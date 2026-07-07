@@ -19,7 +19,27 @@ services:
       timeout: 5s
       retries: 5
 
-  # pcb_api (FastAPI, port 8100) and pcb_web (Next.js, port 3100) — added by factory
+  pcb_api:
+    build:
+      context: ./services/ingestion
+      dockerfile: Dockerfile
+    container_name: pcb_api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pcb_db:5432/${POSTGRES_DB}
+    ports:
+      - "8100:8100"
+    depends_on:
+      pcb_db:
+        condition: service_healthy
+    networks:
+      - pcb_net
+    volumes:
+      - ./services/ingestion:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8100 --reload
+
+  # pcb_web (Next.js, port 3100) — added by factory
 
 networks:
   pcb_net:
