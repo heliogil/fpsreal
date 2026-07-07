@@ -39,7 +39,21 @@ services:
       - ./services/ingestion:/app
     command: uvicorn main:app --host 0.0.0.0 --port 8100 --reload
 
-  # pcb_web (Next.js, port 3100) — added by factory
+  pcb_web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: pcb_web
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    environment:
+      NEXT_PUBLIC_DATA_SOURCE: mock
+      NEXT_PUBLIC_API_BASE: /api
+    networks:
+      - pcb_net
+    depends_on:
+      - pcb_api
 
 networks:
   pcb_net:
