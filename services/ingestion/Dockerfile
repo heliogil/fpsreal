@@ -19,9 +19,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-# Playwright browser install is heavy; do it in a separate layer so the
-# Python deps layer caches well across code changes.
-RUN playwright install chromium
 
 COPY . .
 
