@@ -1,0 +1,31 @@
+services:
+  pcb_db:
+    image: postgres:16-alpine
+    container_name: pcb_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pcb_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-pcb_db}
+    ports:
+      - "5434:5432"
+    volumes:
+      - pcb_db_data:/var/lib/postgresql/data
+    networks:
+      - pcb_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # pcb_api (FastAPI, port 8100) and pcb_web (Next.js, port 3100) — added by factory
+
+networks:
+  pcb_net:
+    name: pcb_net
+    driver: bridge
+
+volumes:
+  pcb_db_data:
+    name: pcb_db_data
