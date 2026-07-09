@@ -11,3 +11,4 @@ build/
 *.log
 coverage/
 .pytest_cache/
+.ergon-decisions.jsonl

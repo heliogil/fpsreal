@@ -73,7 +73,9 @@ class Product(Base):
         back_populates="product", cascade="all, delete-orphan"
     )
     performance_entries: Mapped[List["PerformanceIndex"]] = relationship(
-        back_populates="product", cascade="all, delete-orphan"
+        back_populates="product",
+        cascade="all, delete-orphan",
+        foreign_keys="PerformanceIndex.product_id",
     )
     footprint: Mapped[Optional["ComponentFootprint"]] = relationship(
         back_populates="product",
@@ -230,7 +232,10 @@ class PerformanceIndex(Base):
         onupdate=func.now(),
     )
 
-    product: Mapped[Product] = relationship(back_populates="performance_entries")
+    product: Mapped[Product] = relationship(
+        back_populates="performance_entries",
+        foreign_keys="PerformanceIndex.product_id",
+    )
 
     __table_args__ = (
         UniqueConstraint(
