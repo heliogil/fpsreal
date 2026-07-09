@@ -36,7 +36,10 @@ class ProductOut(BaseModel):
     name: str
     category: str
     brand: Optional[str] = None
+    specs: dict = {}
     is_active: bool
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
     cheapest_offer: Optional[OfferSummary] = None
 
     class Config:
@@ -77,7 +80,10 @@ async def list_products(
                 name=p.name,
                 category=p.category,
                 brand=p.brand,
+                specs=p.specs or {},
                 is_active=p.is_active,
+                created_at=p.created_at.isoformat() if p.created_at else None,
+                updated_at=p.updated_at.isoformat() if p.updated_at else None,
                 cheapest_offer=cheapest,
             )
         )
@@ -97,7 +103,10 @@ async def get_product(product_id: int, db: AsyncSession = Depends(get_db)) -> Pr
         name=product.name,
         category=product.category,
         brand=product.brand,
+        specs=product.specs or {},
         is_active=product.is_active,
+        created_at=product.created_at.isoformat() if product.created_at else None,
+        updated_at=product.updated_at.isoformat() if product.updated_at else None,
         cheapest_offer=cheapest,
     )
 
