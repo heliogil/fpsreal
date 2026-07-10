@@ -85,23 +85,34 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         rem = round(max_cooler - cooler_h, 1)
         clearances["cooler"] = {"remaining_mm": rem, "is_tight": 0 <= rem < TIGHT_MM}
 
-    # ---- Airflow (zone-graph estimate) ----
+    # ---- Airflow (zone-graph estimate, Phase 2: real intake/exhaust fans) ----
     cpu_w = _num(cps.get("tdp_w"))
     gpu_w = _num(gs.get("tdp_w"))
     total_w = cpu_w + gpu_w + PSU_OVERHEAD_W
-    cfm = _num(cs.get("base_cfm"))
 
-    if cfm > 0 and total_w > 0:
-        score = int(max(0, min(100, round(100 * cfm / (total_w * SCORE_K)))))
+    intake = _num(cs.get("intake_cfm"))
+    exhaust = _num(cs.get("exhaust_cfm"))
+    if intake <= 0 and exhaust <= 0:  # backward-compat with Phase-1 base_cfm
+        intake = exhaust = _num(cs.get("base_cfm"))
+    # Fresh cool air over the parts is the driver; exhaust helps evacuate heat.
+    effective = intake + 0.5 * exhaust
+    balance = intake - exhaust
+    pressure = "positive" if balance > 30 else ("negative" if balance < -30 else "neutral")
+    fans = {"intake": max(0, round(intake / 75)), "exhaust": max(0, round(exhaust / 75))}
+
+    if effective > 0 and total_w > 0:
+        score = int(max(0, min(100, round(100 * effective / (total_w * SCORE_K)))))
     else:
         score = 0
-    pressure = "positive" if cfm > 0 else "neutral"
+    if exhaust <= 0 and intake > 0:  # heat trap: no way out
+        score = min(score, 40)
 
     zones = [
-        {"zone": "intake_front", "type": "intake", "status": "ok" if cfm > 0 else "dead_zone"},
-        {"zone": "cpu_zone", "type": "internal", "status": _zone_status(cfm, cpu_w, 1.4)},
-        {"zone": "gpu_zone", "type": "internal", "status": _zone_status(cfm, gpu_w, 0.7)},
-        {"zone": "exhaust_rear", "type": "exhaust", "status": "ok" if cfm > 0 else "dead_zone"},
+        {"zone": "intake_front", "type": "intake", "status": "ok" if intake > 0 else "dead_zone"},
+        {"zone": "cpu_zone", "type": "internal", "status": _zone_status(effective, cpu_w, 1.4)},
+        # front intake feeds the GPU directly in a modern front-to-back case
+        {"zone": "gpu_zone", "type": "internal", "status": _zone_status(intake, gpu_w, 0.7)},
+        {"zone": "exhaust_rear", "type": "exhaust", "status": "ok" if exhaust > 0 else "dead_zone"},
     ]
 
     return {
@@ -122,7 +133,10 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         "airflow": {
             "score": score,
             "pressure_balance": pressure,
-            "cfm": cfm,
+            "cfm": round(effective),
+            "intake_cfm": intake,
+            "exhaust_cfm": exhaust,
+            "fans": fans,
             "heat": {"cpu_w": cpu_w, "gpu_w": gpu_w, "total_w": total_w},
             "zones": zones,
         },

@@ -255,6 +255,9 @@ export type LiveInterior = {
     score: number
     pressure_balance: string
     cfm: number
+    intake_cfm?: number
+    exhaust_cfm?: number
+    fans?: { intake: number; exhaust: number }
     heat: { cpu_w: number; gpu_w: number; total_w: number }
     zones: InteriorZone[]
   }

@@ -68,6 +68,8 @@ export default function GabineteInterior({ data }: { data: LiveInterior }) {
     const gpuHeat = Math.min(1, (data.parts.gpu.tdp_w || 0) / 400)
     const cpuHeat = Math.min(1, (data.parts.cpu.tdp_w || 0) / 150)
     const hasFlow = data.airflow.cfm > 0
+    const fanIn = Math.max(hasFlow ? 1 : 0, data.airflow.fans?.intake ?? 2)
+    const fanOut = Math.max(0, data.airflow.fans?.exhaust ?? 1)
     const zoneStatus = (z: string) =>
       data.airflow.zones.find((x) => x.zone === z)?.status ?? 'ok'
 
@@ -173,10 +175,12 @@ export default function GabineteInterior({ data }: { data: LiveInterior }) {
         }
       }
 
-      // fans (intake front x2, rear exhaust)
-      drawFan(p.x0, p.y0 + (p.y1 - p.y0) * 0.36, hasFlow, ang)
-      drawFan(p.x0, p.y0 + (p.y1 - p.y0) * 0.72, hasFlow, ang)
-      drawFan(p.x1, p.y0 + (p.y1 - p.y0) * 0.30, hasFlow, -ang)
+      // fans — real counts from the case's stock config (front intake / rear exhaust)
+      const ih2 = p.y1 - p.y0
+      const spread = (n: number, lo: number, hi: number, i: number) =>
+        p.y0 + ih2 * (n <= 1 ? (lo + hi) / 2 : lo + (hi - lo) * (i / (n - 1)))
+      for (let i = 0; i < fanIn; i++) drawFan(p.x0, spread(fanIn, 0.24, 0.82, i), hasFlow, ang)
+      for (let i = 0; i < fanOut; i++) drawFan(p.x1, spread(fanOut, 0.22, 0.6, i), hasFlow, -ang)
 
       if (!reduce && flow) raf = requestAnimationFrame(render)
     }
@@ -210,6 +214,11 @@ export default function GabineteInterior({ data }: { data: LiveInterior }) {
         <span style={{ padding: '3px 9px', borderRadius: 999, border: '1px solid var(--border,#2a332c)', color: 'var(--text-secondary)', fontFamily: 'var(--font-plex-mono), monospace' }}>
           Pressão: {data.airflow.pressure_balance === 'positive' ? 'positiva' : data.airflow.pressure_balance === 'negative' ? 'negativa' : 'neutra'}
         </span>
+        {data.airflow.fans && (
+          <span style={{ padding: '3px 9px', borderRadius: 999, border: '1px solid var(--border,#2a332c)', color: 'var(--text-secondary)', fontFamily: 'var(--font-plex-mono), monospace' }}>
+            {data.airflow.fans.intake}× entrada · {data.airflow.fans.exhaust}× saída
+          </span>
+        )}
         {gpuClr && (
           <span style={{ padding: '3px 9px', borderRadius: 999, border: `1px solid ${gpuClr.is_tight ? '#e0a24a' : '#7fd6a3'}55`, color: gpuClr.is_tight ? '#e0a24a' : '#7fd6a3', fontFamily: 'var(--font-plex-mono), monospace' }}>
             GPU folga {Math.round(gpuClr.remaining_mm)}mm
