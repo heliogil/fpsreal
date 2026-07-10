@@ -1,14 +1,18 @@
 """Wizard endpoint — the core of the product.
 
-Accepts a budget + game list and returns the top 3 builds ranked by
-``fps_per_brl``. Every FPS figure returned carries
-``method="anchor_scale_estimate"`` and a confidence band — the API never
-claims that figures were measured on hardware.
+Takes a budget + games and returns the top builds ranked by **cost-per-FPS of
+the complete build** (not just CPU+GPU). For each CPU+GPU pair it auto-selects
+the cheapest *compatible* motherboard, RAM, PSU, cooler, case and storage, then
+ranks by ``avg_fps / total_build_price``.
+
+Every FPS figure is an anchor+scale **estimate** (``method`` +
+``confidence_band``); the API never claims figures were measured on hardware.
+FPS for any CPU is estimated via its tier's representative in the seeded matrix.
 """
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -16,19 +20,23 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from deps import get_db
-from models import (
-    CuratedBuild,
-    FpsEstimate,
-    Offer,
-    Product,
-    Variant,
-)
+from models import FpsEstimate, Offer, Product, Variant
 
 router = APIRouter(tags=["wizard"])
 
+# CPUs with seeded FPS rows; every CPU maps to its tier's representative.
+TIER_TO_MATRIX_SKU = {
+    "flagship": "cpu-r7-9800x3d",
+    "high": "cpu-r5-7600",
+    "mid": "cpu-r5-7600",
+    "budget": "cpu-r5-5600",
+}
+PSU_HEADROOM = 1.25
+PSU_OVERHEAD_W = 100.0
+
 
 # ---------------------------------------------------------------------------
-# Request / response schemas
+# Schemas
 # ---------------------------------------------------------------------------
 
 
@@ -37,10 +45,7 @@ class WizardRequest(BaseModel):
     games: List[str] = Field(default_factory=list)
     resolution: str = Field("1080p", pattern="^(1080p|1440p|4k)$")
     preset: str = Field("high", pattern="^(low|medium|high|ultra)$")
-    priority: Optional[str] = Field(
-        None,
-        description="Optional preference: 'fps', 'silence', 'upgrade_path'.",
-    )
+    priority: Optional[str] = Field(None, description="'fps', 'silence', 'upgrade_path'.")
 
 
 class FpsFigure(BaseModel):
@@ -79,78 +84,71 @@ class WizardResponse(BaseModel):
 # Endpoint
 # ---------------------------------------------------------------------------
 
+# Fixed slot order for a complete build.
+_BUILD_SLOTS = ("cpu", "gpu", "motherboard", "ram", "psu", "cooler", "case", "storage")
+
 
 @router.post("/", response_model=WizardResponse)
-async def run_wizard(
-    body: WizardRequest,
-    db: AsyncSession = Depends(get_db),
-) -> WizardResponse:
-    """Run the wizard and return up to three top builds.
-
-    Algorithm:
-    1. Pick all active CPU+GPU pairs whose combined cheapest price fits
-       within ``budget_brl``.
-    2. For each pair, look up ``fps_estimates`` for the requested games
-       (or the default list) and average the ``fps_estimate`` values.
-    3. Compute ``fps_per_brl = avg_fps / total_price_brl`` and keep the
-       top three pairs.
-    4. Each result row includes a ``method`` field of
-       ``"anchor_scale_estimate"`` so the frontend never misrepresents
-       the figures as measured.
-    """
+async def run_wizard(body: WizardRequest, db: AsyncSession = Depends(get_db)) -> WizardResponse:
     budget = Decimal(body.budget_brl)
-    resolution = body.resolution
-    preset = body.preset
-    games = body.games or []
+    catalog = await _load_catalog(db)
+    cpus, gpus = catalog.get("cpu", []), catalog.get("gpu", [])
+    if not cpus or not gpus:
+        raise HTTPException(status_code=404, detail="Catalog has no priced CPUs/GPUs yet.")
 
-    pairs = await _candidate_pairs(db, budget)
-    if not pairs:
-        raise HTTPException(
-            status_code=404,
-            detail="No CPU+GPU pairs fit within the requested budget.",
-        )
+    sku_to_id = {c["sku"]: c["product_id"] for c in cpus}
+    matrix_ids = {t: sku_to_id.get(s) for t, s in TIER_TO_MATRIX_SKU.items()}
+    fps_map = await _load_fps(
+        db, [i for i in matrix_ids.values() if i], [g["product_id"] for g in gpus],
+        body.games, body.resolution, body.preset,
+    )
 
     candidates: List[BuildCandidate] = []
-    for pair in pairs:
-        figures = await _fps_for_pair(db, pair["cpu_id"], pair["gpu_id"], games, resolution, preset)
-        avg_fps = (
-            sum(f["fps_estimate"] for f in figures) / len(figures) if figures else 0.0
-        )
-        total_price = float(pair["total_price_brl"])
-        if total_price <= 0 or avg_fps <= 0:
-            continue
-        candidates.append(
-            BuildCandidate(
-                cpu_id=pair["cpu_id"],
-                gpu_id=pair["gpu_id"],
-                total_price_brl=total_price,
-                fps_per_brl=avg_fps / total_price,
-                fps_figures=[FpsFigure(**f) for f in figures],
-                components=[
-                    ComponentOut(
-                        category="cpu",
-                        product_id=pair["cpu_id"],
-                        name=pair["cpu_name"],
-                        cheapest_price_brl=float(pair["cpu_price"]),
-                    ),
-                    ComponentOut(
-                        category="gpu",
-                        product_id=pair["gpu_id"],
-                        name=pair["gpu_name"],
-                        cheapest_price_brl=float(pair["gpu_price"]),
-                    ),
-                ],
+    for cpu in cpus:
+        matrix_cpu = matrix_ids.get(cpu["specs"].get("game_tier")) or cpu["product_id"]
+        for gpu in gpus:
+            if cpu["price"] + gpu["price"] > budget:
+                continue
+            built = _complete_build(cpu, gpu, catalog)
+            if built is None:
+                continue
+            parts, total = built
+            if total > budget or total <= 0:
+                continue
+            figures = fps_map.get((matrix_cpu, gpu["product_id"]), [])
+            if not figures:
+                continue
+            avg_fps = sum(f["fps_estimate"] for f in figures) / len(figures)
+            if avg_fps <= 0:
+                continue
+            candidates.append(
+                BuildCandidate(
+                    cpu_id=cpu["product_id"],
+                    gpu_id=gpu["product_id"],
+                    total_price_brl=float(total),
+                    fps_per_brl=avg_fps / float(total),
+                    fps_figures=[FpsFigure(**f) for f in figures],
+                    components=[
+                        ComponentOut(
+                            category=slot,
+                            product_id=parts[slot]["product_id"],
+                            name=parts[slot]["name"],
+                            cheapest_price_brl=float(parts[slot]["price"]),
+                        )
+                        for slot in _BUILD_SLOTS
+                    ],
+                )
             )
-        )
+
+    if not candidates:
+        raise HTTPException(status_code=404, detail="No complete build fits the budget with FPS data.")
 
     candidates.sort(key=lambda c: c.fps_per_brl, reverse=True)
-    top = candidates[:3]
-
     return WizardResponse(
         budget_brl=float(budget),
-        resolution=resolution,
-        preset=preset,
-        candidates=top,
+        resolution=body.resolution,
+        preset=body.preset,
+        candidates=candidates[:3],
     )
 
 
@@ -159,98 +157,126 @@ async def run_wizard(
 # ---------------------------------------------------------------------------
 
 
-async def _candidate_pairs(db: AsyncSession, budget: Decimal) -> List[dict]:
-    """Return a list of {cpu_id, gpu_id, cpu_name, gpu_name, prices, total}.
-
-    For each CPU and GPU product we take the cheapest available offer
-    across all variants and all merchants. We then keep only the pairs
-    whose combined cheapest price fits the budget.
-    """
-    cpus = await _cheapest_offers_by_category(db, "cpu")
-    gpus = await _cheapest_offers_by_category(db, "gpu")
-
-    pairs: List[dict] = []
-    for cpu in cpus:
-        for gpu in gpus:
-            total = cpu["price_brl"] + gpu["price_brl"]
-            if total <= budget:
-                pairs.append(
-                    {
-                        "cpu_id": cpu["product_id"],
-                        "cpu_name": cpu["name"],
-                        "cpu_price": cpu["price_brl"],
-                        "gpu_id": gpu["product_id"],
-                        "gpu_name": gpu["name"],
-                        "gpu_price": gpu["price_brl"],
-                        "total_price_brl": total,
-                    }
-                )
-    return pairs
-
-
-async def _cheapest_offers_by_category(db: AsyncSession, category: str) -> List[dict]:
-    """For each product in a category, find the cheapest available offer."""
-    products_stmt = select(Product).where(
-        Product.category == category, Product.is_active.is_(True)
-    )
-    result = await db.execute(products_stmt)
-    products = result.scalars().all()
+async def _load_catalog(db: AsyncSession) -> Dict[str, List[dict]]:
+    """All active, *priced* products by category, each sorted cheapest-first."""
+    products = (
+        await db.execute(select(Product).where(Product.is_active.is_(True)))
+    ).scalars().all()
     if not products:
-        return []
+        return {}
+    ids = [p.id for p in products]
+    offer_rows = (
+        await db.execute(
+            select(Variant.product_id, Offer.price_brl)
+            .join(Offer, Offer.variant_id == Variant.id)
+            .where(Variant.product_id.in_(ids), Offer.is_available.is_(True))
+            .order_by(Variant.product_id, Offer.price_brl.asc())
+        )
+    ).all()
+    cheapest: Dict[int, Decimal] = {}
+    for pid, price in offer_rows:
+        if pid not in cheapest:
+            cheapest[pid] = Decimal(price)
 
-    product_ids = [p.id for p in products]
-    offers_stmt = (
-        select(Offer, Variant)
-        .join(Variant, Variant.id == Offer.variant_id)
-        .where(Variant.product_id.in_(product_ids), Offer.is_available.is_(True))
-        .order_by(Variant.product_id, Offer.price_brl.asc())
-    )
-    result = await db.execute(offers_stmt)
-    rows = result.all()
-
-    seen: dict = {}
-    for offer, variant in rows:
-        pid = variant.product_id
-        if pid in seen:
+    catalog: Dict[str, List[dict]] = {}
+    for p in products:
+        if p.id not in cheapest:  # no price -> cannot be part of a priced build
             continue
-        seen[pid] = {
-            "product_id": pid,
-            "name": next(p.name for p in products if p.id == pid),
-            "price_brl": Decimal(offer.price_brl),
-        }
-    return list(seen.values())
+        catalog.setdefault(p.category, []).append({
+            "product_id": p.id, "name": p.name, "sku": p.sku,
+            "price": cheapest[p.id], "specs": p.specs or {},
+        })
+    for items in catalog.values():
+        items.sort(key=lambda x: x["price"])
+    return catalog
 
 
-async def _fps_for_pair(
+def _cheapest_where(items: List[dict], pred) -> Optional[dict]:
+    """First (cheapest, since pre-sorted) item satisfying pred."""
+    for it in items:
+        if pred(it):
+            return it
+    return None
+
+
+def _fnum(specs: dict, key: str) -> float:
+    try:
+        return float(specs.get(key))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _complete_build(cpu: dict, gpu: dict, catalog: Dict[str, List[dict]]) -> Optional[Tuple[dict, Decimal]]:
+    """Pick the cheapest compatible mobo/ram/psu/cooler/case/storage. None if any is missing."""
+    socket = cpu["specs"].get("socket")
+    cpu_tdp = _fnum(cpu["specs"], "tdp_w")
+    gpu_tdp = _fnum(gpu["specs"], "tdp_w")
+    gpu_len = _fnum(gpu["specs"], "length_mm")
+
+    mobo = _cheapest_where(catalog.get("motherboard", []), lambda m: m["specs"].get("socket") == socket)
+    if not mobo:
+        return None
+    ram_type = mobo["specs"].get("ram_type")
+    ram = _cheapest_where(catalog.get("ram", []), lambda r: r["specs"].get("type") == ram_type)
+    if not ram:
+        return None
+    need_w = (cpu_tdp + gpu_tdp + PSU_OVERHEAD_W) * PSU_HEADROOM
+    psu = _cheapest_where(catalog.get("psu", []), lambda p: _fnum(p["specs"], "watts") >= need_w)
+    if not psu:
+        return None
+    cooler = _cheapest_where(catalog.get("cooler", []), lambda c: _fnum(c["specs"], "tdp_rating_w") >= cpu_tdp)
+    if not cooler:
+        return None
+    cooler_h = _fnum(cooler["specs"], "height_mm")
+    case = _cheapest_where(
+        catalog.get("case", []),
+        lambda k: _fnum(k["specs"], "max_gpu_length_mm") >= gpu_len
+        and _fnum(k["specs"], "max_cooler_height_mm") >= cooler_h,
+    )
+    if not case:
+        return None
+    storage_list = catalog.get("storage", [])
+    if not storage_list:
+        return None
+    storage = storage_list[0]
+
+    parts = {
+        "cpu": cpu, "gpu": gpu, "motherboard": mobo, "ram": ram,
+        "psu": psu, "cooler": cooler, "case": case, "storage": storage,
+    }
+    total = sum(p["price"] for p in parts.values())
+    return parts, total
+
+
+async def _load_fps(
     db: AsyncSession,
-    cpu_id: int,
-    gpu_id: int,
+    matrix_cpu_ids: List[int],
+    gpu_ids: List[int],
     games: List[str],
     resolution: str,
     preset: str,
-) -> List[dict]:
-    """Look up FPS estimates for a pair. Empty list means we have no data."""
+) -> Dict[Tuple[int, int], List[dict]]:
+    """One query: (matrix_cpu_id, gpu_id) -> list of FPS figures."""
+    if not matrix_cpu_ids or not gpu_ids:
+        return {}
     stmt = select(FpsEstimate).where(
-        FpsEstimate.cpu_id == cpu_id,
-        FpsEstimate.gpu_id == gpu_id,
+        FpsEstimate.cpu_id.in_(matrix_cpu_ids),
+        FpsEstimate.gpu_id.in_(gpu_ids),
         FpsEstimate.resolution == resolution,
         FpsEstimate.preset == preset,
     )
     if games:
         stmt = stmt.where(FpsEstimate.game_slug.in_(games))
-    result = await db.execute(stmt)
-    rows = result.scalars().all()
-    out: List[dict] = []
+    rows = (await db.execute(stmt)).scalars().all()
+    out: Dict[Tuple[int, int], List[dict]] = {}
     for r in rows:
-        out.append(
-            {
-                "game_slug": r.game_slug,
-                "fps_estimate": float(r.fps_estimate),
-                "confidence_band_pct": (
-                    float(r.confidence_band_pct) if r.confidence_band_pct is not None else None
-                ),
-                "method": "anchor_scale_estimate",
-                "sources": r.sources or [],
-            }
-        )
+        out.setdefault((r.cpu_id, r.gpu_id), []).append({
+            "game_slug": r.game_slug,
+            "fps_estimate": float(r.fps_estimate),
+            "confidence_band_pct": (
+                float(r.confidence_band_pct) if r.confidence_band_pct is not None else None
+            ),
+            "method": "anchor_scale_estimate",
+            "sources": r.sources or [],
+        })
     return out
