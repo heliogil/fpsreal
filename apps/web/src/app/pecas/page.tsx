@@ -17,6 +17,12 @@ type Product = {
   brand: string | null; specs: Record<string, unknown>
 }
 type Fps = { game_slug: string; fps: number; confidence_band_pct: number | null; method: string }
+type Build = {
+  slug: string; name: string; budget_tier: string; is_rei: boolean
+  total_price_brl: number | null; fps_per_brl: number | null
+  seo_description: string | null
+  components: Record<string, { id: number; name: string; category: string }>
+}
 
 async function jget<T>(path: string, fallback: T): Promise<T> {
   try {
@@ -31,6 +37,14 @@ async function jget<T>(path: string, fallback: T): Promise<T> {
 const syne = { fontFamily: 'var(--font-syne), Syne, sans-serif' }
 const mono = { fontFamily: 'var(--font-plex-mono), monospace' }
 
+const TIER_LABEL: Record<string, string> = {
+  r3k: 'R$ 3k', r5k: 'R$ 5k', r8k: 'R$ 8k', r12k_plus: 'R$ 12k+',
+}
+function brl(n: number | null): string {
+  if (n === null || n === undefined) return '—'
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+}
+
 function spec(p: Product, key: string): string {
   const v = p.specs?.[key]
   return v === undefined || v === null ? '—' : String(v)
@@ -39,7 +53,13 @@ function spec(p: Product, key: string): string {
 export default async function PecasPage() {
   const gpus = await jget<Product[]>('/products/?category=gpu&limit=50', [])
   const cpus = await jget<Product[]>('/products/?category=cpu&limit=50', [])
+  const builds = await jget<Build[]>('/builds/', [])
   const ref = cpus.find((c) => c.sku === 'cpu-r7-9800x3d') ?? cpus[0]
+
+  const tronos = builds
+    .filter((b) => b.is_rei)
+    .sort((a, b) => (a.budget_tier > b.budget_tier ? 1 : -1))
+  const absoluto = builds.find((b) => b.slug === 'rei-absoluto')
 
   // FPS ao vivo: CPU de referência × cada GPU (lista completa por par).
   const fpsByGpu: Record<number, Record<string, number>> = {}
@@ -71,10 +91,55 @@ export default async function PecasPage() {
         </div>
         <h1 className="text-4xl md:text-5xl mb-3" style={syne}>Peças & FPS</h1>
         <p className="text-secondary max-w-2xl mx-auto">
-          Catálogo e banco de performance da Harpia, servidos ao vivo pelo motor.
-          Preços entram quando as parcerias de afiliado abrirem.
+          Catálogo, banco de performance e ranking de custo/FPS da Harpia, servidos ao vivo
+          pelo motor. Os preços abaixo são <strong>de amostra</strong> — serão substituídos
+          pelos feeds oficiais de afiliado sem mudar o pipeline.
         </p>
       </section>
+
+      {/* Tronos por faixa (preços de amostra) */}
+      {tronos.length > 0 && (
+        <section className="mb-14">
+          <h2 className="text-2xl mb-1" style={syne}>Os Tronos — melhor R$/FPS por faixa</h2>
+          <p className="text-sm text-secondary mb-4">
+            Ranking ao vivo por <strong>custo por FPS</strong>.{' '}
+            <span style={{ color: 'var(--accent-gold)' }}>Preços de amostra (demo)</span> — a lógica
+            e o pipeline são reais; só faltam os feeds oficiais.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {tronos.map((b) => (
+              <div key={b.slug} className="card">
+                <div className="flex justify-between items-baseline mb-1">
+                  <span style={syne}>{b.name}</span>
+                  <span className="text-xs num-mono" style={{ ...mono, color: 'var(--accent-gold)' }}>
+                    {TIER_LABEL[b.budget_tier] ?? b.budget_tier}
+                  </span>
+                </div>
+                <div className="text-xs text-secondary mb-2">
+                  {b.components?.cpu?.name} · {b.components?.gpu?.name}
+                </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="num-mono" style={{ ...mono, color: 'var(--text-mono)' }}>{brl(b.total_price_brl)}</span>
+                  <span className="text-xs num-mono" style={mono}>
+                    {b.fps_per_brl ? `${(b.fps_per_brl * 1000).toFixed(1)} FPS / R$1k` : '—'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {absoluto && (
+            <div className="card mt-3" style={{ borderColor: 'var(--accent-gold)' }}>
+              <div className="flex justify-between items-baseline">
+                <span style={{ ...syne, color: 'var(--accent-gold)' }}>👑 {absoluto.name}</span>
+                <span className="num-mono" style={{ ...mono, color: 'var(--text-mono)' }}>{brl(absoluto.total_price_brl)}</span>
+              </div>
+              <div className="text-xs text-secondary mt-1">
+                {absoluto.components?.cpu?.name} · {absoluto.components?.gpu?.name} — {absoluto.seo_description}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Banco de FPS ao vivo */}
       <section className="mb-14">

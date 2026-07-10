@@ -192,6 +192,12 @@ def main() -> None:
                 print(f"fps_estimates upserted: {n_fps}")
                 seed_rules(cur)
                 print("compatibility + thermal rules refreshed")
+                if "--no-prices" not in sys.argv:
+                    from .pricing import seed_amostra_offers, seed_curated_builds
+                    n_off = seed_amostra_offers(cur, sku_to_id)
+                    print(f"SAMPLE offers upserted: {n_off} (merchant 'amostra' — demo, replace with official feeds)")
+                    n_builds = seed_curated_builds(cur, sku_to_id)
+                    print(f"curated builds (Tronos) upserted: {n_builds}")
         conn.commit()
         print("seed committed OK")
     except Exception:
