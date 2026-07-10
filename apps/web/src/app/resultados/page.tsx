@@ -2,9 +2,14 @@ import Link from 'next/link'
 import { getMockRepository } from '@/lib/repositories'
 import BuildCard from '@/components/BuildCard'
 import type { BuildResult } from '@/lib/repositories/types'
+import { gameLabel, priorityLabel } from '@/lib/labels'
 
 interface PageProps {
-  searchParams: { budget?: string; games?: string; priority?: string }
+  searchParams: { budget?: string; games?: string; priority?: string; resolution?: string }
+}
+
+function parseResolution(s?: string): '1080p' | '1440p' | '4k' {
+  return s === '1440p' || s === '4k' ? s : '1080p'
 }
 
 function parseBudget(s?: string): number {
@@ -26,6 +31,7 @@ export default async function ResultadosPage({ searchParams }: PageProps) {
   const repo = getMockRepository()
   const budget = parseBudget(searchParams.budget)
   const games = parseGames(searchParams.games)
+  const resolution = parseResolution(searchParams.resolution)
   const priority = (searchParams.priority as 'fps' | 'budget' | 'quiet' | 'future_proof') || 'budget'
 
   // Chama o wizard do repo. Garante fallback se a chamada falhar.
@@ -35,7 +41,7 @@ export default async function ResultadosPage({ searchParams }: PageProps) {
       budget_brl: budget,
       games: games as never,
       priority,
-      resolution: '1080p',
+      resolution,
       session_type: 'new',
     })
   } catch {
@@ -65,8 +71,10 @@ export default async function ResultadosPage({ searchParams }: PageProps) {
           A Harpia decreta
         </h1>
         <p className="text-secondary">
-          Para {budget.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} com prioridade em{' '}
-          <span style={{ color: 'var(--text-mono)' }}>{priority}</span> · jogos: {games.join(', ') || '—'}
+          Para {budget.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} ·{' '}
+          <span style={{ color: 'var(--text-mono)' }}>{resolution}</span> · prioridade{' '}
+          <span style={{ color: 'var(--text-mono)' }}>{priorityLabel(priority)}</span> · jogos:{' '}
+          {games.map(gameLabel).join(', ') || '—'}
         </p>
       </div>
 

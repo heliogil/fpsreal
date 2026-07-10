@@ -43,7 +43,7 @@ export default async function HomePage() {
       </section>
 
       {/* Tronos */}
-      <section className="py-12">
+      <section id="tronos" className="py-12 scroll-mt-20">
         <div className="text-center mb-8">
           <h2
             className="text-3xl mb-2"

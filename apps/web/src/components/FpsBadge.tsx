@@ -1,4 +1,5 @@
 import type { FpsEstimate } from '@/lib/repositories/types'
+import { gameLabel } from '@/lib/labels'
 
 interface FpsBadgeProps {
   estimate: FpsEstimate
@@ -32,7 +33,7 @@ export default function FpsBadge({
           FPS
         </span>
         <span className="text-secondary text-xs">
-          · {game_slug} · {resolution}
+          · {gameLabel(game_slug)} · {resolution}
         </span>
       </div>
       {showBand && (

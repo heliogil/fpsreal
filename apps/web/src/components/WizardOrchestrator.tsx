@@ -3,6 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { GameSlug, WizardStep } from '@/lib/repositories/types'
+import {
+  gameLabel,
+  RESOLUTIONS,
+  RESOLUTION_LABELS,
+  RESOLUTION_FPS_MULT,
+  type ResolutionKey,
+} from '@/lib/labels'
 
 interface GameOption {
   slug: GameSlug
@@ -48,6 +55,7 @@ export default function WizardOrchestrator() {
   const router = useRouter()
   const [step, setStep] = useState<WizardStep>('budget')
   const [budget, setBudget] = useState(5000)
+  const [resolution, setResolution] = useState<ResolutionKey>('1080p')
   const [games, setGames] = useState<GameSlug[]>([])
   const [priority, setPriority] = useState<'fps' | 'budget' | 'quiet' | 'future_proof'>('budget')
 
@@ -57,7 +65,8 @@ export default function WizardOrchestrator() {
     )
   }
 
-  const estimatedFps = estimateFpsForBudget(budget)
+  const estimatedFps = Math.round(estimateFpsForBudget(budget) * RESOLUTION_FPS_MULT[resolution])
+  const primaryGame = games[0] ?? 'cs2'
 
   const canAdvance = () => {
     if (step === 'budget') return budget >= 2000
@@ -73,6 +82,7 @@ export default function WizardOrchestrator() {
       // Navega para /resultados com querystring
       const params = new URLSearchParams({
         budget: String(budget),
+        resolution,
         games: games.join(','),
         priority,
       })
@@ -122,10 +132,12 @@ export default function WizardOrchestrator() {
           <div className="text-xs uppercase tracking-wider text-secondary">Estimativa em tempo real</div>
           <div className="text-sm">
             <span className="num-mono text-2xl font-bold">~{estimatedFps}</span>
-            <span className="text-secondary text-sm ml-2">FPS médio em CS2 1080p</span>
+            <span className="text-secondary text-sm ml-2">
+              FPS médio · {gameLabel(primaryGame)} · {RESOLUTION_LABELS[resolution]}
+            </span>
           </div>
           <div className="text-xs text-secondary">
-            para {formatBRL(budget)} (±15% estimativa)
+            para {formatBRL(budget)} · estimativa (±15%), não medição
           </div>
         </div>
       </div>
@@ -159,6 +171,34 @@ export default function WizardOrchestrator() {
               <span>R$ 12k</span>
               <span>R$ 20k</span>
             </div>
+          </div>
+
+          <div>
+            <div className="text-sm font-medium mb-2">Resolução do monitor</div>
+            <div className="flex gap-2" role="group" aria-label="Resolução do monitor">
+              {RESOLUTIONS.map((r) => {
+                const selected = resolution === r
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setResolution(r)}
+                    className="flex-1 py-2 rounded-md border text-sm transition-colors"
+                    style={{
+                      borderColor: selected ? 'var(--accent-gold)' : 'var(--border)',
+                      backgroundColor: selected ? 'rgba(212,160,23,0.08)' : 'var(--bg-elevated)',
+                      color: selected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    }}
+                    aria-pressed={selected}
+                  >
+                    {RESOLUTION_LABELS[r]}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-xs text-secondary mt-2">
+              Muda muito o R$/FPS: 1440p e 4K exigem bem mais GPU.
+            </p>
           </div>
         </div>
       )}

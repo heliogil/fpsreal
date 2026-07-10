@@ -18,7 +18,7 @@ export default function BuildCard({ build, variant = 'default' }: BuildCardProps
 
   return (
     <div
-      className={`card relative ${isHighlight ? 'border-2' : ''}`}
+      className={`card card-hover relative ${isHighlight ? 'border-2' : ''}`}
       style={
         isHighlight
           ? { borderColor: 'var(--accent-gold)', background: 'linear-gradient(180deg, var(--bg-card) 0%, var(--bg-elevated) 100%)' }

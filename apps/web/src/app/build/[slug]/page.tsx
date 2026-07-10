@@ -7,6 +7,7 @@ import AirflowPanel from '@/components/AirflowPanel'
 import CompatibilityChecker from '@/components/CompatibilityChecker'
 import HarpiaVerdict from '@/components/HarpiaVerdict'
 import type { BuildComponents } from '@/lib/repositories/types'
+import { gameLabel } from '@/lib/labels'
 
 interface PageProps {
   params: { slug: string }
@@ -153,7 +154,7 @@ export default async function BuildDetailPage({ params }: PageProps) {
               )}
               {fpsEstimates.map((e) => (
                 <tr key={e.id} className="border-b border-border">
-                  <td className="py-2 pr-4">{e.game_slug}</td>
+                  <td className="py-2 pr-4">{gameLabel(e.game_slug)}</td>
                   <td className="py-2 pr-4 num-mono">{e.resolution}</td>
                   <td className="py-2 pr-4">{e.preset}</td>
                   <td className="py-2 pr-4">

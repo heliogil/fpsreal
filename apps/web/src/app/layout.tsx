@@ -47,7 +47,13 @@ export default function RootLayout({
                 Rei do FPS
               </span>
             </a>
-            <nav className="flex items-center gap-6 text-sm">
+            <nav className="flex items-center gap-4 sm:gap-6 text-sm">
+              <a href="/#tronos" className="hover:text-gold transition-colors">
+                Tronos
+              </a>
+              <a href="/pecas" className="hover:text-gold transition-colors">
+                Peças
+              </a>
               <a href="/wizard" className="hover:text-gold transition-colors">
                 Wizard
               </a>
@@ -59,13 +65,16 @@ export default function RootLayout({
         </header>
         <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
         <footer className="border-t border-border mt-16">
-          <div className="max-w-6xl mx-auto px-6 py-6 text-xs text-secondary flex justify-between">
+          <div className="max-w-6xl mx-auto px-6 py-6 text-xs text-secondary flex flex-col sm:flex-row gap-2 sm:gap-4 justify-between">
             <span>
               A Harpia observa. <span style={{ color: 'var(--text-mono)' }}>R$ por FPS</span> — a conta aberta.
             </span>
             <span>
               Fonte: TechPowerUp, PassMark, Cinebench · modelo anchor_scale v1
             </span>
+          </div>
+          <div className="max-w-6xl mx-auto px-6 pb-6 text-xs" style={{ color: 'var(--text-secondary)' }}>
+            🔗 Alguns links são de afiliado — se você comprar por eles, ganhamos comissão da loja. <strong>O preço para você não muda.</strong>
           </div>
         </footer>
       </body>
