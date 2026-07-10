@@ -38,11 +38,11 @@ export function detectGpu(): { model: string | null; raw: string | null } {
 
 // ---- localStorage "meu PC" ----
 const KEY = 'reidofps_meupc'
-export type MeuPc = { gpu: string; savedAt: number }
+export type MeuPc = { gpu: string; cpu?: string; savedAt: number }
 
-export function saveMeuPc(gpu: string): void {
+export function saveMeuPc(gpu: string, cpu?: string): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ gpu, savedAt: Date.now() }))
+    localStorage.setItem(KEY, JSON.stringify({ gpu, cpu: cpu || undefined, savedAt: Date.now() }))
     window.dispatchEvent(new Event('meupc-changed'))
   } catch {
     /* ignore */

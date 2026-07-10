@@ -5,10 +5,13 @@ import { loadMeuPc } from '@/lib/gpu-detect'
 
 /** Persistent "meu PC" chip in the navbar — shows only when a rig is saved. */
 export default function MeuPcChip() {
-  const [gpu, setGpu] = useState<string | null>(null)
+  const [label, setLabel] = useState<string | null>(null)
 
   useEffect(() => {
-    const upd = () => setGpu(loadMeuPc()?.gpu ?? null)
+    const upd = () => {
+      const m = loadMeuPc()
+      setLabel(m ? (m.cpu ? `${m.gpu} · ${m.cpu}` : m.gpu) : null)
+    }
     upd()
     window.addEventListener('meupc-changed', upd)
     window.addEventListener('storage', upd)
@@ -18,7 +21,7 @@ export default function MeuPcChip() {
     }
   }, [])
 
-  if (!gpu) return null
+  if (!label) return null
   return (
     <a
       href="/meu-pc"
@@ -32,9 +35,12 @@ export default function MeuPcChip() {
         padding: '3px 9px',
         color: 'var(--text-mono)',
         whiteSpace: 'nowrap',
+        maxWidth: 260,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
       }}
     >
-      🖥 {gpu}
+      🖥 {label}
     </a>
   )
 }
