@@ -114,7 +114,7 @@ def seed_curated_builds(cur, sku_to_id: dict[str, int]) -> int:
         price_by_pid = {r[0]: r[1] for r in cur.fetchall()}
         total = sum((price_by_pid.get(pid) or Decimal(0)) for pid in pids)
 
-        matrix_cpu_id = sku_to_id.get(FPS_CPU_FOR.get(comps["cpu"], comps["cpu"]))
+        matrix_cpu_id = sku_to_id.get(comps["cpu"])
         cur.execute(
             """
             SELECT AVG(fps_estimate) FROM fps_estimates

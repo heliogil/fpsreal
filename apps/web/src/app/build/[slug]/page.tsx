@@ -1,13 +1,19 @@
 import { notFound } from 'next/navigation'
-import { getMockRepository } from '@/lib/repositories'
-import { getProductById, getAirflowBySlug } from '@/lib/fixtures'
+import {
+  getLiveBuildBySlug,
+  getLiveFpsByBuild,
+  checkLiveCompatibility,
+  getLiveProduct,
+  getLiveBestOffer,
+} from '@/lib/live-server'
 import KingBadge from '@/components/KingBadge'
 import FpsBadge from '@/components/FpsBadge'
-import AirflowPanel from '@/components/AirflowPanel'
 import CompatibilityChecker from '@/components/CompatibilityChecker'
 import HarpiaVerdict from '@/components/HarpiaVerdict'
 import type { BuildComponents } from '@/lib/repositories/types'
 import { gameLabel } from '@/lib/labels'
+
+export const dynamic = 'force-dynamic'
 
 interface PageProps {
   params: { slug: string }
@@ -29,28 +35,27 @@ const componentLabels: Array<{ key: keyof BuildComponents; label: string }> = [
 ]
 
 export default async function BuildDetailPage({ params }: PageProps) {
-  const repo = getMockRepository()
-  const build = await repo.builds.getBySlug(params.slug)
+  const build = await getLiveBuildBySlug(params.slug)
   if (!build) notFound()
 
-  const fpsEstimates = await repo.fps.getByBuild(
+  const fpsEstimates = await getLiveFpsByBuild(
     build.components.cpu_id,
     build.components.gpu_id,
   )
 
-  const compat = await repo.compatibility.checkBuild(build.components)
+  const compat = (await checkLiveCompatibility(
+    build.components as unknown as Record<string, number>,
+  )) ?? { errors: [], warnings: [], clearances: {}, airflow: [] }
 
-  // Pré-resolve as melhores ofertas para cada componente (paralelo).
+  // Best offer per component (parallel), from the live catalog.
   const offerEntries = await Promise.all(
     componentLabels.map(async ({ key }) => {
       const productId = build.components[key]
-      const product = getProductById(productId)
-      const offer = product ? await repo.offers.getBestOffer(productId) : null
+      const product = await getLiveProduct(productId)
+      const offer = product ? await getLiveBestOffer(productId) : null
       return { key, product, offer }
     }),
   )
-
-  const airflowProfile = getAirflowBySlug(build.slug)
 
   return (
     <div className="space-y-8">
@@ -176,15 +181,12 @@ export default async function BuildDetailPage({ params }: PageProps) {
         </div>
       </section>
 
-      {/* Airflow + Compatibilidade lado a lado */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {airflowProfile && <AirflowPanel airflow={airflowProfile} />}
-        <CompatibilityChecker
-          errors={compat.errors}
-          warnings={compat.warnings}
-          clearances={compat.clearances}
-        />
-      </div>
+      {/* Compatibilidade (o motor de airflow é uma feature futura) */}
+      <CompatibilityChecker
+        errors={compat.errors}
+        warnings={compat.warnings}
+        clearances={compat.clearances}
+      />
 
       {/* CTA */}
       <section className="text-center py-8">

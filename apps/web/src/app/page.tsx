@@ -1,14 +1,17 @@
 import Link from 'next/link'
 import { getMockRepository } from '@/lib/repositories'
+import { getLiveBuilds } from '@/lib/live-server'
 import BuildCard from '@/components/BuildCard'
+
+export const dynamic = 'force-dynamic'
 
 function formatBRL(n: number): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
 export default async function HomePage() {
-  const repo = getMockRepository()
-  const builds = await repo.builds.getAll()
+  // Live engine first; fall back to mock only if the API is unreachable.
+  const builds = (await getLiveBuilds()) ?? (await getMockRepository().builds.getAll())
 
   // Tronos: 4 builds por faixa + Rei Absoluto.
   const reiR3k = builds.find((b) => b.tier === 'r3k' && !b.is_rei_absoluto)

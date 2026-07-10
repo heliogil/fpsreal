@@ -116,16 +116,14 @@ async def run_wizard(body: WizardRequest, db: AsyncSession = Depends(get_db)) ->
         raise HTTPException(status_code=404, detail="Catalog has no priced CPUs/GPUs yet.")
 
     gpus_by_id = {g["product_id"]: g for g in gpus}
-    sku_to_id = {c["sku"]: c["product_id"] for c in cpus}
-    matrix_ids = {t: sku_to_id.get(s) for t, s in TIER_TO_MATRIX_SKU.items()}
+    # Every CPU has its own FPS rows now, so use the CPU directly (no tier map).
     fps_map = await _load_fps(
-        db, [i for i in matrix_ids.values() if i], [g["product_id"] for g in gpus],
+        db, [c["product_id"] for c in cpus], [g["product_id"] for g in gpus],
         body.games, body.resolution, body.preset,
     )
 
     candidates: List[BuildCandidate] = []
     for cpu in cpus:
-        matrix_cpu = matrix_ids.get(cpu["specs"].get("game_tier")) or cpu["product_id"]
         for gpu in gpus:
             if cpu["price"] + gpu["price"] > budget:
                 continue
@@ -135,7 +133,7 @@ async def run_wizard(body: WizardRequest, db: AsyncSession = Depends(get_db)) ->
             parts, total = built
             if total > budget or total <= 0:
                 continue
-            figures = fps_map.get((matrix_cpu, gpu["product_id"]), [])
+            figures = fps_map.get((cpu["product_id"], gpu["product_id"]), [])
             if not figures:
                 continue
             avg_fps = sum(f["fps_estimate"] for f in figures) / len(figures)

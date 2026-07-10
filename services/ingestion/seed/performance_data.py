@@ -68,9 +68,9 @@ CPU_TIER_FACTOR = {
     "budget":   0.86,
 }
 
-# CPUs used to populate the FPS matrix (one representative per tier keeps the
-# matrix legible; the engine supports every CPU via its tier factor).
-FPS_MATRIX_CPUS = ["cpu-r7-9800x3d", "cpu-r5-7600", "cpu-r5-5600"]
+# Every CPU in the catalog gets FPS rows (scaled by its tier factor), so any
+# build's CPU has real estimates — no tier-mapping hack downstream.
+FPS_MATRIX_CPUS = [row[0] for row in CPUS]
 
 CONFIDENCE_BAND_PCT = 18.0
 

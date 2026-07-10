@@ -8,7 +8,7 @@
  * NOTE: while prices come from the 'amostra' (demo) merchant, these builds are
  * sample-priced — the caller should label them as such.
  */
-import type { CuratedBuild, GameSlug, WizardInput } from './repositories/types'
+import type { CuratedBuild, FpsEstimate, GameSlug, WizardInput } from './repositories/types'
 import { priorityLabel } from './labels'
 
 const API = process.env.PCB_API_INTERNAL || 'http://pcb_api:8100'
@@ -102,4 +102,131 @@ export async function runLiveWizard(input: WizardInput): Promise<CuratedBuild[] 
   } catch {
     return null
   }
+}
+
+// ---------------------------------------------------------------------------
+// Curated builds (Tronos) + detail page data
+// ---------------------------------------------------------------------------
+
+type BuildOut = {
+  id: number
+  slug: string
+  name: string
+  budget_tier: string
+  is_rei: boolean
+  total_price_brl: number | null
+  fps_per_brl: number | null
+  seo_description: string | null
+  is_active: boolean
+  crowned_at: string | null
+  components: Record<string, { id: number; name: string; category: string }>
+}
+
+async function getJson<T>(path: string): Promise<T | null> {
+  try {
+    const r = await fetch(`${API}${path}`, { cache: 'no-store' })
+    if (!r.ok) return null
+    return (await r.json()) as T
+  } catch {
+    return null
+  }
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T | null> {
+  try {
+    const r = await fetch(`${API}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+    })
+    if (!r.ok) return null
+    return (await r.json()) as T
+  } catch {
+    return null
+  }
+}
+
+function compId(b: BuildOut, cat: string): number {
+  return b.components[cat]?.id ?? 0
+}
+
+async function buildOutToCurated(b: BuildOut): Promise<CuratedBuild> {
+  const cpuId = compId(b, 'cpu')
+  const gpuId = compId(b, 'gpu')
+  const total = b.total_price_brl ?? 0
+  const fpb = b.fps_per_brl ?? 0
+  // Headline FPS = the reference game (CS2) at 1080p, not the cross-game average.
+  const cs2 = await getJson<FpsEstimate | null>(
+    `/fps/?cpu=${cpuId}&gpu=${gpuId}&game=cs2&res=1080p`,
+  )
+  const fpsTop = cs2?.fps ?? Math.round(fpb * total)
+  const now = new Date().toISOString()
+  return {
+    id: b.id,
+    slug: b.slug,
+    tier: b.budget_tier as CuratedBuild['tier'],
+    title: b.name,
+    subtitle: b.seo_description ?? '',
+    description: b.seo_description ?? '',
+    components: {
+      cpu_id: cpuId,
+      gpu_id: gpuId,
+      ram_id: compId(b, 'ram'),
+      motherboard_id: compId(b, 'motherboard'),
+      storage_id: compId(b, 'storage'),
+      psu_id: compId(b, 'psu'),
+      case_id: compId(b, 'case'),
+      cooler_id: compId(b, 'cooler'),
+    },
+    total_price_brl: total,
+    rs_per_fps_top_game: fpsTop > 0 ? total / fpsTop : 0,
+    fps_top_game: Math.round(fpsTop),
+    top_game_slug: 'cs2' as GameSlug,
+    is_rei_absoluto: b.slug === 'rei-absoluto',
+    is_active: b.is_active,
+    crowned_at: b.crowned_at ?? now,
+    created_at: b.crowned_at ?? now,
+    updated_at: now,
+  }
+}
+
+export async function getLiveBuilds(): Promise<CuratedBuild[] | null> {
+  const builds = await getJson<BuildOut[]>('/builds/')
+  if (builds === null) return null
+  return Promise.all(builds.map(buildOutToCurated))
+}
+
+export async function getLiveBuildBySlug(slug: string): Promise<CuratedBuild | null> {
+  const all = await getLiveBuilds()
+  return all?.find((b) => b.slug === slug) ?? null
+}
+
+export type LiveProduct = { id: number; sku: string; name: string; brand: string | null }
+export async function getLiveProduct(id: number): Promise<LiveProduct | null> {
+  if (!id) return null
+  return getJson<LiveProduct>(`/products/${id}`)
+}
+
+export async function getLiveFpsByBuild(cpuId: number, gpuId: number): Promise<FpsEstimate[]> {
+  const rows = await getJson<FpsEstimate[]>(`/fps/?cpu=${cpuId}&gpu=${gpuId}&res=1080p`)
+  return rows ?? []
+}
+
+export type LiveOffer = { id: number; price_brl: number; url: string; merchant: { name: string } }
+export async function getLiveBestOffer(productId: number): Promise<LiveOffer | null> {
+  if (!productId) return null
+  return getJson<LiveOffer>(`/offers/best?product=${productId}`)
+}
+
+export type LiveCompat = {
+  errors: string[]
+  warnings: string[]
+  clearances: Record<string, { remaining_mm: number; is_tight: boolean }>
+  airflow: unknown[]
+}
+export async function checkLiveCompatibility(
+  components: Record<string, number>,
+): Promise<LiveCompat | null> {
+  return postJson<LiveCompat>('/compatibility/check', { components })
 }
