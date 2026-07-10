@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Syne, IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google'
 import './globals.css'
+import MeuPcChip from '@/components/MeuPcChip'
 
 const syne = Syne({
   subsets: ['latin'],
@@ -54,9 +55,13 @@ export default function RootLayout({
               <a href="/pecas" className="hover:text-gold transition-colors">
                 Peças
               </a>
+              <a href="/meu-pc" className="hover:text-gold transition-colors">
+                Meu PC
+              </a>
               <a href="/wizard" className="hover:text-gold transition-colors">
                 Wizard
               </a>
+              <MeuPcChip />
               <a href="/como-medimos" className="hover:text-gold transition-colors">
                 Como medimos
               </a>
