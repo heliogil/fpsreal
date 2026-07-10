@@ -40,6 +40,7 @@ const mono = { fontFamily: 'var(--font-plex-mono), monospace' }
 const TIER_LABEL: Record<string, string> = {
   r3k: 'R$ 3k', r5k: 'R$ 5k', r8k: 'R$ 8k', r12k_plus: 'R$ 12k+',
 }
+const TIER_ORDER: Record<string, number> = { r3k: 0, r5k: 1, r8k: 2, r12k_plus: 3 }
 function brl(n: number | null): string {
   if (n === null || n === undefined) return '—'
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
@@ -58,7 +59,7 @@ export default async function PecasPage() {
 
   const tronos = builds
     .filter((b) => b.is_rei)
-    .sort((a, b) => (a.budget_tier > b.budget_tier ? 1 : -1))
+    .sort((a, b) => (TIER_ORDER[a.budget_tier] ?? 9) - (TIER_ORDER[b.budget_tier] ?? 9))
   const absoluto = builds.find((b) => b.slug === 'rei-absoluto')
 
   // FPS ao vivo: CPU de referência × cada GPU (lista completa por par).

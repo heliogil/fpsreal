@@ -163,9 +163,7 @@ async def run_wizard(body: WizardRequest, db: AsyncSession = Depends(get_db)) ->
                 )
             )
 
-    if not candidates:
-        raise HTTPException(status_code=404, detail="No complete build fits the budget in this mode.")
-
+    # No fit is a valid, honest empty result (200) — not an error.
     candidates.sort(key=lambda c: _metric(mode, c, gpus_by_id), reverse=True)
     return WizardResponse(
         budget_brl=float(budget),

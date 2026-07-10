@@ -110,8 +110,17 @@ def build_performance_index() -> list[dict]:
     return rows
 
 
+# resolution -> (fps multiplier vs 1080p, confidence band %). Higher res = more
+# GPU-bound and more uncertain, so the band widens.
+RES_SCALE = {
+    "1080p": (1.00, CONFIDENCE_BAND_PCT),
+    "1440p": (0.68, CONFIDENCE_BAND_PCT + 4),
+    "4k": (0.42, CONFIDENCE_BAND_PCT + 7),
+}
+
+
 def build_fps_estimates() -> list[dict]:
-    """Anchor+scale FPS matrix: GPU x game x representative CPU, 1080p high."""
+    """Anchor+scale FPS matrix: GPU x game x representative CPU x resolution, high preset."""
     gpus = _gpu_by_sku()
     cpus = _cpu_by_sku()
     rows: list[dict] = []
@@ -121,25 +130,27 @@ def build_fps_estimates() -> list[dict]:
             for cpu_sku in FPS_MATRIX_CPUS:
                 tier = cpus[cpu_sku]["tier"]
                 cpu_factor = CPU_TIER_FACTOR[tier]
-                fps = base * demand * cpu_factor
-                if cap is not None:
-                    fps = min(fps, cap)
-                fps = round(fps, 1)
-                fps_low = round(fps * (1 - CONFIDENCE_BAND_PCT / 100.0), 1)
-                rows.append({
-                    "cpu_sku": cpu_sku,
-                    "gpu_sku": gpu_sku,
-                    "game_slug": game_slug,
-                    "resolution": "1080p",
-                    "preset": "high",
-                    "fps_estimate": fps,
-                    "fps_low_1pct": fps_low,
-                    "confidence_band_pct": CONFIDENCE_BAND_PCT,
-                    "method": "anchor_scale",
-                    "sources": [
-                        PERF_SOURCE_URL,
-                        "per-game demand factor: heuristic prior pending crowdsourced calibration",
-                    ],
-                    "is_crowdsourced": False,
-                })
+                base_fps = base * demand * cpu_factor
+                for resolution, (res_mult, band) in RES_SCALE.items():
+                    fps = base_fps * res_mult
+                    if cap is not None:
+                        fps = min(fps, cap)  # engine FPS caps apply at every resolution
+                    fps = round(fps, 1)
+                    fps_low = round(fps * (1 - band / 100.0), 1)
+                    rows.append({
+                        "cpu_sku": cpu_sku,
+                        "gpu_sku": gpu_sku,
+                        "game_slug": game_slug,
+                        "resolution": resolution,
+                        "preset": "high",
+                        "fps_estimate": fps,
+                        "fps_low_1pct": fps_low,
+                        "confidence_band_pct": band,
+                        "method": "anchor_scale",
+                        "sources": [
+                            PERF_SOURCE_URL,
+                            "per-game demand + resolution scale: heuristic prior pending crowdsourced calibration",
+                        ],
+                        "is_crowdsourced": False,
+                    })
     return rows

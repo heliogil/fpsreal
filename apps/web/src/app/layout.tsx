@@ -37,17 +37,17 @@ export default function RootLayout({
     <html lang="pt-BR" className={`${syne.variable} ${plex.variable} ${plexMono.variable}`}>
       <body>
         <header className="border-b border-border">
-          <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-            <a href="/" className="flex items-center gap-2">
+          <div className="max-w-6xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <a href="/" className="flex items-center gap-2 shrink-0">
               <span className="text-2xl" aria-hidden="true">🦅</span>
               <span
-                className="text-xl"
+                className="text-xl whitespace-nowrap"
                 style={{ fontFamily: 'var(--font-syne), Syne, sans-serif', fontWeight: 700 }}
               >
                 Rei do FPS
               </span>
             </a>
-            <nav className="flex items-center gap-4 sm:gap-6 text-sm">
+            <nav className="flex flex-wrap items-center gap-x-4 sm:gap-x-6 gap-y-1 text-sm">
               <a href="/#tronos" className="hover:text-gold transition-colors">
                 Tronos
               </a>

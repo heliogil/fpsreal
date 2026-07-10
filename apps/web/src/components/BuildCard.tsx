@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import type { CuratedBuild } from '@/lib/repositories/types'
+import type { CuratedBuild, Resolution } from '@/lib/repositories/types'
 import KingBadge from './KingBadge'
 import FpsBadge from './FpsBadge'
 import PriceTag from './PriceTag'
@@ -7,14 +7,19 @@ import PriceTag from './PriceTag'
 interface BuildCardProps {
   build: CuratedBuild
   variant?: 'default' | 'rei' | 'equilibrado' | 'arrojado'
+  /** Detail link href. `undefined` → default `/build/{slug}`. `null` → hide (dynamic builds). */
+  detailHref?: string | null
+  /** Resolution the FPS figure was estimated at (label only). */
+  resolution?: Resolution
 }
 
 function formatBRL(n: number): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-export default function BuildCard({ build, variant = 'default' }: BuildCardProps) {
+export default function BuildCard({ build, variant = 'default', detailHref, resolution = '1080p' }: BuildCardProps) {
   const isHighlight = variant === 'rei' || build.is_rei_absoluto
+  const href = detailHref === undefined ? `/build/${build.slug}` : detailHref
 
   return (
     <div
@@ -64,7 +69,7 @@ export default function BuildCard({ build, variant = 'default' }: BuildCardProps
             cpu_id: build.components.cpu_id,
             gpu_id: build.components.gpu_id,
             game_slug: build.top_game_slug,
-            resolution: '1080p',
+            resolution,
             preset: 'high',
             fps: build.fps_top_game,
             confidence_band_pct: 15,
@@ -75,12 +80,15 @@ export default function BuildCard({ build, variant = 'default' }: BuildCardProps
         />
       </div>
 
-      <Link
-        href={`/build/${build.slug}`}
-        className="btn-ghost w-full text-center text-sm"
-      >
-        Ver build completo →
-      </Link>
+      {href ? (
+        <Link href={href} className="btn-ghost w-full text-center text-sm">
+          Ver build completo →
+        </Link>
+      ) : (
+        <div className="text-center text-xs text-secondary pt-2">
+          Build montada sob medida pela Harpia
+        </div>
+      )}
     </div>
   )
 }
