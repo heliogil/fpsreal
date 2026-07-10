@@ -1,13 +1,21 @@
 """Wizard endpoint — the core of the product.
 
-Takes a budget + games and returns the top builds ranked by **cost-per-FPS of
-the complete build** (not just CPU+GPU). For each CPU+GPU pair it auto-selects
-the cheapest *compatible* motherboard, RAM, PSU, cooler, case and storage, then
-ranks by ``avg_fps / total_build_price``.
+Takes a budget + games + a **priority mode** and returns the top complete
+builds. For each CPU+GPU pair it auto-selects the cheapest *compatible*
+motherboard, RAM, PSU, cooler, case and storage (the selection itself adapts
+to the mode), then ranks by a mode-specific metric.
 
-Every FPS figure is an anchor+scale **estimate** (``method`` +
-``confidence_band``); the API never claims figures were measured on hardware.
-FPS for any CPU is estimated via its tier's representative in the seeded matrix.
+Modes (``priority``):
+- ``budget``      — best cost per FPS: maximise ``avg_fps / total_price`` (default).
+- ``fps``         — max FPS in budget: maximise ``avg_fps`` (spends up to budget).
+- ``quiet``       — FPS per watt: maximise ``avg_fps / system_tdp``; forces an
+                    aftermarket cooler with ≥50% TDP headroom (no stock).
+- ``future_proof``— longevity: AM5 only + 32GB RAM + PSU ×1.5 headroom + 2TB SSD;
+                    ranks by ``avg_fps × VRAM bonus``.
+
+Every FPS figure is an anchor+scale **estimate** (``method`` + confidence band);
+the API never claims figures were measured. FPS for any CPU is estimated via its
+tier's representative in the seeded matrix.
 """
 from __future__ import annotations
 
@@ -24,15 +32,21 @@ from models import FpsEstimate, Offer, Product, Variant
 
 router = APIRouter(tags=["wizard"])
 
-# CPUs with seeded FPS rows; every CPU maps to its tier's representative.
 TIER_TO_MATRIX_SKU = {
     "flagship": "cpu-r7-9800x3d",
     "high": "cpu-r5-7600",
     "mid": "cpu-r5-7600",
     "budget": "cpu-r5-5600",
 }
-PSU_HEADROOM = 1.25
 PSU_OVERHEAD_W = 100.0
+PSU_HEADROOM = {"future_proof": 1.5}
+PSU_HEADROOM_DEFAULT = 1.25
+QUIET_COOLER_MULT = 1.5          # quiet mode wants a cooler with big headroom
+FUTUREPROOF_MIN_RAM_GB = 32
+FUTUREPROOF_MIN_STORAGE_GB = 2000
+DEAD_END_SOCKETS = {"AM4"}       # excluded in future_proof (no upgrade path)
+
+_BUILD_SLOTS = ("cpu", "gpu", "motherboard", "ram", "psu", "cooler", "case", "storage")
 
 
 # ---------------------------------------------------------------------------
@@ -45,7 +59,11 @@ class WizardRequest(BaseModel):
     games: List[str] = Field(default_factory=list)
     resolution: str = Field("1080p", pattern="^(1080p|1440p|4k)$")
     preset: str = Field("high", pattern="^(low|medium|high|ultra)$")
-    priority: Optional[str] = Field(None, description="'fps', 'silence', 'upgrade_path'.")
+    priority: str = Field(
+        "budget",
+        pattern="^(budget|fps|quiet|future_proof)$",
+        description="Ranking mode: budget | fps | quiet | future_proof.",
+    )
 
 
 class FpsFigure(BaseModel):
@@ -67,6 +85,8 @@ class BuildCandidate(BaseModel):
     cpu_id: int
     gpu_id: int
     total_price_brl: float
+    total_tdp_w: float
+    avg_fps: float
     fps_per_brl: float
     fps_figures: List[FpsFigure]
     components: List[ComponentOut]
@@ -77,6 +97,7 @@ class WizardResponse(BaseModel):
     budget_brl: float
     resolution: str
     preset: str
+    priority: str
     candidates: List[BuildCandidate]
 
 
@@ -84,18 +105,17 @@ class WizardResponse(BaseModel):
 # Endpoint
 # ---------------------------------------------------------------------------
 
-# Fixed slot order for a complete build.
-_BUILD_SLOTS = ("cpu", "gpu", "motherboard", "ram", "psu", "cooler", "case", "storage")
-
 
 @router.post("/", response_model=WizardResponse)
 async def run_wizard(body: WizardRequest, db: AsyncSession = Depends(get_db)) -> WizardResponse:
     budget = Decimal(body.budget_brl)
+    mode = body.priority
     catalog = await _load_catalog(db)
     cpus, gpus = catalog.get("cpu", []), catalog.get("gpu", [])
     if not cpus or not gpus:
         raise HTTPException(status_code=404, detail="Catalog has no priced CPUs/GPUs yet.")
 
+    gpus_by_id = {g["product_id"]: g for g in gpus}
     sku_to_id = {c["sku"]: c["product_id"] for c in cpus}
     matrix_ids = {t: sku_to_id.get(s) for t, s in TIER_TO_MATRIX_SKU.items()}
     fps_map = await _load_fps(
@@ -109,7 +129,7 @@ async def run_wizard(body: WizardRequest, db: AsyncSession = Depends(get_db)) ->
         for gpu in gpus:
             if cpu["price"] + gpu["price"] > budget:
                 continue
-            built = _complete_build(cpu, gpu, catalog)
+            built = _complete_build(cpu, gpu, catalog, mode)
             if built is None:
                 continue
             parts, total = built
@@ -121,11 +141,14 @@ async def run_wizard(body: WizardRequest, db: AsyncSession = Depends(get_db)) ->
             avg_fps = sum(f["fps_estimate"] for f in figures) / len(figures)
             if avg_fps <= 0:
                 continue
+            total_tdp = _fnum(cpu["specs"], "tdp_w") + _fnum(gpu["specs"], "tdp_w")
             candidates.append(
                 BuildCandidate(
                     cpu_id=cpu["product_id"],
                     gpu_id=gpu["product_id"],
                     total_price_brl=float(total),
+                    total_tdp_w=total_tdp,
+                    avg_fps=round(avg_fps, 1),
                     fps_per_brl=avg_fps / float(total),
                     fps_figures=[FpsFigure(**f) for f in figures],
                     components=[
@@ -141,19 +164,36 @@ async def run_wizard(body: WizardRequest, db: AsyncSession = Depends(get_db)) ->
             )
 
     if not candidates:
-        raise HTTPException(status_code=404, detail="No complete build fits the budget with FPS data.")
+        raise HTTPException(status_code=404, detail="No complete build fits the budget in this mode.")
 
-    candidates.sort(key=lambda c: c.fps_per_brl, reverse=True)
+    candidates.sort(key=lambda c: _metric(mode, c, gpus_by_id), reverse=True)
     return WizardResponse(
         budget_brl=float(budget),
         resolution=body.resolution,
         preset=body.preset,
+        priority=mode,
         candidates=candidates[:3],
     )
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Ranking metric per mode
+# ---------------------------------------------------------------------------
+
+
+def _metric(mode: str, c: BuildCandidate, gpus_by_id: Dict[int, dict]) -> float:
+    if mode == "fps":
+        return c.avg_fps
+    if mode == "quiet":
+        return c.avg_fps / max(c.total_tdp_w, 1.0)
+    if mode == "future_proof":
+        vram = _fnum(gpus_by_id.get(c.gpu_id, {}).get("specs", {}), "vram_gb")
+        return c.avg_fps * (1.0 + vram / 24.0)
+    return c.fps_per_brl  # budget (default)
+
+
+# ---------------------------------------------------------------------------
+# Catalog / build completion
 # ---------------------------------------------------------------------------
 
 
@@ -180,7 +220,7 @@ async def _load_catalog(db: AsyncSession) -> Dict[str, List[dict]]:
 
     catalog: Dict[str, List[dict]] = {}
     for p in products:
-        if p.id not in cheapest:  # no price -> cannot be part of a priced build
+        if p.id not in cheapest:
             continue
         catalog.setdefault(p.category, []).append({
             "product_id": p.id, "name": p.name, "sku": p.sku,
@@ -192,7 +232,6 @@ async def _load_catalog(db: AsyncSession) -> Dict[str, List[dict]]:
 
 
 def _cheapest_where(items: List[dict], pred) -> Optional[dict]:
-    """First (cheapest, since pre-sorted) item satisfying pred."""
     for it in items:
         if pred(it):
             return it
@@ -206,28 +245,46 @@ def _fnum(specs: dict, key: str) -> float:
         return 0.0
 
 
-def _complete_build(cpu: dict, gpu: dict, catalog: Dict[str, List[dict]]) -> Optional[Tuple[dict, Decimal]]:
-    """Pick the cheapest compatible mobo/ram/psu/cooler/case/storage. None if any is missing."""
+def _complete_build(
+    cpu: dict, gpu: dict, catalog: Dict[str, List[dict]], mode: str
+) -> Optional[Tuple[dict, Decimal]]:
+    """Cheapest compatible mobo/ram/psu/cooler/case/storage. Selection adapts to mode."""
     socket = cpu["specs"].get("socket")
     cpu_tdp = _fnum(cpu["specs"], "tdp_w")
     gpu_tdp = _fnum(gpu["specs"], "tdp_w")
     gpu_len = _fnum(gpu["specs"], "length_mm")
 
+    if mode == "future_proof" and socket in DEAD_END_SOCKETS:
+        return None  # no upgrade path
+
     mobo = _cheapest_where(catalog.get("motherboard", []), lambda m: m["specs"].get("socket") == socket)
     if not mobo:
         return None
     ram_type = mobo["specs"].get("ram_type")
-    ram = _cheapest_where(catalog.get("ram", []), lambda r: r["specs"].get("type") == ram_type)
+    ram_min = FUTUREPROOF_MIN_RAM_GB if mode == "future_proof" else 0
+    ram = _cheapest_where(
+        catalog.get("ram", []),
+        lambda r: r["specs"].get("type") == ram_type and _fnum(r["specs"], "capacity_gb") >= ram_min,
+    )
     if not ram:
         return None
-    need_w = (cpu_tdp + gpu_tdp + PSU_OVERHEAD_W) * PSU_HEADROOM
+
+    headroom = PSU_HEADROOM.get(mode, PSU_HEADROOM_DEFAULT)
+    need_w = (cpu_tdp + gpu_tdp + PSU_OVERHEAD_W) * headroom
     psu = _cheapest_where(catalog.get("psu", []), lambda p: _fnum(p["specs"], "watts") >= need_w)
     if not psu:
         return None
-    cooler = _cheapest_where(catalog.get("cooler", []), lambda c: _fnum(c["specs"], "tdp_rating_w") >= cpu_tdp)
+
+    cool_mult = QUIET_COOLER_MULT if mode == "quiet" else 1.0
+    cooler = _cheapest_where(
+        catalog.get("cooler", []),
+        lambda c: _fnum(c["specs"], "tdp_rating_w") >= cpu_tdp * cool_mult
+        and (mode != "quiet" or c["specs"].get("cooler_type") != "stock"),
+    )
     if not cooler:
         return None
     cooler_h = _fnum(cooler["specs"], "height_mm")
+
     case = _cheapest_where(
         catalog.get("case", []),
         lambda k: _fnum(k["specs"], "max_gpu_length_mm") >= gpu_len
@@ -235,10 +292,16 @@ def _complete_build(cpu: dict, gpu: dict, catalog: Dict[str, List[dict]]) -> Opt
     )
     if not case:
         return None
+
     storage_list = catalog.get("storage", [])
     if not storage_list:
         return None
-    storage = storage_list[0]
+    if mode == "future_proof":
+        storage = _cheapest_where(
+            storage_list, lambda s: _fnum(s["specs"], "capacity_gb") >= FUTUREPROOF_MIN_STORAGE_GB
+        ) or storage_list[0]
+    else:
+        storage = storage_list[0]
 
     parts = {
         "cpu": cpu, "gpu": gpu, "motherboard": mobo, "ram": ram,
