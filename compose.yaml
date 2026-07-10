@@ -50,6 +50,8 @@ services:
     environment:
       NEXT_PUBLIC_DATA_SOURCE: mock
       NEXT_PUBLIC_API_BASE: /api
+      # Server-side (SSR) base for live pages like /pecas — internal docker DNS.
+      PCB_API_INTERNAL: http://pcb_api:8100
     networks:
       - pcb_net
     depends_on:
