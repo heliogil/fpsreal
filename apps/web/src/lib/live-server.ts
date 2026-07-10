@@ -230,3 +230,38 @@ export async function checkLiveCompatibility(
 ): Promise<LiveCompat | null> {
   return postJson<LiveCompat>('/compatibility/check', { components })
 }
+
+// ---------------------------------------------------------------------------
+// Case interior — fit + airflow (feeds the Canvas viewport)
+// ---------------------------------------------------------------------------
+
+export type InteriorZone = { zone: string; type: string; status: string }
+export type LiveInterior = {
+  method: string
+  case: {
+    name: string | null
+    form_factor: string | null
+    airflow_class: string | null
+    max_gpu_length_mm: number | null
+    max_cooler_height_mm: number | null
+  }
+  parts: {
+    cpu: { name: string | null; tdp_w: number }
+    gpu: { name: string | null; length_mm: number; tdp_w: number }
+    cooler: { name: string | null; height_mm: number }
+  }
+  clearances: Record<string, { remaining_mm: number; is_tight: boolean }>
+  airflow: {
+    score: number
+    pressure_balance: string
+    cfm: number
+    heat: { cpu_w: number; gpu_w: number; total_w: number }
+    zones: InteriorZone[]
+  }
+}
+
+export async function getLiveInterior(
+  components: Record<string, number>,
+): Promise<LiveInterior | null> {
+  return postJson<LiveInterior>('/interior/estimate', { components })
+}

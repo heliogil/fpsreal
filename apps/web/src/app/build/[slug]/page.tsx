@@ -5,10 +5,12 @@ import {
   checkLiveCompatibility,
   getLiveProduct,
   getLiveBestOffer,
+  getLiveInterior,
 } from '@/lib/live-server'
 import KingBadge from '@/components/KingBadge'
 import FpsBadge from '@/components/FpsBadge'
 import CompatibilityChecker from '@/components/CompatibilityChecker'
+import GabineteInterior from '@/components/GabineteInterior'
 import HarpiaVerdict from '@/components/HarpiaVerdict'
 import type { BuildComponents } from '@/lib/repositories/types'
 import { gameLabel } from '@/lib/labels'
@@ -43,9 +45,11 @@ export default async function BuildDetailPage({ params }: PageProps) {
     build.components.gpu_id,
   )
 
-  const compat = (await checkLiveCompatibility(
-    build.components as unknown as Record<string, number>,
-  )) ?? { errors: [], warnings: [], clearances: {}, airflow: [] }
+  const components = build.components as unknown as Record<string, number>
+  const compat = (await checkLiveCompatibility(components)) ?? {
+    errors: [], warnings: [], clearances: {}, airflow: [],
+  }
+  const interior = await getLiveInterior(components)
 
   // Best offer per component (parallel), from the live catalog.
   const offerEntries = await Promise.all(
@@ -181,7 +185,17 @@ export default async function BuildDetailPage({ params }: PageProps) {
         </div>
       </section>
 
-      {/* Compatibilidade (o motor de airflow é uma feature futura) */}
+      {/* Interior do gabinete — encaixe (clearance) + fluxo de ar, ao vivo */}
+      {interior && (
+        <section>
+          <h2 className="text-2xl mb-4" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+            Dentro do gabinete
+          </h2>
+          <GabineteInterior data={interior} />
+        </section>
+      )}
+
+      {/* Compatibilidade — soquete, RAM, PSU (o encaixe físico está acima) */}
       <CompatibilityChecker
         errors={compat.errors}
         warnings={compat.warnings}

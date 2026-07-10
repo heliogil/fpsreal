@@ -49,7 +49,7 @@ def create_app() -> FastAPI:
     # Routers — imported here so module-level errors surface as ImportError
     # during app construction rather than at first request.
     from routers import (
-        builds, compatibility, fps, go, health, offers, products, track, wizard,
+        builds, compatibility, fps, go, health, interior, offers, products, track, wizard,
     )
 
     app.include_router(health.router)
@@ -59,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(fps.router, prefix="/fps", tags=["fps"])
     app.include_router(offers.router, prefix="/offers", tags=["offers"])
     app.include_router(compatibility.router, prefix="/compatibility", tags=["compatibility"])
+    app.include_router(interior.router, prefix="/interior", tags=["interior"])
     app.include_router(track.router, prefix="/track", tags=["tracking"])
     app.include_router(go.router, prefix="/go", tags=["redirect"])
 

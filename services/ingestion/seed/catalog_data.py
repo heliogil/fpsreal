@@ -95,13 +95,14 @@ PSUS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Cases — form factor, max GPU length (mm), max cooler height (mm).
+# Cases — form factor, max GPU length (mm), max cooler height (mm),
+# airflow_class (low/medium/high), nominal base_cfm (feeds the airflow solver).
 # ---------------------------------------------------------------------------
 CASES = [
-    ("case-lancool-216", "Lian Li Lancool 216",     "Lian Li", "ATX", 392, 180),
-    ("case-h5-flow",     "NZXT H5 Flow",            "NZXT",    "ATX", 365, 165),
-    ("case-4000d",       "Corsair 4000D Airflow",   "Corsair", "ATX", 360, 170),
-    ("case-air-903",     "Montech Air 903 MAX",     "Montech", "ATX", 400, 175),
+    ("case-lancool-216", "Lian Li Lancool 216",     "Lian Li", "ATX", 392, 180, "high",   220),
+    ("case-h5-flow",     "NZXT H5 Flow",            "NZXT",    "ATX", 365, 165, "medium", 150),
+    ("case-4000d",       "Corsair 4000D Airflow",   "Corsair", "ATX", 360, 170, "high",   185),
+    ("case-air-903",     "Montech Air 903 MAX",     "Montech", "ATX", 400, 175, "high",   205),
 ]
 
 # ---------------------------------------------------------------------------
@@ -166,11 +167,12 @@ def build_products() -> list[dict]:
             "specs": {"watts": watts, "efficiency": eff, "modular": modular},
             "footprint": None,
         })
-    for sku, name, brand, ff, max_gpu, max_cooler in CASES:
+    for sku, name, brand, ff, max_gpu, max_cooler, airflow_class, base_cfm in CASES:
         products.append({
             "sku": sku, "name": name, "category": "case", "brand": brand,
             "specs": {"form_factor": ff, "max_gpu_length_mm": max_gpu,
-                      "max_cooler_height_mm": max_cooler},
+                      "max_cooler_height_mm": max_cooler,
+                      "airflow_class": airflow_class, "base_cfm": base_cfm},
             "footprint": None,
         })
     for sku, name, brand, cooler_type, tdp_rating, height in COOLERS:
