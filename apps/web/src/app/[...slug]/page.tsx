@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { getLiveBuilds } from '@/lib/live-server'
 import { getMockRepository } from '@/lib/repositories'
 
 interface PageProps {
@@ -19,8 +20,11 @@ function formatBRL(n: number): string {
 
 export default async function SeoCatchAllPage({ params }: PageProps) {
   const slugStr = (params.slug ?? []).join('/')
-  const repo = getMockRepository()
-  const directBuild = await repo.builds.getBySlug(slugStr)
+  // Live-first, mock only as a fallback if the API is unreachable — the same
+  // pattern as the home and results pages, so these SEO pages show the same
+  // numbers as the rest of the site (never stale fixture prices).
+  const builds = (await getLiveBuilds()) ?? (await getMockRepository().builds.getAll())
+  const directBuild = builds.find((b) => b.slug === slugStr) ?? null
   if (directBuild) {
     return (
       <div className="text-center py-16">
@@ -48,8 +52,10 @@ export default async function SeoCatchAllPage({ params }: PageProps) {
     tierGuess = 'r12k_plus'; tierLabel = 'R$ 12k+'
   }
 
-  // Pega o Rei da faixa inferida (se houver).
-  const rei = tierGuess ? await repo.builds.getByTier(tierGuess) : null
+  // Pega o Rei da faixa inferida (se houver), a partir dos builds ao vivo.
+  const rei = tierGuess
+    ? (builds.find((b) => b.tier === tierGuess && !b.is_rei_absoluto) ?? null)
+    : null
 
   // Extrai um "nome do concorrente" legível a partir do slug.
   const contenderName = (params.slug ?? [])
