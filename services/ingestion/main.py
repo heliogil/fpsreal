@@ -50,7 +50,7 @@ def create_app() -> FastAPI:
     # during app construction rather than at first request.
     from routers import (
         builds, compatibility, fps, go, health, interior, offers, products,
-        track, upgrade, wizard,
+        track, upgrade, vs, wizard,
     )
 
     app.include_router(health.router)

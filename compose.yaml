@@ -8,7 +8,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-pcb_db}
     ports:
-      - "5434:5432"
+      # Bind to loopback only — the DB is reached by pcb_api over the docker
+      # network (pcb_db:5432). Never expose Postgres on the public interface;
+      # host-level firewall (DOCKER-USER) does not cover this stack.
+      - "127.0.0.1:5434:5432"
     volumes:
       - pcb_db_data:/var/lib/postgresql/data
     networks:
@@ -29,7 +32,9 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pcb_db:5432/${POSTGRES_DB}
     ports:
-      - "8100:8100"
+      # Loopback only — public traffic reaches the API via nginx (/api/ ->
+      # 127.0.0.1:8100). No need to publish on 0.0.0.0.
+      - "127.0.0.1:8100:8100"
     depends_on:
       pcb_db:
         condition: service_healthy
@@ -46,7 +51,9 @@ services:
     container_name: pcb_web
     restart: unless-stopped
     ports:
-      - "3100:3100"
+      # Loopback only — public traffic reaches the web app via nginx
+      # (location / -> 127.0.0.1:3100).
+      - "127.0.0.1:3100:3100"
     environment:
       NEXT_PUBLIC_DATA_SOURCE: mock
       NEXT_PUBLIC_API_BASE: /api
