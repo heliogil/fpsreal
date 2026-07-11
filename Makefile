@@ -1,5 +1,11 @@
 # Rei do FPS — pc-builder-br dev commands
-.PHONY: up down db-shell db-status schema-apply schema-reset
+.PHONY: up down db-shell db-status schema-apply schema-reset test
+
+# Contract + smoke tests: run inside the pcb_api container against the running
+# API + seeded DB. Installs test-only deps (pytest) ad-hoc; the prod image stays
+# slim. Requires the stack up (`docker compose up -d`).
+test:
+	docker exec pcb_api sh -c "pip install -q -r requirements-dev.txt && cd /app && python -m pytest tests/"
 
 up:
 	docker compose up -d pcb_db

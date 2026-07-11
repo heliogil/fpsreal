@@ -1,0 +1,3 @@
+# Test-only dependencies — NOT installed in the production image.
+# httpx and psycopg2-binary are already in requirements.txt (reused by the tests).
+pytest>=8.0,<9
