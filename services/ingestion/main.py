@@ -64,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(upgrade.router, prefix="/upgrade", tags=["upgrade"])
     app.include_router(track.router, prefix="/track", tags=["tracking"])
     app.include_router(go.router, prefix="/go", tags=["redirect"])
+    app.include_router(vs.router, prefix="/vs", tags=["vs"])
 
     @app.get("/", tags=["meta"])
     async def root() -> dict:

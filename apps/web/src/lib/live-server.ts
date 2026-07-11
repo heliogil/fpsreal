@@ -259,3 +259,49 @@ export async function getLiveInterior(
 ): Promise<LiveInterior | null> {
   return postJson<LiveInterior>('/interior/estimate', { components })
 }
+
+// ---------------------------------------------------------------------------
+// GPU head-to-head comparison
+// ---------------------------------------------------------------------------
+
+export type VsGpuSpec = {
+  id: number
+  sku: string
+  name: string
+  brand: string
+  tdp_w: number
+  vram_gb: number
+  length_mm: number
+  fps_1080p_agg: number
+  index_value: number
+}
+
+export type VsGameRow = {
+  game_slug: string
+  game_label: string
+  fps_a: number
+  fps_b: number
+  delta_pct: number
+  winner: 'a' | 'b' | 'tie'
+}
+
+export type VsData = {
+  gpu_a: VsGpuSpec
+  gpu_b: VsGpuSpec
+  resolution: string
+  reference_cpu_name: string
+  reference_cpu_sku: string
+  overall_winner: 'a' | 'b' | 'tie'
+  avg_fps_a: number
+  avg_fps_b: number
+  avg_delta_pct: number
+  rows: VsGameRow[]
+}
+
+export async function getLiveVs(
+  skuA: string,
+  skuB: string,
+  res = '1080p',
+): Promise<VsData | null> {
+  return getJson<VsData>(`/vs/${skuA}/${skuB}?res=${res}`)
+}
