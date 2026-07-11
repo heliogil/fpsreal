@@ -219,10 +219,12 @@ export async function getLiveBestOffer(productId: number): Promise<LiveOffer | n
   return getJson<LiveOffer>(`/offers/best?product=${productId}`)
 }
 
+export type CompatCheck = { a: string; b: string; label: string; status: string; message: string | null }
 export type LiveCompat = {
   errors: string[]
   warnings: string[]
   clearances: Record<string, { remaining_mm: number; is_tight: boolean }>
+  checks?: CompatCheck[]
   airflow: unknown[]
 }
 export async function checkLiveCompatibility(

@@ -85,6 +85,15 @@ async def check_build(body: CheckRequest, db: AsyncSession = Depends(get_db)):
 
     errors: list[str] = []
     warnings: list[str] = []
+    checks: list[dict] = []  # structured, for the visual diagram
+
+    rule_label = {
+        "socket_match": "soquete",
+        "ram_type_match": "tipo de RAM",
+        "gpu_case_clearance": "GPU cabe",
+        "cooler_case_clearance": "cooler cabe",
+        "cooler_tdp_headroom": "cooler dá conta",
+    }
 
     rules = (
         await db.execute(select(CompatibilityRule).where(CompatibilityRule.is_active.is_(True)))
@@ -97,9 +106,16 @@ async def check_build(body: CheckRequest, db: AsyncSession = Depends(get_db)):
         b_val = (pb.specs or {}).get(r.attribute_b)
         if a_val is None or b_val is None:
             continue
-        if not _passes(r.operator, a_val, b_val):
-            msg = _fmt(r.message_template, pa, a_val, pb, b_val)
+        ok = _passes(r.operator, a_val, b_val)
+        status = "ok" if ok else ("error" if r.severity == "error" else "warning")
+        msg = None if ok else _fmt(r.message_template, pa, a_val, pb, b_val)
+        if not ok:
             (errors if r.severity == "error" else warnings).append(msg)
+        checks.append({
+            "a": r.category_a, "b": r.category_b,
+            "label": rule_label.get(r.rule_type, r.rule_type),
+            "status": status, "message": msg,
+        })
 
     # Physical clearances (GPU / cooler vs case)
     clearances: Dict[str, dict] = {}
@@ -131,10 +147,17 @@ async def check_build(body: CheckRequest, db: AsyncSession = Depends(get_db)):
             if p:
                 total += _num((p.specs or {}).get("tdp_w")) or 0.0
         total += 100.0  # board + drives + fans overhead
-        if watts is not None and total > 0 and watts < total * 1.25:
-            warnings.append(
-                f"A fonte {psu.name} ({int(watts)}W) tem margem apertada para ~{int(total)}W de consumo. "
-                f"Recomendado ≥ {int(total * 1.25)}W."
-            )
+        if watts is not None and total > 0:
+            tight = watts < total * 1.25
+            if tight:
+                warnings.append(
+                    f"A fonte {psu.name} ({int(watts)}W) tem margem apertada para ~{int(total)}W de consumo. "
+                    f"Recomendado ≥ {int(total * 1.25)}W."
+                )
+            checks.append({
+                "a": "psu", "b": "system", "label": "potência",
+                "status": "warning" if tight else "ok",
+                "message": (f"{int(watts)}W p/ ~{int(total)}W (recomendado ≥{int(total * 1.25)}W)" if tight else None),
+            })
 
-    return {"errors": errors, "warnings": warnings, "clearances": clearances, "airflow": []}
+    return {"errors": errors, "warnings": warnings, "clearances": clearances, "checks": checks, "airflow": []}

@@ -47,7 +47,7 @@ export default async function BuildDetailPage({ params }: PageProps) {
 
   const components = build.components as unknown as Record<string, number>
   const compat = (await checkLiveCompatibility(components)) ?? {
-    errors: [], warnings: [], clearances: {}, airflow: [],
+    errors: [], warnings: [], clearances: {}, checks: [], airflow: [],
   }
   const interior = await getLiveInterior(components)
 
@@ -200,6 +200,7 @@ export default async function BuildDetailPage({ params }: PageProps) {
         errors={compat.errors}
         warnings={compat.warnings}
         clearances={compat.clearances}
+        checks={compat.checks}
       />
 
       {/* CTA */}

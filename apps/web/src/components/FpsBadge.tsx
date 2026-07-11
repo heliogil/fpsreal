@@ -37,11 +37,18 @@ export default function FpsBadge({
         </span>
       </div>
       {showBand && (
-        <div className="text-xs text-secondary">
-          banda estimada{' '}
-          <span className="num-mono">
-            {low}–{high} fps (±{confidence_band_pct}%)
-          </span>
+        <div style={{ maxWidth: 168 }}>
+          <div
+            style={{ position: 'relative', height: 5, background: 'var(--bg-elevated, #1a1a26)', borderRadius: 999, marginTop: 3 }}
+            role="img"
+            aria-label={`Banda estimada ${low} a ${high} FPS, mais ou menos ${confidence_band_pct} por cento`}
+          >
+            <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${(100 - Math.min(90, confidence_band_pct * 2)) / 2}%`, width: `${Math.min(90, confidence_band_pct * 2)}%`, background: 'var(--text-mono, #c0ffb0)', opacity: 0.25, borderRadius: 999 }} />
+            <div style={{ position: 'absolute', top: -2, bottom: -2, left: '50%', width: 2, background: 'var(--text-mono, #c0ffb0)', transform: 'translateX(-1px)', borderRadius: 2 }} />
+          </div>
+          <div className="text-xs text-secondary" style={{ marginTop: 3 }}>
+            <span className="num-mono">{low}–{high} fps</span> · ±{confidence_band_pct}% estimativa
+          </div>
         </div>
       )}
       {showSource && sources && sources.length > 0 && (
