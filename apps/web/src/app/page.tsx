@@ -113,44 +113,44 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* SEO comparativos */}
+      {/* Comparações GPU — links reais para o sistema /vs (FPS estimado, sem números inventados) */}
       <section className="py-12">
         <div className="text-center mb-8">
           <h2
             className="text-3xl mb-2"
             style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}
           >
-            Comparativos da semana
+            Comparações de GPU
           </h2>
           <p className="text-secondary text-sm">
-            “X vs o Rei” — toda build nova é medida contra o trono da sua faixa.
+            FPS estimado jogo a jogo, GPU contra GPU. Sem palpite — a conta aberta.
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
-            { x: 'i5-13400F + RTX 4060', rei: 'Rei dos R$ 5k', verdict: 'perde em 18 FPS no CS2' },
-            { x: 'Ryzen 7 5800X3D + RX 6700 XT', rei: 'Rei dos R$ 8k', verdict: 'CPU forte, GPU fraca — perde 35 FPS' },
-            { x: 'i5-14600K + RTX 4070', rei: 'Rei dos R$ 8k', verdict: 'empate técnico no 1440p' },
-          ].map((c, i) => (
+            { a: 'rtx-5070-ti', b: 'rtx-4070-super', label: 'RTX 5070 Ti vs RTX 4070 SUPER', note: 'Vale o salto da série 50?' },
+            { a: 'rtx-4060', b: 'rx-7600', label: 'RTX 4060 vs RX 7600', note: 'Entrada de linha: NVIDIA vs AMD' },
+            { a: 'rtx-5090', b: 'rtx-4090', label: 'RTX 5090 vs RTX 4090', note: 'O rei vs o seu antecessor' },
+          ].map((c) => (
             <Link
-              key={i}
-              href={`/${c.x.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}-vs-${c.rei.toLowerCase().replace(/\s+/g, '-').replace(/\+/g, 'plus')}`}
+              key={`${c.a}-${c.b}`}
+              href={`/vs/${c.a}/${c.b}`}
               className="card hover:border-gold transition-colors"
             >
-              <div className="text-xs uppercase tracking-wider text-secondary mb-1">
-                {c.rei}
-              </div>
               <h3 className="text-lg mb-2" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
-                {c.x}
+                {c.label}
               </h3>
-              <p className="text-sm text-secondary">
-                <span style={{ color: 'var(--accent-orange)' }}>vs</span> {c.rei} — {c.verdict}.
-              </p>
+              <p className="text-sm text-secondary">{c.note}</p>
               <div className="mt-3 text-xs" style={{ color: 'var(--accent-gold)' }}>
-                ler comparativo →
+                ver comparação →
               </div>
             </Link>
           ))}
+        </div>
+        <div className="text-center mt-6">
+          <Link href="/vs" className="text-sm" style={{ color: 'var(--accent-gold)' }}>
+            Ver todas as comparações →
+          </Link>
         </div>
       </section>
 

@@ -31,18 +31,27 @@ def create_app() -> FastAPI:
         ),
     )
 
-    # CORS — local Next.js dev (port 3100). Additional origins can be added
-    # via the comma-separated CORS_ALLOW_ORIGINS env var.
+    # CORS. In production the web app calls the API same-origin through nginx
+    # (/api/), so cross-origin requests only happen in local dev or from tools.
+    # The API has no cookie/session auth, so allow_credentials stays False —
+    # which is both safer and keeps an explicit (wildcard-free) origin list
+    # valid. Extra origins can be added via the CORS_ALLOW_ORIGINS env var
+    # (comma-separated).
+    default_origins = [
+        "http://localhost:3100",
+        "https://reidofps.com.br",
+        "https://www.reidofps.com.br",
+    ]
     allow_origins_env = os.environ.get("CORS_ALLOW_ORIGINS", "")
     allow_origins = [
         o.strip() for o in allow_origins_env.split(",") if o.strip()
-    ] or ["http://localhost:3100"]
+    ] or default_origins
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allow_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
     )
 
