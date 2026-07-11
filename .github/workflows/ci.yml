@@ -1,0 +1,128 @@
+# Rei do FPS — CI/CD
+#
+# CI  (every push + PR to master): bring the real Docker stack up from a clean
+#      checkout, apply the schema, seed, and run the smoke + contract suite.
+#      Because it boots the stack from scratch, it also catches "won't start"
+#      regressions (e.g. a router referenced but not imported).
+#
+# CD  (push to master, after CI passes): SSH to the VPS and deploy via
+#      `git pull` + `docker compose up -d --build`. The repo is public, so the
+#      VPS needs no GitHub credentials — only the Action needs SSH access.
+#
+# ── One-time setup to enable auto-deploy (repo Settings → Secrets and
+#    variables → Actions → New repository secret):
+#      VPS_HOST     = the server IP/hostname
+#      VPS_SSH_KEY  = the PRIVATE SSH key (root) authorised on the VPS
+#    Until VPS_SSH_KEY is set, the deploy job no-ops gracefully (green, with a
+#    notice) so CI stays useful on its own.
+#
+#    Also set the repository's default branch to `master`
+#    (Settings → Branches) so PRs and the "Code" tab track the real code branch.
+
+name: CI/CD
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Smoke + contract tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write test .env
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_USER=pcb_user
+          POSTGRES_PASSWORD=pcb_test_pw
+          POSTGRES_DB=pcb_db
+          DATABASE_URL=postgresql://pcb_user:pcb_test_pw@pcb_db:5432/pcb_db
+          NODE_ENV=production
+          EOF
+
+      - name: Build & start DB + API
+        run: docker compose up -d --build pcb_db pcb_api
+
+      - name: Wait for API health
+        run: |
+          for i in $(seq 1 45); do
+            if curl -sf http://localhost:8100/health | grep -q '"db":"connected"'; then
+              echo "API healthy"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::API did not become healthy in time"
+          docker compose logs pcb_api
+          exit 1
+
+      - name: Apply schema
+        run: docker exec -i pcb_db psql -U pcb_user -d pcb_db < db/schema.sql
+
+      - name: Seed database (idempotent)
+        run: docker exec pcb_api python -m seed.run_seed
+
+      - name: Run tests
+        run: docker exec pcb_api sh -c "pip install -q -r requirements-dev.txt && cd /app && python -m pytest tests/"
+
+      - name: API logs on failure
+        if: failure()
+        run: docker compose logs pcb_api
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v
+
+  deploy:
+    name: Deploy to VPS
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Check for deploy secret
+        id: check
+        run: |
+          if [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::VPS_SSH_KEY not set — skipping deploy. Add VPS_HOST + VPS_SSH_KEY in Settings → Secrets → Actions to enable auto-deploy."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy over SSH (git pull + compose up)
+        if: steps.check.outputs.enabled == 'true'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          command_timeout: 20m
+          script: |
+            set -e
+            cd /opt/pc-builder-br
+            git fetch origin master
+            git reset --hard origin/master
+            docker compose up -d --build
+            for i in $(seq 1 45); do
+              if curl -sf http://localhost:8100/health | grep -q '"db":"connected"'; then
+                echo "deploy healthy"; exit 0
+              fi
+              sleep 2
+            done
+            echo "health check failed after deploy"
+            docker compose logs --tail=50 pcb_api
+            exit 1
