@@ -7,9 +7,7 @@ import PriceTag from './PriceTag'
 interface BuildCardProps {
   build: CuratedBuild
   variant?: 'default' | 'rei' | 'equilibrado' | 'arrojado'
-  /** Detail link href. `undefined` → default `/build/{slug}`. `null` → hide (dynamic builds). */
   detailHref?: string | null
-  /** Resolution the FPS figure was estimated at (label only). */
   resolution?: Resolution
 }
 
@@ -50,7 +48,7 @@ export default function BuildCard({ build, variant = 'default', detailHref, reso
       </h3>
       <p className="text-sm text-secondary mb-4">{build.subtitle}</p>
 
-      <div className="flex items-baseline justify-between mb-3">
+      <div className="flex items-baseline justify-between mb-1">
         <PriceTag price_brl={build.total_price_brl} in_stock size="lg" />
         {!build.is_rei_absoluto && build.rs_per_fps_top_game > 0 && (
           <div className="text-right">
@@ -60,6 +58,10 @@ export default function BuildCard({ build, variant = 'default', detailHref, reso
             </div>
           </div>
         )}
+      </div>
+      {/* Fix 2 — label amostra */}
+      <div className="text-xs mb-4" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>
+        preço de amostra · afiliados em breve
       </div>
 
       <div className="mb-4">

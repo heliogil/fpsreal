@@ -17,8 +17,12 @@ import { gameLabel } from '@/lib/labels'
 
 export const dynamic = 'force-dynamic'
 
+const VALID_RES = ['1080p', '1440p', '4k'] as const
+type Res = (typeof VALID_RES)[number]
+
 interface PageProps {
   params: { slug: string }
+  searchParams: { res?: string }
 }
 
 function formatBRL(n: number): string {
@@ -36,13 +40,18 @@ const componentLabels: Array<{ key: keyof BuildComponents; label: string }> = [
   { key: 'cooler_id', label: 'Cooler' },
 ]
 
-export default async function BuildDetailPage({ params }: PageProps) {
+export default async function BuildDetailPage({ params, searchParams }: PageProps) {
   const build = await getLiveBuildBySlug(params.slug)
   if (!build) notFound()
+
+  const res: Res = VALID_RES.includes(searchParams.res as Res)
+    ? (searchParams.res as Res)
+    : '1080p'
 
   const fpsEstimates = await getLiveFpsByBuild(
     build.components.cpu_id,
     build.components.gpu_id,
+    res,
   )
 
   const components = build.components as unknown as Record<string, number>
@@ -51,7 +60,6 @@ export default async function BuildDetailPage({ params }: PageProps) {
   }
   const interior = await getLiveInterior(components)
 
-  // Best offer per component (parallel), from the live catalog.
   const offerEntries = await Promise.all(
     componentLabels.map(async ({ key }) => {
       const productId = build.components[key]
@@ -59,6 +67,10 @@ export default async function BuildDetailPage({ params }: PageProps) {
       const offer = product ? await getLiveBestOffer(productId) : null
       return { key, product, offer }
     }),
+  )
+
+  const allDemo = offerEntries.every(
+    (e) => !e.offer || e.offer.merchant.name.toLowerCase().includes('amostra'),
   )
 
   return (
@@ -75,14 +87,19 @@ export default async function BuildDetailPage({ params }: PageProps) {
           {build.title}
         </h1>
         <p className="text-secondary">{build.subtitle}</p>
-        <div className="mt-4 flex items-baseline gap-6">
+        <div className="mt-4 flex items-baseline gap-6 flex-wrap">
           <div>
             <div className="text-xs uppercase tracking-wider text-secondary">Total</div>
             <div className="num-mono text-3xl font-bold">{formatBRL(build.total_price_brl)}</div>
+            {allDemo && (
+              <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)', opacity: 0.7 }}>
+                preço de amostra · afiliados em breve
+              </div>
+            )}
           </div>
           {!build.is_rei_absoluto && build.rs_per_fps_top_game > 0 && (
             <div>
-              <div className="text-xs uppercase tracking-wider text-secondary">R$/FPS (top game)</div>
+              <div className="text-xs uppercase tracking-wider text-secondary">R$/FPS · CS2 · 1080p</div>
               <div className="num-mono text-3xl font-bold" style={{ color: 'var(--text-mono)' }}>
                 {formatBRL(build.rs_per_fps_top_game)}
               </div>
@@ -122,13 +139,19 @@ export default async function BuildDetailPage({ params }: PageProps) {
                     {offer ? formatBRL(offer.price_brl) : '—'}
                   </div>
                   {offer && (
-                    <a
-                      href={`/go/${offer.id}?utm_source=build&utm_medium=detalhe&utm_campaign=${build.slug}`}
-                      className="text-xs hover:underline"
-                      style={{ color: 'var(--accent-gold)' }}
-                    >
-                      Comprar no {offer.merchant.name} →
-                    </a>
+                    <div className="text-xs text-secondary">
+                      {offer.merchant.name.toLowerCase().includes('amostra') ? (
+                        <span style={{ opacity: 0.6 }}>amostra · sem afiliado</span>
+                      ) : (
+                        <a
+                          href={`/go/${offer.id}?utm_source=build&utm_medium=detalhe&utm_campaign=${build.slug}`}
+                          className="hover:underline"
+                          style={{ color: 'var(--accent-gold)' }}
+                        >
+                          Comprar no {offer.merchant.name} →
+                        </a>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -139,45 +162,61 @@ export default async function BuildDetailPage({ params }: PageProps) {
 
       {/* FPS estimado */}
       <section>
-        <h2 className="text-2xl mb-4" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
-          FPS estimado
-        </h2>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <h2 className="text-2xl" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+            FPS estimado
+          </h2>
+          {/* Fix 3 — resolução toggle */}
+          <div className="flex gap-2" role="group" aria-label="Resolução">
+            {VALID_RES.map((r) => (
+              <a
+                key={r}
+                href={`?res=${r}`}
+                className="text-sm px-3 py-1 rounded border transition-colors"
+                style={{
+                  borderColor: r === res ? 'var(--accent-gold)' : 'var(--border)',
+                  color: r === res ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  backgroundColor: r === res ? 'rgba(212,160,23,0.08)' : 'var(--bg-elevated)',
+                  textDecoration: 'none',
+                }}
+                aria-current={r === res ? 'true' : undefined}
+              >
+                {r}
+              </a>
+            ))}
+          </div>
+        </div>
         <div className="card overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wider text-secondary border-b border-border">
                 <th className="py-2 pr-4">Jogo</th>
-                <th className="py-2 pr-4">Resolução</th>
                 <th className="py-2 pr-4">Preset</th>
-                <th className="py-2 pr-4">FPS estimado</th>
-                <th className="py-2 pr-4">Banda</th>
+                <th className="py-2 pr-8">FPS estimado</th>
               </tr>
             </thead>
             <tbody>
               {fpsEstimates.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-4 text-center text-secondary">
-                    Sem estimativas para este par CPU+GPU.
+                  <td colSpan={3} className="py-4 text-center text-secondary">
+                    Sem estimativas para este par CPU+GPU em {res}.
                   </td>
                 </tr>
               )}
               {fpsEstimates.map((e) => (
                 <tr key={e.id} className="border-b border-border">
                   <td className="py-2 pr-4">{gameLabel(e.game_slug)}</td>
-                  <td className="py-2 pr-4 num-mono">{e.resolution}</td>
                   <td className="py-2 pr-4">{e.preset}</td>
-                  <td className="py-2 pr-4">
-                    <FpsBadge estimate={e} showBand={false} size="sm" />
-                  </td>
-                  <td className="py-2 pr-4 text-secondary text-xs">
-                    <span className="num-mono">±{e.confidence_band_pct}%</span> · {e.sources.join(', ')}
+                  {/* Fix 1 — showBand=true, banda visual activa */}
+                  <td className="py-3 pr-4">
+                    <FpsBadge estimate={e} showBand size="sm" />
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
           <p className="text-xs text-secondary mt-3 italic">
-            FPS são estimativas calculadas via modelo anchor_scale v1, cruzando benchmarks públicos. Não temos bancada — não testamos “em casa”.{' '}
+            FPS são estimativas calculadas via modelo anchor_scale v1, cruzando benchmarks públicos. Não temos bancada — não testamos "em casa".{' '}
             <a href="/como-medimos" style={{ color: 'var(--accent-gold)' }}>
               Ver metodologia →
             </a>
@@ -185,7 +224,7 @@ export default async function BuildDetailPage({ params }: PageProps) {
         </div>
       </section>
 
-      {/* Interior do gabinete — encaixe (clearance) + fluxo de ar, ao vivo */}
+      {/* Interior do gabinete */}
       {interior && (
         <section>
           <h2 className="text-2xl mb-4" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
@@ -195,7 +234,7 @@ export default async function BuildDetailPage({ params }: PageProps) {
         </section>
       )}
 
-      {/* Compatibilidade — soquete, RAM, PSU (o encaixe físico está acima) */}
+      {/* Compatibilidade */}
       <CompatibilityChecker
         errors={compat.errors}
         warnings={compat.warnings}

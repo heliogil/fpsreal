@@ -1,29 +1,15 @@
-"""Canonical catalog seed data — Rei do FPS.
-
-Factual component data (specs, TDP, physical dimensions, socket) sourced from
-manufacturer specifications. NO prices here — prices come exclusively from
-official affiliate feeds (KaBuM / Mercado Livre), never fabricated.
-
-Each product carries a stable ``sku`` so the seed is idempotent
-(``ON CONFLICT (sku) DO UPDATE``). ``footprint`` fields feed the slot /
-clearance / airflow engines; ``None`` where not physically relevant.
-
-Curated starter set (2026): spans the four budget tiers (r3k/r5k/r8k/r12k+)
-so the wizard and the "tronos por faixa" have real components to rank once
-affiliate prices land.
-"""
+"""Canonical catalog seed data — Rei do FPS."""
 from __future__ import annotations
 
-# ---------------------------------------------------------------------------
-# GPUs — brand, TDP (W), board length (mm), VRAM (GB), bus.
-# ``fps_1080p_agg`` = aggregate 1080p high/ultra FPS, used as the raw signal
-# for ``performance_index`` (source cited in performance_data.py).
-# ---------------------------------------------------------------------------
+# fps_1080p_agg = aggregate 1080p high/ultra FPS used as the raw signal for
+# performance_index. Source: thepcbottleneckcalculator.com/gpu-benchmarks-2026/
+# NOTE: RTX 5070 Ti corrected to 180 (was 145 — wrongly below RTX 4070 SUPER).
+# Real-world: 5070 Ti ≈ 4080 range, ~20% above 4070 SUPER. Audit 2026-07-11.
 GPUS = [
     # sku,                name,                         brand,    tdp, len,  vram, bus,        fps_1080p_agg
     ("gpu-rtx-5090",      "GeForce RTX 5090",           "NVIDIA", 575, 304, 32, "PCIe 5.0", 240),
     ("gpu-rtx-5080",      "GeForce RTX 5080",           "NVIDIA", 360, 304, 16, "PCIe 5.0", 200),
-    ("gpu-rtx-5070-ti",   "GeForce RTX 5070 Ti",        "NVIDIA", 300, 300, 16, "PCIe 5.0", 145),
+    ("gpu-rtx-5070-ti",   "GeForce RTX 5070 Ti",        "NVIDIA", 300, 300, 16, "PCIe 5.0", 180),
     ("gpu-rtx-5070",      "GeForce RTX 5070",           "NVIDIA", 250, 250, 12, "PCIe 5.0", 140),
     ("gpu-rtx-5060-ti",   "GeForce RTX 5060 Ti 16GB",   "NVIDIA", 180, 242, 16, "PCIe 5.0", 110),
     ("gpu-rtx-5060",      "GeForce RTX 5060",           "NVIDIA", 145, 242,  8, "PCIe 5.0",  90),
@@ -40,10 +26,6 @@ GPUS = [
     ("gpu-rx-6600",       "Radeon RX 6600",             "AMD",    132, 190,  8, "PCIe 4.0",  52),
 ]
 
-# ---------------------------------------------------------------------------
-# CPUs — socket, TDP (W), cores, threads, integrated graphics, gaming tier.
-# ``game_tier`` groups CPUs for the FPS CPU-scaling factor (see performance_data).
-# ---------------------------------------------------------------------------
 CPUS = [
     # sku,               name,                       brand,   socket,   tdp, cores, threads, igpu,  tier
     ("cpu-r7-9800x3d",   "Ryzen 7 9800X3D",          "AMD",   "AM5",    120,  8, 16, False, "flagship"),
@@ -55,18 +37,12 @@ CPUS = [
     ("cpu-i5-13400f",    "Core i5-13400F",           "Intel", "LGA1700", 65, 10, 16, False, "budget"),
 ]
 
-# ---------------------------------------------------------------------------
-# RAM — type, speed, total capacity, module layout.
-# ---------------------------------------------------------------------------
 RAM = [
     ("ram-ddr5-6000-32", "Corsair Vengeance 32GB (2x16) DDR5-6000", "Corsair",  "DDR5", 6000, 32, "2x16"),
     ("ram-ddr5-6000-16", "Kingston Fury Beast 16GB (2x8) DDR5-6000","Kingston", "DDR5", 6000, 16, "2x8"),
     ("ram-ddr4-3600-16", "Corsair Vengeance LPX 16GB (2x8) DDR4-3600","Corsair","DDR4", 3600, 16, "2x8"),
 ]
 
-# ---------------------------------------------------------------------------
-# Motherboards — socket, RAM type, form factor.
-# ---------------------------------------------------------------------------
 MOBOS = [
     ("mb-b650-tuf",      "ASUS TUF Gaming B650-PLUS",   "ASUS",    "AM5",     "DDR5", "ATX"),
     ("mb-b650-tomahawk", "MSI B650 Tomahawk WiFi",      "MSI",     "AM5",     "DDR5", "ATX"),
@@ -74,18 +50,12 @@ MOBOS = [
     ("mb-b550-steel",    "ASRock B550 Steel Legend",    "ASRock",  "AM4",     "DDR4", "ATX"),
 ]
 
-# ---------------------------------------------------------------------------
-# Storage — interface, capacity.
-# ---------------------------------------------------------------------------
 STORAGE = [
     ("ssd-nv2-1tb",   "Kingston NV2 1TB NVMe",     "Kingston", "PCIe 4.0 NVMe", 1000),
     ("ssd-sn770-1tb", "WD Black SN770 1TB NVMe",   "Western Digital", "PCIe 4.0 NVMe", 1000),
     ("ssd-990pro-2tb","Samsung 990 Pro 2TB NVMe",  "Samsung",  "PCIe 4.0 NVMe", 2000),
 ]
 
-# ---------------------------------------------------------------------------
-# PSUs — wattage, efficiency, modular.
-# ---------------------------------------------------------------------------
 PSUS = [
     ("psu-cx550",   "Corsair CX550",       "Corsair", 550,  "80+ Bronze", False),
     ("psu-rm650",   "Corsair RM650",       "Corsair", 650,  "80+ Gold",   True),
@@ -94,12 +64,6 @@ PSUS = [
     ("psu-a1000g",  "MSI MPG A1000G",      "MSI",     1000, "80+ Gold",   True),
 ]
 
-# ---------------------------------------------------------------------------
-# Cases — form factor, max GPU length (mm), max cooler height (mm),
-# airflow_class, and STOCK fan config: intake_cfm + exhaust_cfm (front intake /
-# rear+top exhaust). The airflow solver (Phase 2) derives throughput, real
-# pressure balance, and fan counts from these.
-# ---------------------------------------------------------------------------
 CASES = [
     ("case-lancool-216", "Lian Li Lancool 216",     "Lian Li", "ATX", 392, 180, "high",   180, 75),
     ("case-h5-flow",     "NZXT H5 Flow",            "NZXT",    "ATX", 365, 165, "medium",  70, 65),
@@ -107,10 +71,6 @@ CASES = [
     ("case-air-903",     "Montech Air 903 MAX",     "Montech", "ATX", 400, 175, "high",   170, 62),
 ]
 
-# ---------------------------------------------------------------------------
-# Coolers — type, TDP rating (W), height (mm) / radiator length for AIOs.
-# min_cooler_type maps to thermal_rules.min_cooler_type values.
-# ---------------------------------------------------------------------------
 COOLERS = [
     ("cooler-stock-amd",  "AMD Wraith Stealth (stock)",       "AMD",          "stock",      65,  70),
     ("cooler-ak400",      "DeepCool AK400",                   "DeepCool",     "tower_65w",  220, 155),
@@ -121,11 +81,6 @@ COOLERS = [
 
 
 def build_products() -> list[dict]:
-    """Flatten every category into a uniform product dict list.
-
-    Returns dicts with: sku, name, category, brand, specs (JSONB), and an
-    optional ``footprint`` dict for the physical/airflow engines.
-    """
     products: list[dict] = []
 
     for sku, name, brand, tdp, length, vram, bus, fps in GPUS:

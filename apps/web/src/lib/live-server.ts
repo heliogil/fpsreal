@@ -1,13 +1,3 @@
-/**
- * Server-side adapter: maps the live pcb_api into the web's CuratedBuild shape.
- *
- * Used by server components (SSR) to render the real engine instead of mock
- * fixtures. Fetches the internal API (no CORS). Returns [] on any failure so
- * callers can fall back to mock gracefully.
- *
- * NOTE: while prices come from the 'amostra' (demo) merchant, these builds are
- * sample-priced — the caller should label them as such.
- */
 import type { CuratedBuild, FpsEstimate, GameSlug, WizardInput } from './repositories/types'
 import { priorityLabel } from './labels'
 
@@ -48,7 +38,7 @@ function candidateToBuild(
   const now = new Date().toISOString()
   return {
     id: idx + 1,
-    slug: '', // dynamic build — no detail page
+    slug: '',
     tier: 'r5k',
     title: `${cpu?.name ?? 'CPU'} + ${gpu?.name ?? 'GPU'}`,
     subtitle: `Montado para ${priorityLabel(priority)} · ${resolution}`,
@@ -75,11 +65,6 @@ function candidateToBuild(
   }
 }
 
-/**
- * Runs the live wizard. Returns `null` on transport/parse failure (caller
- * should fall back to mock), or an array (possibly empty) when the API
- * responded — an empty array is an honest "nothing fit the budget".
- */
 export async function runLiveWizard(input: WizardInput): Promise<CuratedBuild[] | null> {
   try {
     const res = await fetch(`${API}/wizard/`, {
@@ -156,7 +141,6 @@ async function buildOutToCurated(b: BuildOut): Promise<CuratedBuild> {
   const gpuId = compId(b, 'gpu')
   const total = b.total_price_brl ?? 0
   const fpb = b.fps_per_brl ?? 0
-  // Headline FPS = the reference game (CS2) at 1080p, not the cross-game average.
   const cs2 = await getJson<FpsEstimate | null>(
     `/fps/?cpu=${cpuId}&gpu=${gpuId}&game=cs2&res=1080p`,
   )
@@ -208,8 +192,13 @@ export async function getLiveProduct(id: number): Promise<LiveProduct | null> {
   return getJson<LiveProduct>(`/products/${id}`)
 }
 
-export async function getLiveFpsByBuild(cpuId: number, gpuId: number): Promise<FpsEstimate[]> {
-  const rows = await getJson<FpsEstimate[]>(`/fps/?cpu=${cpuId}&gpu=${gpuId}&res=1080p`)
+// Fix 3: accepts optional resolution param (default 1080p)
+export async function getLiveFpsByBuild(
+  cpuId: number,
+  gpuId: number,
+  res = '1080p',
+): Promise<FpsEstimate[]> {
+  const rows = await getJson<FpsEstimate[]>(`/fps/?cpu=${cpuId}&gpu=${gpuId}&res=${res}`)
   return rows ?? []
 }
 
@@ -234,7 +223,7 @@ export async function checkLiveCompatibility(
 }
 
 // ---------------------------------------------------------------------------
-// Case interior — fit + airflow (feeds the Canvas viewport)
+// Case interior
 // ---------------------------------------------------------------------------
 
 export type InteriorZone = { zone: string; type: string; status: string }
