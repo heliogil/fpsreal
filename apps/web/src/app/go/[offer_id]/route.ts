@@ -1,71 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getMockRepository } from '@/lib/repositories'
+
+export const dynamic = 'force-dynamic'
+
+const API = process.env.PCB_API_INTERNAL || 'http://pcb_api:8100'
 
 interface RouteParams {
   params: { offer_id: string }
 }
 
 /**
- * /go/[offer_id] — redireciona para o link afiliado e registra o clique.
+ * /go/[offer_id] — canonical affiliate redirect with click tracking.
  *
- * Querystring esperado:
- *   ?utm_source=...&utm_medium=...&utm_campaign=...&referer=...
+ * This is a thin relay to the ingestion API's `/go/{offer_id}` endpoint,
+ * which is the single source of truth: it records the click into
+ * `affiliate_clicks` (hashed IP, UTM tags, referer, user-agent, build_id)
+ * and 302-redirects to the offer's affiliate URL.
  *
- * Em produção: chama POST /track/click no pcb_api.
- * No mock: apenas loga em window.__reidofps_clicks.
+ * We keep the pretty public URL (`/go/5`) and forward the real client IP,
+ * referer and user-agent so the recorded click is accurate. The redirect
+ * target always comes from our own DB (never from the request), so there is
+ * no open-redirect surface.
+ *
+ * Query string (utm_source, utm_medium, utm_campaign, build_id) is passed
+ * through verbatim to the API.
  */
 export async function GET(req: NextRequest, { params }: RouteParams) {
   const offerId = parseInt(params.offer_id, 10)
-  if (!Number.isFinite(offerId)) {
+  if (!Number.isFinite(offerId) || offerId <= 0) {
     return NextResponse.json({ error: 'offer_id inválido' }, { status: 400 })
   }
 
-  const url = new URL(req.url)
-  const utm_source = url.searchParams.get('utm_source') ?? undefined
-  const utm_medium = url.searchParams.get('utm_medium') ?? undefined
-  const utm_campaign = url.searchParams.get('utm_campaign') ?? undefined
-  const referer = req.headers.get('referer') ?? undefined
+  const search = new URL(req.url).search // '' or '?utm_source=...'
+  const apiUrl = `${API}/go/${offerId}${search}`
 
-  const repo = getMockRepository()
-  // Tracking fire-and-forget.
-  void repo.tracking.recordClick(offerId, {
-    utm_source,
-    utm_medium,
-    utm_campaign,
-    referer,
-  })
+  // Forward the real client context so the click is attributed correctly.
+  // In production nginx sets X-Forwarded-For when the browser hits pcb_web;
+  // we relay it to the API (whose _client_ip honours X-Forwarded-For first).
+  const headers: Record<string, string> = {}
+  const xff = req.headers.get('x-forwarded-for')
+  if (xff) headers['x-forwarded-for'] = xff
+  const referer = req.headers.get('referer')
+  if (referer) headers['referer'] = referer
+  const ua = req.headers.get('user-agent')
+  if (ua) headers['user-agent'] = ua
 
-  // Resolve offer → URL real.
-  const offer = await repo.offers.getByVariant(0).then(() => null)
-  // No mock não temos variant_id conhecido, então busca via fallback.
-  const offers = await repo.products.search('').then(async () => {
-    // Pega direto do mock pelo product_id conhecido.
-    return null
-  })
+  let apiRes: Response
+  try {
+    // redirect: 'manual' → in the Node runtime undici returns the real 302
+    // response with the Location header readable (it does NOT follow it).
+    apiRes = await fetch(apiUrl, { redirect: 'manual', headers, cache: 'no-store' })
+  } catch {
+    // API unreachable — fail closed rather than send the user somewhere wrong.
+    return NextResponse.json({ error: 'serviço de redirecionamento indisponível' }, { status: 502 })
+  }
 
-  // Como o mock não tem endpoint "offerById", usamos heurística direta.
-  const target = await resolveOfferUrl(repo, offerId)
+  if (apiRes.status === 404) {
+    return NextResponse.json({ error: 'oferta não encontrada', offer_id: offerId }, { status: 404 })
+  }
 
+  const target = apiRes.headers.get('location')
   if (!target) {
-    return NextResponse.json(
-      { error: 'oferta não encontrada', offer_id: offerId },
-      { status: 404 },
-    )
+    // 409 (offer without URL) or any unexpected shape.
+    return NextResponse.json({ error: 'oferta sem URL de destino', offer_id: offerId }, { status: 502 })
   }
 
   return NextResponse.redirect(target, { status: 302 })
-}
-
-async function resolveOfferUrl(
-  repo: ReturnType<typeof getMockRepository>,
-  offerId: number,
-): Promise<string | null> {
-  // Mock-only fallback: para o nosso seed, offer_id === id do fixture.
-  // Fazemos uma busca via products (não ideal mas funciona sem repo extra).
-  const all = await repo.products.getByCategory('cpu')
-  for (const p of all) {
-    const best = await repo.offers.getBestOffer(p.id)
-    if (best && best.id === offerId) return best.url
-  }
-  return null
 }
