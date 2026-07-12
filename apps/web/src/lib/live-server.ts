@@ -234,6 +234,42 @@ export async function checkLiveCompatibility(
 // ---------------------------------------------------------------------------
 
 export type InteriorZone = { zone: string; type: string; status: string }
+
+/** Geometria paramétrica (mm, vista lateral) — volumetria + motor de vento composicional. */
+export type GeoMount = {
+  id: string
+  kind: string
+  accepts: string[]
+  x: number; y: number; w: number; h: number
+  orient: 'intake' | 'exhaust'
+  stock: boolean
+  occupied_by: 'stock_fan' | 'aio_radiator' | null
+  cfm: number
+}
+export type GeoPlacement = {
+  part: string
+  x: number; y: number; w: number; h: number
+  source: 'spec' | 'form_factor_default'
+  fan_count?: number
+  sticks?: number
+  mount?: string
+}
+export type GeoFlow = {
+  from: { x: number; y: number; h: number }
+  to: { x: number; y: number; w?: number; h?: number; side: 'rear' | 'top' }
+  cfm: number
+  intensity: number
+  heat_at: number[]
+}
+export type InteriorGeometry = {
+  unit: 'mm'
+  note: string
+  case: { depth_mm: number; height_mm: number; shroud_h_mm: number }
+  mounts: GeoMount[]
+  placements: GeoPlacement[]
+  flows: GeoFlow[]
+}
+
 export type LiveInterior = {
   method: string
   case: {
@@ -259,6 +295,7 @@ export type LiveInterior = {
     heat: { cpu_w: number; gpu_w: number; total_w: number }
     zones: InteriorZone[]
   }
+  geometry: InteriorGeometry | null
 }
 
 export async function getLiveInterior(

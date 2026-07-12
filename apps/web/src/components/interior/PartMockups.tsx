@@ -100,6 +100,15 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
         <FanDisc cx={b.x + b.w * 0.14} cy={b.y + b.h * 0.42} r={Math.min(b.w * 0.16, b.h * 0.3)} spin={o?.spin} dur={2.6} />
       </g>
     ),
+    'cooler-aio-pump': (b) => (
+      /* só o bloco da bomba — os tubos até o radiador são desenhados pelo
+         GabineteVivo a partir das posições reais (data-driven) */
+      <g>
+        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={6} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+        <circle cx={b.x + b.w / 2} cy={b.y + b.h / 2} r={Math.min(b.w, b.h) * 0.3} fill="var(--panel)" stroke="var(--accent)" strokeWidth="1.6" />
+        <circle cx={b.x + b.w / 2} cy={b.y + b.h / 2} r={Math.min(b.w, b.h) * 0.12} fill="var(--accent-dim)" />
+      </g>
+    ),
     'cooler-aio': (b) => (
       <g>
         {/* pump block sobre o socket — o radiador é desenhado no top bay pelo GabineteVivo */}
