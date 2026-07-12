@@ -173,35 +173,26 @@ export default function GabineteVivo({ interior, products }: { interior: LiveInt
         {/* PSU */}
         <g data-part="psu" data-variant={vPsu}>{renderPart('psu', vPsu, { x: 100, y: 344, w: 96, h: 48 })}</g>
 
-        {/* ── entrada e saída como JANELAS de ventilação (não pontos) ──────── */}
-        {/* janela de entrada — grelha na frente, o ar entra por toda a altura */}
+        {/* ── entrada/saída: linha colorida na própria parede do gabinete ──── */}
+        {/* entrada — linha verde na parede frontal */}
         <g data-vent="intake-front">
-          <rect x={50} y={100} width={26} height={232} rx={4} fill="var(--bg)" stroke="var(--fresh-b)" strokeWidth="1.2" />
-          {Array.from({ length: 16 }, (_, i) => (
-            <line key={i} x1={53} y1={108 + i * 14} x2={73} y2={108 + i * 14} stroke="var(--fresh)" strokeWidth="1.4" opacity=".38" />
-          ))}
+          <line x1={40} y1={100} x2={40} y2={332} stroke="var(--fresh)" strokeWidth="3.5" strokeLinecap="round" opacity=".85" />
           <text x={8} y={100} fill="var(--fresh)" fontSize="10.5" fontWeight="600" fontFamily="var(--font-plex-mono), monospace">entrada</text>
           <text x={8} y={112} fill="var(--dim2)" fontSize="8.5" fontFamily="var(--font-plex-mono), monospace">intake</text>
         </g>
 
-        {/* janela de saída — grelha traseira */}
+        {/* saída — linha laranja na parede traseira */}
         <g data-vent="exhaust-rear">
-          <rect x={650} y={78} width={26} height={112} rx={4} fill="var(--bg)" stroke="var(--warn-b)" strokeWidth="1.2" />
-          {Array.from({ length: 8 }, (_, i) => (
-            <line key={i} x1={653} y1={86 + i * 14} x2={673} y2={86 + i * 14} stroke="var(--warn)" strokeWidth="1.4" opacity=".38" />
-          ))}
+          <line x1={688} y1={78} x2={688} y2={190} stroke="var(--warn)" strokeWidth="3.5" strokeLinecap="round" opacity=".85" />
           <text x={714} y={64} textAnchor="end" fill="var(--warn)" fontSize="10.5" fontWeight="600" fontFamily="var(--font-plex-mono), monospace">saída</text>
           <text x={714} y={76} textAnchor="end" fill="var(--dim2)" fontSize="8.5" fontFamily="var(--font-plex-mono), monospace">exhaust</text>
         </g>
 
-        {/* janela de saída no topo (radiador), quando AIO */}
+        {/* saída pelo topo (radiador), quando AIO — linha laranja na parede do topo */}
         {isAio && (
           <g data-vent="exhaust-top">
-            <rect x={170} y={16} width={360} height={12} rx={3} fill="var(--bg)" stroke="var(--warn-b)" strokeWidth="1.2" />
-            {Array.from({ length: 24 }, (_, i) => (
-              <line key={i} x1={178 + i * 15} y1={18} x2={178 + i * 15} y2={26} stroke="var(--warn)" strokeWidth="1.4" opacity=".38" />
-            ))}
-            <text x={560} y={13} fill="var(--warn)" fontSize="9.5" fontFamily="var(--font-plex-mono), monospace">saída pelo radiador</text>
+            <line x1={170} y1={22} x2={530} y2={22} stroke="var(--warn)" strokeWidth="3.5" strokeLinecap="round" opacity=".85" />
+            <text x={560} y={16} fill="var(--warn)" fontSize="9.5" fontFamily="var(--font-plex-mono), monospace">saída pelo radiador</text>
           </g>
         )}
 
