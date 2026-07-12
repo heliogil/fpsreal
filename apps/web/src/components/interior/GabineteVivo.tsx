@@ -76,16 +76,23 @@ export default function GabineteVivo({ interior, products }: { interior: LiveInt
   const coolerPx = Math.max(30, (coolerH / maxCooler) * 128)
   const coolerBox = { x: 388, y: 196 - coolerPx, w: 86, h: coolerPx }
   const socket = { x: 410, y: 198, w: 44, h: 30 }
-  const flowDots = cfm >= 130 ? 5 : cfm >= 70 ? 4 : 3
+  const flowDots = cfm >= 130 ? 7 : cfm >= 70 ? 6 : 5
   const flowDur = Math.max(3.4, 7 - cfm / 45)
 
-  const flowPaths = [
-    'M84,140 C240,128 470,118 652,96',
-    `M84,${gpuBox.y + 18} C300,${gpuBox.y + 14} 500,210 652,140`,
-    'M84,330 C300,322 500,270 652,170',
+  // Ar nasce FORA do gabinete (x<40), entra pela frente e sai FORA (trás x>688;
+  // topo pelo radiador quando AIO). heatAt = ponto do trajeto onde esquenta.
+  const rearPaths = [
+    { d: 'M8,132 C150,128 420,112 712,92', heatAt: 0.68 },
+    { d: `M8,${gpuBox.y + 18} C240,${gpuBox.y + 16} 500,208 712,148`, heatAt: 0.55 },
+    { d: 'M8,322 C240,316 500,268 712,172', heatAt: 0.55 },
   ]
-  const heatColors = 'var(--dim2)' // cold start; SMIL precisa de literais ↓
-  void heatColors
+  const topPaths = isAio
+    ? [
+        { d: 'M8,176 C180,168 294,132 300,58 C302,36 302,12 302,-10', heatAt: 0.5 },
+        { d: 'M8,282 C240,268 426,150 432,58 C434,36 434,12 434,-10', heatAt: 0.5 },
+      ]
+    : []
+  const allPaths = [...rearPaths, ...topPaths]
 
   return (
     <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
@@ -122,14 +129,14 @@ export default function GabineteVivo({ interior, products }: { interior: LiveInt
         <rect x={socket.x} y={socket.y} width={socket.w} height={socket.h} rx={3} fill="var(--panel2)" stroke="var(--line)" />
         <g data-part="cooler" data-variant={vCooler}>{renderPart('cooler', vCooler, coolerBox, { spin: true })}</g>
         {isAio && (
-          /* radiador AIO no top bay */
+          /* radiador AIO no top bay — participa do fluxo: fans girando + exaustão pelo topo */
           <g data-part="cooler-radiator" data-variant="aio-radiator-360">
             <rect x={150} y={32} width={400} height={24} rx={5} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
             {Array.from({ length: 26 }, (_, i) => (
               <line key={i} x1={158 + i * 15} y1={35} x2={158 + i * 15} y2={53} stroke="var(--line)" strokeWidth="1" />
             ))}
-            {[0, 1, 2].map((i) => (
-              <circle key={i} cx={216 + i * 134} cy={44} r={9} fill="none" stroke="var(--accent-dim)" strokeWidth="1.4" />
+            {[216, 350, 484].map((x) => (
+              <g key={x} data-part="fan" data-variant="fan-slim">{renderPart('fan', 'fan-slim', { x: x - 11, y: 33, w: 22, h: 22 }, { spin: cfm > 0 })}</g>
             ))}
           </g>
         )}
@@ -175,17 +182,55 @@ export default function GabineteVivo({ interior, products }: { interior: LiveInt
           <g key={`out${i}`} data-part="fan" data-variant="fan-120">{renderPart('fan', 'fan-120', { x: 632, y: 74 + i * 66, w: 48, h: 48 }, { spin: cfm > 0 })}</g>
         ))}
 
-        {/* ── FLUXO DE AR — partículas SMIL (cinza→âmbar→vermelho) ──────── */}
+        {/* ── direção do ar — intake e exhaust explícitos ─────────────────── */}
+        <g>
+          {/* entrada (frente): chevrons verdes apontando para dentro */}
+          {[128, 218, 306].slice(0, Math.min(3, fanIn)).map((y) => (
+            <g key={`chin${y}`}>
+              <polygon points={`10,${y - 6} 22,${y} 10,${y + 6}`} fill="var(--fresh)" opacity=".9" />
+              <polygon points={`20,${y - 6} 32,${y} 20,${y + 6}`} fill="var(--fresh)" opacity=".45" />
+            </g>
+          ))}
+          <text x={8} y={100} fill="var(--fresh)" fontSize="10.5" fontWeight="600" fontFamily="var(--font-plex-mono), monospace">entrada</text>
+          <text x={8} y={112} fill="var(--dim2)" fontSize="8.5" fontFamily="var(--font-plex-mono), monospace">intake</text>
+
+          {/* saída (traseira): chevrons âmbar apontando para fora */}
+          {[98, 164].slice(0, Math.min(2, fanOut)).map((y) => (
+            <g key={`chout${y}`}>
+              <polygon points={`692,${y - 6} 704,${y} 692,${y + 6}`} fill="var(--warn)" opacity=".9" />
+              <polygon points={`702,${y - 6} 714,${y} 702,${y + 6}`} fill="var(--warn)" opacity=".45" />
+            </g>
+          ))}
+          <text x={714} y={64} textAnchor="end" fill="var(--warn)" fontSize="10.5" fontWeight="600" fontFamily="var(--font-plex-mono), monospace">saída</text>
+          <text x={714} y={76} textAnchor="end" fill="var(--dim2)" fontSize="8.5" fontFamily="var(--font-plex-mono), monospace">exhaust</text>
+
+          {/* saída pelo radiador (topo), quando AIO */}
+          {isAio && (
+            <g>
+              {[302, 434].map((x) => (
+                <g key={`chtop${x}`}>
+                  <polygon points={`${x - 6},18 ${x},7 ${x + 6},18`} fill="var(--warn)" opacity=".9" />
+                  <polygon points={`${x - 6},13 ${x},2 ${x + 6},13`} fill="var(--warn)" opacity=".4" />
+                </g>
+              ))}
+              <text x={560} y={16} fill="var(--warn)" fontSize="9.5" fontFamily="var(--font-plex-mono), monospace">saída pelo radiador</text>
+            </g>
+          )}
+        </g>
+
+        {/* ── FLUXO DE AR — partículas nascem fora, esquentam nas zonas de calor
+               e saem do gabinete (trás; topo pelo radiador quando AIO) ───────── */}
         <g className="flowdots">
-          {flowPaths.map((d, pi) =>
+          {allPaths.map((fp, pi) =>
             Array.from({ length: flowDots }, (_, di) => {
-              const dur = flowDur + pi * 0.5
-              const begin = `${-((di / flowDots) * dur + pi * 0.7).toFixed(2)}s`
+              const dur = flowDur + pi * 0.45
+              const begin = `${-((di / flowDots) * dur + pi * 0.6).toFixed(2)}s`
+              const pre = Math.max(0.05, fp.heatAt - 0.14).toFixed(2)
               return (
                 <circle key={`${pi}-${di}`} r={pi === 1 ? 3 : 2.4} fill="#A0A0A0" opacity=".8">
-                  <animateMotion dur={`${dur}s`} begin={begin} repeatCount="indefinite" path={d} rotate="0" />
-                  <animate attributeName="fill" values="#A0A0A0;#E0A93B;#C85348;#C85348" keyTimes={`0;${pi === 0 ? '0.75' : '0.45'};0.9;1`} dur={`${dur}s`} begin={begin} repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="0;.85;.85;0" keyTimes="0;.06;.92;1" dur={`${dur}s`} begin={begin} repeatCount="indefinite" />
+                  <animateMotion dur={`${dur}s`} begin={begin} repeatCount="indefinite" path={fp.d} rotate="0" />
+                  <animate attributeName="fill" values="#A0A0A0;#A0A0A0;#E0A93B;#C85348" keyTimes={`0;${pre};${fp.heatAt};1`} dur={`${dur}s`} begin={begin} repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0;.85;.85;0" keyTimes="0;.04;.97;1" dur={`${dur}s`} begin={begin} repeatCount="indefinite" />
                 </circle>
               )
             }),
