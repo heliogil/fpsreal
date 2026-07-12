@@ -132,12 +132,27 @@ export default function GabineteVivo({ interior, products }: { interior: LiveInt
         <rect x={socket.x} y={socket.y} width={socket.w} height={socket.h} rx={3} fill="var(--panel2)" stroke="var(--line)" />
         <g data-part="cooler" data-variant={vCooler}>{renderPart('cooler', vCooler, coolerBox)}</g>
         {isAio && (
-          /* radiador AIO no top bay — a exaustão sai pela janela do topo, acima dele */
+          /* AIO no topo, vista lateral: bloco SÓLIDO do radiador + fila de fans
+             particionados embaixo. O conjunto ocupa volume real dentro do
+             gabinete (cota ao lado) — esse stack é o tradeoff da build. */
           <g data-part="cooler-radiator" data-variant="aio-radiator-360">
-            <rect x={150} y={32} width={400} height={24} rx={5} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-            {Array.from({ length: 26 }, (_, i) => (
-              <line key={i} x1={158 + i * 15} y1={35} x2={158 + i * 15} y2={53} stroke="var(--line)" strokeWidth="1" />
+            {/* radiador: bloco sólido */}
+            <rect x={150} y={30} width={400} height={22} rx={3} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+            <rect x={155} y={34} width={390} height={14} rx={2} fill="var(--line2)" />
+            {/* fans do radiador: fila particionada (3 segmentos), estáticos */}
+            <rect x={150} y={52} width={400} height={20} rx={3} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
+            {[1, 2].map((i) => (
+              <line key={i} x1={150 + (400 / 3) * i} y1={52} x2={150 + (400 / 3) * i} y2={72} stroke="var(--line)" strokeWidth="1.2" />
             ))}
+            {[0, 1, 2].map((i) => {
+              const cx = 150 + (400 / 6) * (2 * i + 1)
+              return <circle key={`hub${i}`} cx={cx} cy={62} r={4.5} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
+            })}
+            {/* cota do volume ocupado pelo conjunto radiador+fans */}
+            <line x1={558} y1={30} x2={558} y2={72} stroke="var(--dim2)" strokeWidth="1" />
+            <line x1={554} y1={30} x2={562} y2={30} stroke="var(--dim2)" strokeWidth="1" />
+            <line x1={554} y1={72} x2={562} y2={72} stroke="var(--dim2)" strokeWidth="1" />
+            <text x={566} y={54} fill="var(--dim2)" fontSize="9.5" fontFamily="var(--font-plex-mono), monospace">~52mm</text>
           </g>
         )}
 
