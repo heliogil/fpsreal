@@ -92,8 +92,18 @@ a:hover { color: var(--accent); }
 .prov .tip::after { content: ''; position: absolute; top: 100%; right: 16px; border: 6px solid transparent; border-top-color: var(--panel2); }
 .prov:hover .tip, .prov:focus-visible .tip, .prov:focus-within .tip { opacity: 1; transform: none; }
 
+/* ── GabineteVivo — animações do moat visual ─────────────────────────────── */
+@keyframes fanspin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.fanspin { animation: fanspin 2.4s linear infinite; transform-box: fill-box; }
+@keyframes heatpulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+.heatpulse { animation: heatpulse 3s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001s !important; scroll-behavior: auto; }
+  .fanspin { animation: none; }
+  .heatpulse { animation: none; opacity: .4; }
+  /* partículas SMIL não obedecem a media queries CSS — escondê-las inteiras */
+  .flowdots { display: none; }
 }
 
 /* ============================================================================
