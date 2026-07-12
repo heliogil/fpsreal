@@ -9,12 +9,14 @@ import { pickVariant, renderPart } from './PartMockups'
  * airflow) e posiciona mockups de peças escolhidos por tier visual
  * (PartMockups: GPU flagship ≠ GPU de entrada — regra do design doc).
  *
- * Animações:
- *  - fluxo de ar: partículas SMIL percorrendo o gabinete (frente → trás),
- *    quantidade/velocidade proporcionais ao CFM estimado; a cor esquenta
- *    (cinza → âmbar → vermelho) ao passar pelas zonas de calor.
- *  - fans girando (CSS), calor pulsando na GPU/CPU proporcional ao TDP.
- *  - `prefers-reduced-motion` esconde as partículas e congela os fans.
+ * Animações (decisão do founder: a vida da cena é o AR, não os rotores):
+ *  - fluxo de ar: partículas SMIL que nascem FORA do gabinete, entram pela
+ *    JANELA de entrada (grelha frontal), esquentam (cinza → âmbar → vermelho)
+ *    ao cruzar as zonas de calor e saem pelas janelas de saída (grelha
+ *    traseira; grelha do topo sobre o radiador quando AIO). Quantidade e
+ *    velocidade proporcionais ao CFM estimado.
+ *  - calor pulsando na GPU/CPU proporcional ao TDP. Fans são estáticos.
+ *  - `prefers-reduced-motion` esconde as partículas.
  *
  * INTEGRIDADE: tudo aqui é estimativa de fluxo (zone_graph), nunca medição —
  * rotulado no painel. Peça sem dados → silhueta "em análise" (nunca inventar).
@@ -46,8 +48,6 @@ export default function GabineteVivo({ interior, products }: { interior: LiveInt
   const gpuHeat = Math.min(1, (interior.parts.gpu.tdp_w || 0) / 400)
   const cpuHeat = Math.min(1, (interior.parts.cpu.tdp_w || 0) / 150)
   const cfm = interior.airflow.cfm || 0
-  const fanIn = Math.max(1, interior.airflow.fans?.intake ?? 2)
-  const fanOut = Math.max(1, interior.airflow.fans?.exhaust ?? 1)
   const gpuClr = interior.clearances.gpu
   const coolerClr = interior.clearances.cooler
   const score = interior.airflow.score
@@ -86,10 +86,13 @@ export default function GabineteVivo({ interior, products }: { interior: LiveInt
     { d: `M8,${gpuBox.y + 18} C240,${gpuBox.y + 16} 500,208 712,148`, heatAt: 0.55 },
     { d: 'M8,322 C240,316 500,268 712,172', heatAt: 0.55 },
   ]
+  // Exaustão pelo radiador: 4 trajetos distribuídos pela largura da janela do topo
   const topPaths = isAio
     ? [
-        { d: 'M8,176 C180,168 294,132 300,58 C302,36 302,12 302,-10', heatAt: 0.5 },
-        { d: 'M8,282 C240,268 426,150 432,58 C434,36 434,12 434,-10', heatAt: 0.5 },
+        { d: 'M8,150 C160,144 216,120 220,58 C221,40 221,14 221,-10', heatAt: 0.5 },
+        { d: 'M8,200 C200,190 306,140 310,58 C311,40 311,14 311,-10', heatAt: 0.5 },
+        { d: 'M8,262 C240,250 396,150 400,58 C401,40 401,14 401,-10', heatAt: 0.5 },
+        { d: 'M8,310 C260,296 486,160 490,58 C491,40 491,14 491,-10', heatAt: 0.55 },
       ]
     : []
   const allPaths = [...rearPaths, ...topPaths]
@@ -127,16 +130,13 @@ export default function GabineteVivo({ interior, products }: { interior: LiveInt
 
         {/* socket + cooler */}
         <rect x={socket.x} y={socket.y} width={socket.w} height={socket.h} rx={3} fill="var(--panel2)" stroke="var(--line)" />
-        <g data-part="cooler" data-variant={vCooler}>{renderPart('cooler', vCooler, coolerBox, { spin: true })}</g>
+        <g data-part="cooler" data-variant={vCooler}>{renderPart('cooler', vCooler, coolerBox)}</g>
         {isAio && (
-          /* radiador AIO no top bay — participa do fluxo: fans girando + exaustão pelo topo */
+          /* radiador AIO no top bay — a exaustão sai pela janela do topo, acima dele */
           <g data-part="cooler-radiator" data-variant="aio-radiator-360">
             <rect x={150} y={32} width={400} height={24} rx={5} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
             {Array.from({ length: 26 }, (_, i) => (
               <line key={i} x1={158 + i * 15} y1={35} x2={158 + i * 15} y2={53} stroke="var(--line)" strokeWidth="1" />
-            ))}
-            {[216, 350, 484].map((x) => (
-              <g key={x} data-part="fan" data-variant="fan-slim">{renderPart('fan', 'fan-slim', { x: x - 11, y: 33, w: 22, h: 22 }, { spin: cfm > 0 })}</g>
             ))}
           </g>
         )}
@@ -150,7 +150,7 @@ export default function GabineteVivo({ interior, products }: { interior: LiveInt
           : <g data-part="storage" data-variant={vSto}>{renderPart('storage', vSto, { x: 206, y: 348, w: 64, h: 40 })}</g>}
 
         {/* GPU (comprimento em escala real) */}
-        <g data-part="gpu" data-variant={vGpu}>{renderPart('gpu', vGpu, gpuBox, { spin: true })}</g>
+        <g data-part="gpu" data-variant={vGpu}>{renderPart('gpu', vGpu, gpuBox)}</g>
 
         {/* folga da GPU até a frente — cota de engenharia */}
         {gpuClr && (
@@ -173,50 +173,37 @@ export default function GabineteVivo({ interior, products }: { interior: LiveInt
         {/* PSU */}
         <g data-part="psu" data-variant={vPsu}>{renderPart('psu', vPsu, { x: 100, y: 344, w: 96, h: 48 })}</g>
 
-        {/* fans de entrada (frente) e saída (traseira) */}
-        {Array.from({ length: Math.min(3, fanIn) }, (_, i) => {
-          const ys = [128, 218, 306]
-          return <g key={`in${i}`} data-part="fan" data-variant="fan-120">{renderPart('fan', 'fan-120', { x: 48, y: ys[i] - 26, w: 52, h: 52 }, { spin: cfm > 0 })}</g>
-        })}
-        {Array.from({ length: Math.min(2, fanOut) }, (_, i) => (
-          <g key={`out${i}`} data-part="fan" data-variant="fan-120">{renderPart('fan', 'fan-120', { x: 632, y: 74 + i * 66, w: 48, h: 48 }, { spin: cfm > 0 })}</g>
-        ))}
-
-        {/* ── direção do ar — intake e exhaust explícitos ─────────────────── */}
-        <g>
-          {/* entrada (frente): chevrons verdes apontando para dentro */}
-          {[128, 218, 306].slice(0, Math.min(3, fanIn)).map((y) => (
-            <g key={`chin${y}`}>
-              <polygon points={`10,${y - 6} 22,${y} 10,${y + 6}`} fill="var(--fresh)" opacity=".9" />
-              <polygon points={`20,${y - 6} 32,${y} 20,${y + 6}`} fill="var(--fresh)" opacity=".45" />
-            </g>
+        {/* ── entrada e saída como JANELAS de ventilação (não pontos) ──────── */}
+        {/* janela de entrada — grelha na frente, o ar entra por toda a altura */}
+        <g data-vent="intake-front">
+          <rect x={50} y={100} width={26} height={232} rx={4} fill="var(--bg)" stroke="var(--fresh-b)" strokeWidth="1.2" />
+          {Array.from({ length: 16 }, (_, i) => (
+            <line key={i} x1={53} y1={108 + i * 14} x2={73} y2={108 + i * 14} stroke="var(--fresh)" strokeWidth="1.4" opacity=".38" />
           ))}
           <text x={8} y={100} fill="var(--fresh)" fontSize="10.5" fontWeight="600" fontFamily="var(--font-plex-mono), monospace">entrada</text>
           <text x={8} y={112} fill="var(--dim2)" fontSize="8.5" fontFamily="var(--font-plex-mono), monospace">intake</text>
+        </g>
 
-          {/* saída (traseira): chevrons âmbar apontando para fora */}
-          {[98, 164].slice(0, Math.min(2, fanOut)).map((y) => (
-            <g key={`chout${y}`}>
-              <polygon points={`692,${y - 6} 704,${y} 692,${y + 6}`} fill="var(--warn)" opacity=".9" />
-              <polygon points={`702,${y - 6} 714,${y} 702,${y + 6}`} fill="var(--warn)" opacity=".45" />
-            </g>
+        {/* janela de saída — grelha traseira */}
+        <g data-vent="exhaust-rear">
+          <rect x={650} y={78} width={26} height={112} rx={4} fill="var(--bg)" stroke="var(--warn-b)" strokeWidth="1.2" />
+          {Array.from({ length: 8 }, (_, i) => (
+            <line key={i} x1={653} y1={86 + i * 14} x2={673} y2={86 + i * 14} stroke="var(--warn)" strokeWidth="1.4" opacity=".38" />
           ))}
           <text x={714} y={64} textAnchor="end" fill="var(--warn)" fontSize="10.5" fontWeight="600" fontFamily="var(--font-plex-mono), monospace">saída</text>
           <text x={714} y={76} textAnchor="end" fill="var(--dim2)" fontSize="8.5" fontFamily="var(--font-plex-mono), monospace">exhaust</text>
-
-          {/* saída pelo radiador (topo), quando AIO */}
-          {isAio && (
-            <g>
-              {[302, 434].map((x) => (
-                <g key={`chtop${x}`}>
-                  <polygon points={`${x - 6},18 ${x},7 ${x + 6},18`} fill="var(--warn)" opacity=".9" />
-                  <polygon points={`${x - 6},13 ${x},2 ${x + 6},13`} fill="var(--warn)" opacity=".4" />
-                </g>
-              ))}
-              <text x={560} y={16} fill="var(--warn)" fontSize="9.5" fontFamily="var(--font-plex-mono), monospace">saída pelo radiador</text>
-            </g>
-          )}
         </g>
+
+        {/* janela de saída no topo (radiador), quando AIO */}
+        {isAio && (
+          <g data-vent="exhaust-top">
+            <rect x={170} y={16} width={360} height={12} rx={3} fill="var(--bg)" stroke="var(--warn-b)" strokeWidth="1.2" />
+            {Array.from({ length: 24 }, (_, i) => (
+              <line key={i} x1={178 + i * 15} y1={18} x2={178 + i * 15} y2={26} stroke="var(--warn)" strokeWidth="1.4" opacity=".38" />
+            ))}
+            <text x={560} y={13} fill="var(--warn)" fontSize="9.5" fontFamily="var(--font-plex-mono), monospace">saída pelo radiador</text>
+          </g>
+        )}
 
         {/* ── FLUXO DE AR — partículas nascem fora, esquentam nas zonas de calor
                e saem do gabinete (trás; topo pelo radiador quando AIO) ───────── */}

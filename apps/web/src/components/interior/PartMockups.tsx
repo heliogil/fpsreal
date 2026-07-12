@@ -30,25 +30,14 @@ export type MockupRenderer = (box: Box, opts?: MockupOpts) => ReactNode
 
 /* ── primitivas compartilhadas ─────────────────────────────────────────── */
 
-function FanDisc({ cx, cy, r, spin, dur = 2.2 }: { cx: number; cy: number; r: number; spin?: boolean; dur?: number }) {
-  // 3 pás em arco (turbina) — leitura limpa de "fan", sem virar estrelinha.
-  const rb = r * 0.58
-  const blade = (a0: number) => {
-    const a1 = a0 + 72
-    const x1 = cx + rb * Math.cos((a0 * Math.PI) / 180)
-    const y1 = cy + rb * Math.sin((a0 * Math.PI) / 180)
-    const x2 = cx + rb * Math.cos((a1 * Math.PI) / 180)
-    const y2 = cy + rb * Math.sin((a1 * Math.PI) / 180)
-    return `M ${x1} ${y1} A ${rb} ${rb} 0 0 1 ${x2} ${y2}`
-  }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function FanDisc({ cx, cy, r, spin: _spin, dur: _dur }: { cx: number; cy: number; r: number; spin?: boolean; dur?: number }) {
+  // Anel + cubo, estático — sem elemento giratório (decisão do founder:
+  // pás animadas viravam ruído). A vida da cena é o fluxo de ar, não o rotor.
   return (
     <g>
       <circle cx={cx} cy={cy} r={r} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
-      <g className={spin ? 'fanspin' : undefined} style={spin ? { transformOrigin: `${cx}px ${cy}px`, animationDuration: `${dur}s` } : undefined}>
-        {[0, 120, 240].map((a) => (
-          <path key={a} d={blade(a)} fill="none" stroke="var(--accent-dim)" strokeWidth={Math.max(2, r * 0.26)} strokeLinecap="round" />
-        ))}
-      </g>
+      <circle cx={cx} cy={cy} r={r * 0.62} fill="none" stroke="var(--line)" strokeWidth="1" opacity=".6" />
       <circle cx={cx} cy={cy} r={r * 0.2} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
     </g>
   )
