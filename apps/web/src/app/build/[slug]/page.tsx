@@ -14,19 +14,7 @@ import FpsBadge from '@/components/FpsBadge'
 import type { BuildComponents, CuratedBuild, GameSlug } from '@/lib/repositories/types'
 import { gameLabel } from '@/lib/labels'
 
-export const revalidate = 3600  // ISR: regenera páginas de build a cada hora
-
-export async function generateStaticParams(): Promise<{ slug: string }[]> {
-  const API = process.env.PCB_API_INTERNAL || 'http://pcb_api:8100'
-  try {
-    const r = await fetch(`${API}/builds/`, { cache: 'no-store', signal: AbortSignal.timeout(3000) })
-    if (!r.ok) return []
-    const builds = (await r.json()) as Array<{ slug: string; is_active: boolean }>
-    return builds.filter((b) => b.is_active).map((b) => ({ slug: b.slug }))
-  } catch {
-    return []  // API unavailable at build time — pages rendered on-demand
-  }
-}
+export const revalidate = 3600  // ISR: renderiza na 1a request, cacheia por 1h
 
 const VALID_RES = ['1080p', '1440p', '4k'] as const
 type Res = (typeof VALID_RES)[number]
