@@ -136,6 +136,29 @@ def test_interior_estimate_labelled(client: httpx.Client, ids: dict):
     assert "airflow" in b
 
 
+def test_interior_parametric_geometry(client: httpx.Client):
+    """Motor paramétrico: mounts com orientação, colocações em mm e fluxos compostos."""
+    builds = client.get("/builds/").json()
+    assert builds
+    comp = {f"{k}_id": v["id"] for k, v in builds[0]["components"].items()}
+    r = client.post("/interior/estimate", json={"components": comp})
+    assert r.status_code == 200
+    g = r.json()["geometry"]
+    assert g is not None, "seeded case must expose parametric geometry"
+    assert g["case"]["depth_mm"] > 0 and g["case"]["height_mm"] > 0
+    assert g["mounts"], "case must declare its mounting provisions"
+    assert all(m["orient"] in ("intake", "exhaust") for m in g["mounts"])
+    assert any(m["occupied_by"] == "stock_fan" for m in g["mounts"])
+    parts = {p["part"] for p in g["placements"]}
+    assert {"motherboard", "gpu", "psu"} <= parts
+    assert all(p["source"] in ("spec", "form_factor_default") for p in g["placements"])
+    assert g["flows"], "composed intake->exhaust flows expected"
+    for f in g["flows"]:
+        assert f["to"]["side"] in ("rear", "top")
+        assert 0 <= f["intensity"] <= 1
+        assert f["heat_at"], "every flow declares where it heats up"
+
+
 # --- upgrade advisor ----------------------------------------------------------
 
 def test_upgrade_advise(client: httpx.Client):

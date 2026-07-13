@@ -8,9 +8,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-pcb_db}
     ports:
-      # Bind to loopback only — the DB is reached by pcb_api over the docker
-      # network (pcb_db:5432). Never expose Postgres on the public interface;
-      # host-level firewall (DOCKER-USER) does not cover this stack.
       - "127.0.0.1:5434:5432"
     volumes:
       - pcb_db_data:/var/lib/postgresql/data
@@ -32,36 +29,42 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pcb_db:5432/${POSTGRES_DB}
     ports:
-      # Loopback only — public traffic reaches the API via nginx (/api/ ->
-      # 127.0.0.1:8100). No need to publish on 0.0.0.0.
       - "127.0.0.1:8100:8100"
     depends_on:
       pcb_db:
         condition: service_healthy
     networks:
       - pcb_net
-    volumes:
-      - ./services/ingestion:/app
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8100/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     command: uvicorn main:app --host 0.0.0.0 --port 8100 --workers 2
 
   pcb_web:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
+      network: host
     container_name: pcb_web
     restart: unless-stopped
     ports:
-      # Loopback only — public traffic reaches the web app via nginx
-      # (location / -> 127.0.0.1:3100).
       - "127.0.0.1:3100:3100"
     environment:
       NEXT_PUBLIC_API_BASE: /api
-      # Server-side (SSR) base for live pages like /pecas — internal docker DNS.
       PCB_API_INTERNAL: http://pcb_api:8100
     networks:
       - pcb_net
     depends_on:
       - pcb_api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
 networks:
   pcb_net:

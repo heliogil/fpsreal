@@ -8,7 +8,7 @@
  *
  * Integridade: FPS é sempre "estimativa", com fonte/data/confiança. Nunca medido.
  */
-export const dynamic = 'force-dynamic'
+export const revalidate = 300
 
 const API = process.env.PCB_API_INTERNAL || 'http://pcb_api:8100'
 
@@ -63,16 +63,16 @@ export default async function PecasPage() {
   const absoluto = builds.find((b) => b.slug === 'rei-absoluto')
 
   // FPS ao vivo: CPU de referência × cada GPU (lista completa por par).
+  // /fps/by-cpu: 1 query retorna todos pares cpu+gpu em vez de N fetches paralelos
   const fpsByGpu: Record<number, Record<string, number>> = {}
   if (ref) {
-    await Promise.all(
-      gpus.map(async (g) => {
-        const rows = await jget<Fps[]>(`/fps/?cpu=${ref.id}&gpu=${g.id}&res=1080p`, [])
-        const m: Record<string, number> = {}
-        for (const r of rows) m[r.game_slug] = r.fps
-        fpsByGpu[g.id] = m
-      }),
+    const bulk = await jget<Record<string, Record<string, number>>>(
+      `/fps/by-cpu?cpu=${ref.id}&res=1080p`,
+      {},
     )
+    for (const [gpuId, games] of Object.entries(bulk)) {
+      fpsByGpu[Number(gpuId)] = games
+    }
   }
 
   const isLive = gpus.length > 0

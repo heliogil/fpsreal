@@ -1,6 +1,8 @@
 """Canonical catalog seed data — Rei do FPS."""
 from __future__ import annotations
 
+from .geometry_data import CASE_GEOMETRY, COOLER_GEOMETRY
+
 # fps_1080p_agg = aggregate 1080p high/ultra FPS used as the raw signal for
 # performance_index. Source: thepcbottleneckcalculator.com/gpu-benchmarks-2026/
 # NOTE: RTX 5070 Ti corrected to 180 (was 145 — wrongly below RTX 4070 SUPER).
@@ -125,18 +127,23 @@ def build_products() -> list[dict]:
             "footprint": None,
         })
     for sku, name, brand, ff, max_gpu, max_cooler, airflow_class, intake_cfm, exhaust_cfm in CASES:
+        # Geometria paramétrica (interior_mm + mounts) entra no specs JSONB — é
+        # ela que alimenta a volumetria e o motor de vento composicional.
+        geo = CASE_GEOMETRY.get(sku, {})
         products.append({
             "sku": sku, "name": name, "category": "case", "brand": brand,
             "specs": {"form_factor": ff, "max_gpu_length_mm": max_gpu,
                       "max_cooler_height_mm": max_cooler, "airflow_class": airflow_class,
-                      "intake_cfm": intake_cfm, "exhaust_cfm": exhaust_cfm},
+                      "intake_cfm": intake_cfm, "exhaust_cfm": exhaust_cfm,
+                      **geo},
             "footprint": None,
         })
     for sku, name, brand, cooler_type, tdp_rating, height in COOLERS:
+        geo = COOLER_GEOMETRY.get(sku, {})
         products.append({
             "sku": sku, "name": name, "category": "cooler", "brand": brand,
             "specs": {"cooler_type": cooler_type, "tdp_rating_w": tdp_rating,
-                      "height_mm": height},
+                      "height_mm": height, **geo},
             "footprint": None,
         })
 
