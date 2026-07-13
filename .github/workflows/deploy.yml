@@ -8,7 +8,7 @@ jobs:
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
-    needs: []   # roda independentemente do CI (não bloqueia deploy em test failures)
+    needs: [api-tests, typecheck]
     concurrency:
       group: deploy-production
       cancel-in-progress: false
@@ -25,4 +25,4 @@ jobs:
             git pull origin main
             docker compose build pcb_api pcb_web
             docker compose up -d --no-deps pcb_api pcb_web
-            echo "Deploy concluído: $(date)"
+            echo "Deploy concluido: $(date)"
