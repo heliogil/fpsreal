@@ -75,9 +75,9 @@ export default function MeuPcPage() {
     setDetected(d.model)
     setGpu(d.model || saved?.gpu || '')
     if (saved?.cpu) setCpu(saved.cpu)
-    fetch('/api/cpus')
+    fetch('/api/products/?category=cpu&limit=200')
       .then((r) => r.json())
-      .then((j) => setCpuOptions(j.cpus ?? []))
+      .then((products: Array<{ name: string }>) => setCpuOptions(products.map((p) => p.name).sort()))
       .catch(() => {})
   }, [])
 
@@ -87,7 +87,7 @@ export default function MeuPcPage() {
     setLoading(true)
     saveMeuPc(gpu.trim(), cpu.trim())
     try {
-      const r = await fetch('/api/meu-pc', {
+      const r = await fetch('/api/upgrade/advise', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ gpu_name: gpu.trim(), cpu_name: cpu.trim(), budget_brl: budget, resolution: res }),

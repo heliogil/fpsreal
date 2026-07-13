@@ -12,3 +12,4 @@ build/
 coverage/
 .pytest_cache/
 .ergon-decisions.jsonl
+compose.yaml.bak*
