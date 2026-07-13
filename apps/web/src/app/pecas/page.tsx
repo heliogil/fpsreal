@@ -8,6 +8,16 @@
  *
  * Integridade: FPS é sempre "estimativa", com fonte/data/confiança. Nunca medido.
  */
+export const metadata = {
+  title: 'Peças & FPS — Catálogo ao vivo | Rei do FPS',
+  description: 'Catálogo de GPUs e CPUs com banco de FPS estimado por jogo. Compare desempenho em CS2, Valorant, Fortnite e mais antes de comprar.',
+  openGraph: {
+    title: 'Peças & FPS | Rei do FPS',
+    description: 'Explore GPUs e CPUs com estimativas de FPS em jogos reais. Dados ao vivo do motor Harpia.',
+    url: 'https://reidofps.com.br/pecas',
+  },
+}
+
 export const revalidate = 300
 
 const API = process.env.PCB_API_INTERNAL || 'http://pcb_api:8100'

@@ -24,7 +24,10 @@ function parseGames(s?: string): string[] {
   return s.split(',').filter(Boolean)
 }
 
-export const metadata = { title: 'Resultados — Rei do FPS' }
+export const metadata = {
+  title: 'Resultados — Rei do FPS',
+  description: 'A Harpia decreta: as 3 melhores builds gamer para o seu orçamento, jogos e prioridade. Ranking ao vivo por custo/FPS.',
+}
 
 export default async function ResultadosPage({ searchParams }: PageProps) {
   const budget = parseBudget(searchParams.budget)

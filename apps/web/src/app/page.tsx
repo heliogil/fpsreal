@@ -1,9 +1,28 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getLiveBuilds, getLiveFpsByBuild } from '@/lib/live-server'
 import { getMockRepository } from '@/lib/repositories'
 import type { CuratedBuild, GameSlug } from '@/lib/repositories/types'
 
 export const revalidate = 300  // ISR: regenera a landing a cada 5 minutos
+
+export const metadata: Metadata = {
+  title: 'Rei do FPS — Melhor build gamer para o seu orçamento',
+  description: 'Qual PC dá o melhor FPS com o seu dinheiro e o seu jogo? Builds curadas com preço real e FPS estimado com fonte. Sem chute.',
+  openGraph: {
+    title: 'Rei do FPS — Melhor build gamer para o seu orçamento',
+    description: 'Compare builds gamer por custo/FPS. Preços reais de lojas brasileiras. Estimativas com fonte pública e banda de confiança.',
+    url: 'https://reidofps.com.br',
+    siteName: 'Rei do FPS',
+    locale: 'pt_BR',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Rei do FPS',
+    description: 'Melhor FPS pelo seu dinheiro. Builds curadas para o mercado brasileiro.',
+  },
+}
 
 // Ranking games for the cost/FPS headline (1080p) — matches the handoff hero.
 const RANK: { slug: GameSlug; name: string }[] = [
