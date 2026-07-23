@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import type { GeoMount, GeoPlacement, LiveInterior, LiveProduct } from '@/lib/live-server'
-import { pickVariant, renderPart } from './PartMockups'
+import { MaterialDefs, bevel, pickVariant, renderPart } from './PartMockups'
 import TopDownInset from './TopDownInset'
 
 /**
@@ -275,6 +275,7 @@ export default function GabineteVivo({
             <filter id="gv-lift" x="-20%" y="-20%" width="140%" height="150%">
               <feDropShadow dx="0" dy="2.2" stdDeviation="2.6" floodColor="#000" floodOpacity="0.34" />
             </filter>
+            <MaterialDefs />
           </defs>
 
           {/* chassi */}
@@ -379,6 +380,7 @@ export default function GabineteVivo({
                   strokeDasharray={sim ? '4 3' : undefined} />
                 <circle cx={b.x + b.w / 2} cy={b.y + b.h / 2} r={Math.min(b.w * 0.32, 5)}
                   fill="var(--panel)" stroke={sim ? 'var(--accent)' : 'var(--line)'} strokeWidth="1" />
+                {bevel(b, 2, 3)}
               </g>
             )
           })}
@@ -390,6 +392,8 @@ export default function GabineteVivo({
               <g data-part="cooler-radiator" filter="url(#gv-lift)" opacity={dimOf('rad')} {...hoverProps('rad', 'radiador do AIO')}>
                 <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={3} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
                 <rect x={b.x + 4} y={b.y + 3} width={b.w - 8} height={Math.max(4, b.h - 6)} rx={2} fill="var(--line2)" />
+                <rect x={b.x + 4} y={b.y + 3} width={b.w - 8} height={Math.max(4, b.h - 6)} fill="url(#mat-fins-v)" />
+                {bevel(b, 2, 3)}
               </g>
             )
           })()}

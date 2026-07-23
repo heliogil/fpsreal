@@ -43,18 +43,62 @@ function FanDisc({ cx, cy, r, spin: _spin, dur: _dur }: { cx: number; cy: number
   )
 }
 
-function finLines(x: number, y: number, w: number, h: number, n: number, vertical = true) {
-  const lines = []
-  for (let i = 0; i < n; i++) {
-    const t = n <= 1 ? 0.5 : i / (n - 1)
-    lines.push(
-      vertical
-        ? <line key={i} x1={x + w * t} y1={y} x2={x + w * t} y2={y + h} stroke="var(--line)" strokeWidth="1" />
-        : <line key={i} x1={x} y1={y + h * t} x2={x + w} y2={y + h * t} stroke="var(--line)" strokeWidth="1" />,
-    )
-  }
-  return lines
+/**
+ * MaterialDefs — texturas partilhadas, declaradas UMA vez no <defs> do SVG.
+ *
+ * Servem dois fins: (1) diferenciar materiais (aletas, malha, PCB, chapa
+ * escovada) para a cena ler como CORTE DE PRODUTO e não como esquema; (2)
+ * baratear o DOM — a malha frontal era desenhada com centenas de <circle>
+ * num laço e passa a ser um único fill.
+ * `patternUnits="userSpaceOnUse"` mantém a densidade constante em unidades
+ * de viewBox (não escala com a peça), que é o que se quer numa textura.
+ */
+export function MaterialDefs() {
+  return (
+    <>
+      <pattern id="mat-fins-v" patternUnits="userSpaceOnUse" width="4" height="4">
+        <line x1="0.5" y1="0" x2="0.5" y2="4" stroke="var(--line)" strokeWidth="1" />
+      </pattern>
+      <pattern id="mat-fins-h" patternUnits="userSpaceOnUse" width="4" height="4">
+        <line x1="0" y1="0.5" x2="4" y2="0.5" stroke="var(--line)" strokeWidth="1" />
+      </pattern>
+      <pattern id="mat-mesh" patternUnits="userSpaceOnUse" width="7" height="7">
+        <circle cx="3.5" cy="3.5" r="1.05" fill="var(--line)" />
+      </pattern>
+      {/* trilhas de PCB: têm de SUGERIR o material, não virar papel quadriculado
+          — daí o espaçamento largo, o traço fino e a opacidade baixa */}
+      <pattern id="mat-pcb" patternUnits="userSpaceOnUse" width="26" height="26">
+        <path d="M0 13 H26 M13 0 V26" fill="none" stroke="var(--accent-dim)" strokeWidth=".5" opacity=".18" />
+      </pattern>
+      <pattern id="mat-brushed" patternUnits="userSpaceOnUse" width="6" height="3">
+        <line x1="0" y1="1.5" x2="6" y2="1.5" stroke="var(--strong)" strokeWidth=".5" opacity=".055" />
+      </pattern>
+    </>
+  )
 }
+
+/**
+ * bevel — chanfro de volume: luz no topo, sombra na base (mesma direção de
+ * luz do resto da cena). Transforma silhueta chapada em sólido.
+ *
+ * INTEGRIDADE: o chanfro é SEMPRE para DENTRO da caixa. A caixa desenhada é a
+ * dimensão real em mm — inflar a silhueta para simular volume seria mentir
+ * sobre o tamanho da peça.
+ */
+export function bevel(b: Box, d = 3, r = 2) {
+  const dd = Math.max(1, Math.min(d, b.h / 3, b.w / 3))
+  return (
+    <g pointerEvents="none">
+      <path d={`M${b.x + r},${b.y} H${b.x + b.w - r} L${b.x + b.w - r - dd},${b.y + dd} H${b.x + r + dd} Z`}
+        fill="var(--strong)" opacity=".08" />
+      <path d={`M${b.x + r},${b.y + b.h} H${b.x + b.w - r} L${b.x + b.w - r - dd},${b.y + b.h - dd} H${b.x + r + dd} Z`}
+        fill="var(--bg)" opacity=".4" />
+    </g>
+  )
+}
+
+/* `finLines` foi removido: as aletas passaram a ser o padrão `mat-fins-*`,
+   que é mais nítido e troca dezenas de <line> por um único fill. */
 
 /* ── GPU ───────────────────────────────────────────────────────────────── */
 
@@ -77,8 +121,8 @@ const gpuBody = (b: Box, fans: number, thick: boolean, flagship: boolean, spin?:
       ))}
       {/* shroud */}
       <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={5} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-      {/* highlight superior (luz vem de cima) */}
-      <line x1={b.x + 5} y1={b.y + 1.4} x2={b.x + b.w - 5} y2={b.y + 1.4} stroke="var(--strong)" strokeWidth="1" opacity=".05" />
+      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={5} fill="url(#mat-brushed)" className="gv-hide-sm" />
+      {bevel(b, 3, 5)}
       {flagship && <rect x={b.x} y={b.y + b.h - 5} width={b.w} height={5} rx={2} fill="var(--accent)" opacity=".8" />}
       {!flagship && <rect x={b.x + 4} y={b.y + b.h - 4} width={b.w * 0.35} height={2.5} rx={1} fill="var(--accent-dim)" />}
       {cxs.map((cx, i) => <FanDisc key={i} cx={cx} cy={b.y + b.h / 2} r={r} spin={spin} dur={2 + i * 0.3} />)}
@@ -100,6 +144,7 @@ const moboBoard = (b: Box, wScale: number, hScale: number): ReactNode => {
     <g>
       {/* PCB */}
       <rect x={b.x} y={b.y} width={bw} height={bh} rx={6} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
+      <rect x={b.x} y={b.y} width={bw} height={bh} rx={6} fill="url(#mat-pcb)" className="gv-hide-sm" />
       {/* traços do PCB */}
       <path d={`M ${px(0.1)} ${py(0.78)} H ${px(0.62)}`} stroke="var(--line2)" strokeWidth="1" />
       <path d={`M ${px(0.12)} ${py(0.12)} V ${py(0.6)}`} stroke="var(--line2)" strokeWidth="1" />
@@ -112,7 +157,8 @@ const moboBoard = (b: Box, wScale: number, hScale: number): ReactNode => {
       {[0.5, 0.74].map((t) => (
         <g key={t}>
           <rect x={px(t)} y={py(0.06)} width={bw * 0.13} height={bh * 0.16} rx={2} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
-          {finLines(px(t) + 2, py(0.07), bw * 0.13 - 4, bh * 0.14, 4)}
+          <rect x={px(t)} y={py(0.06)} width={bw * 0.13} height={bh * 0.16} fill="url(#mat-fins-v)" />
+          {bevel({ x: px(t), y: py(0.06), w: bw * 0.13, h: bh * 0.16 }, 2, 2)}
         </g>
       ))}
       {/* socket da CPU */}
@@ -138,14 +184,16 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
     'cooler-lowprofile': (b) => (
       <g>
         <rect x={b.x + b.w * 0.2} y={b.y + b.h * 0.55} width={b.w * 0.6} height={b.h * 0.45} rx={3} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
-        {finLines(b.x + b.w * 0.2, b.y + b.h * 0.55, b.w * 0.6, b.h * 0.45, 6)}
+        <rect x={b.x + b.w * 0.2} y={b.y + b.h * 0.55} width={b.w * 0.6} height={b.h * 0.45} fill="url(#mat-fins-v)" opacity=".9" />
+        {bevel({ x: b.x + b.w * 0.2, y: b.y + b.h * 0.55, w: b.w * 0.6, h: b.h * 0.45 }, 2, 3)}
         <FanDisc cx={b.x + b.w / 2} cy={b.y + b.h * 0.34} r={Math.min(b.w, b.h) * 0.3} />
       </g>
     ),
     'cooler-tower': (b, o) => (
       <g>
         <rect x={b.x + b.w * 0.28} y={b.y} width={b.w * 0.5} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-        {finLines(b.x + b.w * 0.28, b.y + 4, b.w * 0.5, b.h - 8, Math.max(5, Math.round(b.h / 9)), false)}
+        <rect x={b.x + b.w * 0.28} y={b.y + 3} width={b.w * 0.5} height={b.h - 6} fill="url(#mat-fins-h)" opacity=".9" />
+        {bevel({ x: b.x + b.w * 0.28, y: b.y, w: b.w * 0.5, h: b.h }, 3, 4)}
         <rect x={b.x + b.w * 0.3} y={b.y + 2} width={b.w * 0.46} height={3} rx={1.5} fill="var(--accent-dim)" />
         <FanDisc cx={b.x + b.w * 0.14} cy={b.y + b.h * 0.42} r={Math.min(b.w * 0.16, b.h * 0.3)} spin={o?.spin} dur={2.6} />
       </g>
@@ -169,7 +217,8 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
           <rect x={cx + bx - 3} y={b.y - 6} width={6} height={7} rx={2} fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
           {/* corpo do bloco */}
           <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={7} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-          <line x1={b.x + 7} y1={b.y + 2} x2={b.x + b.w - 7} y2={b.y + 2} stroke="var(--strong)" strokeWidth="1" opacity=".06" />
+          <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={7} fill="url(#mat-brushed)" className="gv-hide-sm" />
+          {bevel(b, 3, 7)}
           {/* cap central iluminado */}
           <circle cx={cx} cy={cy} r={R * 0.3} fill="var(--panel)" stroke="var(--accent)" strokeWidth="1.6" />
           <circle cx={cx} cy={cy} r={R * 0.3} fill="var(--accent-soft)" />
@@ -219,6 +268,8 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
     'psu-basic': (b) => (
       <g>
         <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="url(#mat-brushed)" className="gv-hide-sm" />
+        {bevel(b, 3, 4)}
         <circle cx={b.x + b.h * 0.55} cy={b.y + b.h / 2} r={b.h * 0.32} fill="none" stroke="var(--line)" strokeWidth="1.2" />
         {[0, 60, 120].map((a) => (
           <line key={a} x1={b.x + b.h * 0.55 - b.h * 0.3 * Math.cos((a * Math.PI) / 180)} y1={b.y + b.h / 2 - b.h * 0.3 * Math.sin((a * Math.PI) / 180)} x2={b.x + b.h * 0.55 + b.h * 0.3 * Math.cos((a * Math.PI) / 180)} y2={b.y + b.h / 2 + b.h * 0.3 * Math.sin((a * Math.PI) / 180)} stroke="var(--line)" strokeWidth="1" />
@@ -228,6 +279,8 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
     'psu-modular': (b) => (
       <g>
         <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="url(#mat-brushed)" className="gv-hide-sm" />
+        {bevel(b, 3, 4)}
         <circle cx={b.x + b.h * 0.55} cy={b.y + b.h / 2} r={b.h * 0.32} fill="none" stroke="var(--line)" strokeWidth="1.2" />
         {[0, 1, 2, 3].map((i) => (
           <rect key={i} x={b.x + b.w - b.h * 0.9 + i * 7} y={b.y + b.h * 0.3} width={5} height={5} rx={1} fill="var(--accent-dim)" />
@@ -273,11 +326,7 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
     'front-mesh': (b) => (
       <g>
         <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
-        {Array.from({ length: Math.floor(b.h / 10) }, (_, r) =>
-          Array.from({ length: Math.floor(b.w / 10) }, (_, c) => (
-            <circle key={`${r}-${c}`} cx={b.x + 6 + c * 10} cy={b.y + 6 + r * 10} r={1.1} fill="var(--line)" />
-          )),
-        )}
+        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="url(#mat-mesh)" />
       </g>
     ),
     'front-solid': (b) => (
