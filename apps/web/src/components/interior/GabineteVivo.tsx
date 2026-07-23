@@ -143,8 +143,18 @@ export default function GabineteVivo({
   const psu = P('psu')
   const socket = P('cpu_socket')
 
+  // O TDP é a FONTE de calor; o status da zona é quão bem esse calor é levado
+  // embora. Uma GPU quente com bom fluxo brilha menos que a mesma GPU sufocada
+  // — o brilho passa a refletir a ESTIMATIVA, não só a ficha técnica.
+  const zoneStatus: Record<string, string> = Object.fromEntries(
+    interior.airflow.zones.map((z) => [z.zone, z.status]),
+  )
+  const heatMult = (s?: string) =>
+    s === 'critical' ? 1.45 : s === 'dead_zone' ? 1.5 : s === 'tight' ? 1.12 : 0.8
   const gpuHeat = Math.min(1, (interior.parts.gpu.tdp_w || 0) / 400)
   const cpuHeat = Math.min(1, (interior.parts.cpu.tdp_w || 0) / 150)
+  const gpuHeatM = heatMult(zoneStatus.gpu_zone)
+  const cpuHeatM = heatMult(zoneStatus.cpu_zone)
   const gpuClr = interior.clearances.gpu
   const coolerClr = interior.clearances.cooler
   const coolerRealH = interior.parts.cooler.height_mm || 0
@@ -297,18 +307,24 @@ export default function GabineteVivo({
   }
 
   /* fluxos → trajetos de partículas (nascem fora, saem fora) */
-  type Stream = { d: string; intensity: number; heatT: number; key: string }
+  // choke = quanto o motor diz que este caminho está obstruído (0..1). É o que
+  // liga o motor de obstrução ao MOVIMENTO: um fluxo sufocado gagueja (rastros
+  // mais curtos, menos, apagando cedo), um intake livre corre límpido.
+  const flowChoke = (f: { obstructions?: Array<{ factor: number }> }) =>
+    Math.min(1, (f.obstructions?.reduce((a, o) => a + o.factor, 0) ?? 0) / 0.9)
+  type Stream = { d: string; intensity: number; heatT: number; choke: number; key: string }
   const streams: Stream[] = []
   g.flows.forEach((f, fi) => {
     const sx = ox - 26
     const sy = Yc(f.from.y)
     const heatT = Math.min(0.86, 0.18 + (f.heat_at[0] ?? 0.55) * 0.6)
+    const choke = flowChoke(f)
     if (f.to.side === 'rear') {
       const ey = Yc(f.to.y)
       streams.push({
         key: `f${fi}`,
         d: `M${sx},${sy} C${X(D * 0.3)},${sy} ${X(D * 0.72)},${(sy + ey) / 2} ${X(D) + 26},${ey}`,
-        intensity: f.intensity, heatT,
+        intensity: f.intensity, heatT, choke,
       })
     } else {
       const w = f.to.w ?? 100
@@ -318,19 +334,32 @@ export default function GabineteVivo({
         streams.push({
           key: `f${fi}-${i}`,
           d: `M${sx},${sy} C${X(D * 0.32)},${sy} ${xi},${Yc(H * 0.45)} ${xi},${oy - 14}`,
-          intensity: f.intensity * (0.75 + 0.25 * (i % 2)), heatT,
+          intensity: f.intensity * (0.75 + 0.25 * (i % 2)), heatT, choke,
         })
       }
     }
   })
 
-  /* zonas sem fluxo → eddies de recirculação */
-  const gpuC = gpu ? center(box(gpu)) : null
-  const cpuC = (airCooler || pump || socket) ? center(box((airCooler ?? pump ?? socket)!)) : null
+  /* obstrução por peça (somada em todos os fluxos) — vinda do motor */
+  const obstrByPart: Record<string, number> = {}
+  g.flows.forEach((f) => f.obstructions?.forEach((o) => {
+    obstrByPart[o.part] = (obstrByPart[o.part] ?? 0) + o.factor
+  }))
+  const flowsToTop = g.flows.some((f) => f.to.side === 'top')
+
+  /* zonas sem fluxo → eddies de recirculação, posicionados na SOMBRA (bolsão a
+     sotavento) da peça que obstrui a zona — não num ponto genérico. O ar que
+     não passa pela peça gorda recircula logo atrás dela. */
+  const leewardOf = (b: { x: number; y: number; w: number; h: number }) =>
+    flowsToTop
+      ? { x: b.x + b.w * 0.5, y: b.y - 16 }          // saída no topo → bolsão acima
+      : { x: b.x + b.w + 14, y: b.y + b.h * 0.35 }   // saída traseira → atrás (maior x)
+  const gpuLee = gpu ? leewardOf(box(gpu)) : null
+  const cpuLee = (airCooler || pump || socket) ? leewardOf(box((airCooler ?? pump ?? socket)!)) : null
   const zonePoint: Record<string, { x: number; y: number } | null> = {
     intake_front: { x: X(0) + 26, y: Yc(H * 0.5) },
-    gpu_zone: gpuC,
-    cpu_zone: cpuC,
+    gpu_zone: gpuLee,   // sombra da GPU (a obstrução da câmara inferior)
+    cpu_zone: cpuLee,   // sombra do cooler
     exhaust_rear: { x: X(D) - 26, y: Yc(H * 0.5) },
     exhaust_top: { x: X(D * 0.5), y: oy + 20 },
   }
@@ -405,8 +434,8 @@ export default function GabineteVivo({
           )}
 
           {/* calor: gradiente radial (pulso pelo grupo .heatpulse) */}
-          {gpu && (() => { const b = box(gpu); const c = center(b); const r = Math.max(b.w, b.h) * 0.6; return <g className="heatpulse" style={{ animationDuration: `${3.2 - gpuHeat}s` }} pointerEvents="none"><ellipse cx={c.x} cy={c.y} rx={r} ry={r * 0.62} fill="url(#gv-heat)" opacity={0.14 + 0.22 * gpuHeat} /></g> })()}
-          {(airCooler || pump || socket) && (() => { const b = box((airCooler ?? pump ?? socket)!); const c = center(b); const r = Math.max(b.w, b.h) * 0.66; return <g className="heatpulse" style={{ animationDuration: `${3.4 - cpuHeat}s` }} pointerEvents="none"><ellipse cx={c.x} cy={c.y} rx={r} ry={r * 0.66} fill="url(#gv-heat)" opacity={0.12 + 0.18 * cpuHeat} /></g> })()}
+          {gpu && (() => { const b = box(gpu); const c = center(b); const r = Math.max(b.w, b.h) * 0.6 * (0.9 + 0.15 * gpuHeatM); const op = Math.min(0.5, (0.13 + 0.2 * gpuHeat) * gpuHeatM); return <g className="heatpulse" style={{ animationDuration: `${3.2 - gpuHeat}s` }} pointerEvents="none"><ellipse cx={c.x} cy={c.y} rx={r} ry={r * 0.62} fill="url(#gv-heat)" opacity={op} /></g> })()}
+          {(airCooler || pump || socket) && (() => { const b = box((airCooler ?? pump ?? socket)!); const c = center(b); const r = Math.max(b.w, b.h) * 0.66 * (0.9 + 0.15 * cpuHeatM); const op = Math.min(0.46, (0.11 + 0.17 * cpuHeat) * cpuHeatM); return <g className="heatpulse" style={{ animationDuration: `${3.4 - cpuHeat}s` }} pointerEvents="none"><ellipse cx={c.x} cy={c.y} rx={r} ry={r * 0.66} fill="url(#gv-heat)" opacity={op} /></g> })()}
 
           {/* fonte */}
           {psu && (
@@ -585,12 +614,17 @@ export default function GabineteVivo({
               porque rastro longo diz mais que muitos pontos — e pesa menos. */}
           <g className="flowdots" pointerEvents="none">
             {streams.map((st, si) => {
+              // choke (do motor de obstrução): caminho sufocado GAGUEJA — menos
+              // rastros, mais curtos, apagando antes de completar o trajeto.
+              const ch = st.choke
               const dur = Math.max(3, 6.6 - st.intensity * 2.4) + (si % 3) * 0.35
-              const trails = compact ? 1 + Math.round(st.intensity) : 2 + Math.round(st.intensity * 3)
+              const baseTrails = compact ? 1 + Math.round(st.intensity) : 2 + Math.round(st.intensity * 3)
+              const trails = Math.max(1, Math.round(baseTrails * (1 - 0.45 * ch)))
               const pre = Math.max(0.05, st.heatT - 0.12).toFixed(2)
-              const L = 5 + st.intensity * 9      // comprimento do rastro
-              const w = 1.3 + st.intensity * 1.1  // meia-largura da cabeça
-              const peak = (0.45 + 0.4 * st.intensity).toFixed(2)
+              const L = (5 + st.intensity * 9) * (1 - 0.4 * ch)   // rastro encurta
+              const w = 1.3 + st.intensity * 1.1
+              const peak = ((0.45 + 0.4 * st.intensity) * (1 - 0.35 * ch)).toFixed(2)
+              const fadeOut = (0.97 - 0.32 * ch).toFixed(2)        // apaga mais cedo
               const d = `M${-L},0 C${(-L * 0.6).toFixed(1)},${-w} ${-w},${-w} 0,0 C${-w},${w} ${(-L * 0.6).toFixed(1)},${w} ${-L},0 Z`
               return Array.from({ length: trails }, (_, di) => {
                 const begin = `${-((di / trails) * dur + si * 0.5).toFixed(2)}s`
@@ -598,7 +632,7 @@ export default function GabineteVivo({
                   <path key={`${st.key}-${di}`} className={di >= 2 ? 'gv-dot-extra' : undefined} d={d} fill="#A0A0A0" opacity={peak}>
                     <animateMotion dur={`${dur}s`} begin={begin} repeatCount="indefinite" path={st.d} rotate="auto" />
                     <animate attributeName="fill" values="#A0A0A0;#A0A0A0;#E0A93B;#C85348" keyTimes={`0;${pre};${st.heatT.toFixed(2)};1`} dur={`${dur}s`} begin={begin} repeatCount="indefinite" />
-                    <animate attributeName="opacity" values={`0;${peak};${peak};0`} keyTimes="0;.04;.97;1" dur={`${dur}s`} begin={begin} repeatCount="indefinite" />
+                    <animate attributeName="opacity" values={`0;${peak};${peak};0`} keyTimes={`0;.04;${fadeOut};1`} dur={`${dur}s`} begin={begin} repeatCount="indefinite" />
                   </path>
                 )
               })
