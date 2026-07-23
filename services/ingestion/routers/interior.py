@@ -347,8 +347,51 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
             "flows": flows,
         }
 
+    # ---- diagnóstico: QUAL é o gargalo? -------------------------------------
+    # O score sozinho é um número; isto diz o que o está a segurar, com os
+    # números que sustentam a afirmação. A UI compõe a frase — daqui sai só
+    # estrutura, para o texto/idioma viver na camada de apresentação.
+    # A regra é simples e explicável DE PROPÓSITO: isto é uma estimativa, e um
+    # diagnóstico que não se consegue explicar não serve para decidir compra.
+    worst_zone = (next((z["zone"] for z in zones if z["status"] == "critical"), None)
+                  or next((z["zone"] for z in zones if z["status"] == "tight"), None))
+
+    if intake <= 0:
+        diag_code, need_orient = "no_intake", "intake"
+    elif exhaust <= 0:
+        diag_code, need_orient = "no_exhaust", "exhaust"   # armadilha de calor
+    elif score >= 70:
+        diag_code, need_orient = "ok", None
+    elif exhaust < intake * 0.6:
+        diag_code, need_orient = "exhaust_limited", "exhaust"
+    elif intake < exhaust * 0.6:
+        diag_code, need_orient = "intake_limited", "intake"
+    else:
+        diag_code, need_orient = "airflow_low", "intake"
+
+    # sugestão acionável: um mount LIVRE do lado que falta — liga o diagnóstico
+    # ao what-if, para o utilizador ver o problema e simular a solução no mesmo
+    # sítio, sem ter de adivinhar onde pôr a ventoinha.
+    suggest_mount = None
+    if need_orient and geometry:
+        suggest_mount = next(
+            (m["id"] for m in geometry["mounts"]
+             if m["occupied_by"] is None and m["orient"] == need_orient), None)
+        if suggest_mount is None:  # sem vaga do lado ideal: qualquer uma ajuda
+            suggest_mount = next(
+                (m["id"] for m in geometry["mounts"] if m["occupied_by"] is None), None)
+
     return {
         "method": "zone_graph_estimate",
+        "diagnosis": {
+            "code": diag_code,
+            "worst_zone": worst_zone,
+            "intake_cfm": round(intake, 1),
+            "exhaust_cfm": round(exhaust, 1),
+            "total_w": round(total_w),
+            "suggest_mount": suggest_mount,
+            "suggest_orient": need_orient,
+        },
         "case": {
             "name": case.name if case else None,
             "form_factor": cs.get("form_factor"),

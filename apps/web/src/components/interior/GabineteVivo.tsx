@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { GeoMount, GeoPlacement, LiveInterior, LiveProduct } from '@/lib/live-server'
 import { MaterialDefs, bevel, pickVariant, renderPart } from './PartMockups'
 import TopDownInset from './TopDownInset'
+import BottleneckNote from './BottleneckNote'
 
 /**
  * GabineteVivo v5 — função da GEOMETRIA PARAMÉTRICA do backend.
@@ -417,7 +418,7 @@ export default function GabineteVivo({
           {/* cooler a ar — altura de DESENHO (corpo). A folga de spec vive na vista superior. */}
           {airCooler && (
             <g data-part="cooler" data-variant={vAir} filter="url(#gv-lift)" opacity={dimOf('cooler')}
-              {...partProps('cooler', `cooler ${Math.round(coolerRealH)}mm de altura${coolerClr ? ` · folga ${Math.round(coolerClr.remaining_mm)}mm até a tampa` : ''} — ver corte superior`)}>
+              {...partProps('cooler', `cooler ${Math.round(coolerRealH)}mm de altura${coolerClr ? ` · folga ${Math.round(coolerClr.remaining_mm)}mm até a tampa` : ''}${compact ? '' : ' — ver corte superior'}`)}>
               {renderPart('cooler', vAir, box(airCooler))}
             </g>
           )}
@@ -583,7 +584,7 @@ export default function GabineteVivo({
           <g className="flowdots" pointerEvents="none">
             {streams.map((st, si) => {
               const dur = Math.max(3, 6.6 - st.intensity * 2.4) + (si % 3) * 0.35
-              const trails = 2 + Math.round(st.intensity * 3)
+              const trails = compact ? 1 + Math.round(st.intensity) : 2 + Math.round(st.intensity * 3)
               const pre = Math.max(0.05, st.heatT - 0.12).toFixed(2)
               const L = 5 + st.intensity * 9      // comprimento do rastro
               const w = 1.3 + st.intensity * 1.1  // meia-largura da cabeça
@@ -664,6 +665,9 @@ export default function GabineteVivo({
           }}>{tip.text}</div>
         )}
       </div>
+
+      {/* diagnóstico: o que segura o fluxo, e como simular a solução */}
+      <BottleneckNote diagnosis={interior.diagnosis} onSimulate={onToggleFan} compact={compact} />
 
       {/* vista superior — onde a altura do cooler está no plano */}
       {!compact && (

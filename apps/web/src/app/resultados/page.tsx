@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getMockRepository } from '@/lib/repositories'
-import { runLiveWizard } from '@/lib/live-server'
+import { runLiveWizard, getLiveInterior } from '@/lib/live-server'
+import GabineteVivo from '@/components/interior/GabineteVivo'
 import BuildCard from '@/components/BuildCard'
 import type { CuratedBuild, GameSlug } from '@/lib/repositories/types'
 import { gameLabel, priorityLabel } from '@/lib/labels'
@@ -70,6 +71,14 @@ export default async function ResultadosPage({ searchParams }: PageProps) {
 
   const variants = ['rei', 'equilibrado', 'arrojado'] as const
 
+  // O gabinete é o ativo mais forte do produto e vivia só na página de detalhe —
+  // longe de onde a escolha acontece. Aqui entra em modo compacto, ao lado de
+  // cada candidata. Só 1 pedido por build (o interior); as variantes visuais
+  // derivam de `interior.parts`, por isso não é preciso buscar os produtos.
+  const interiors = await Promise.all(
+    builds.map((b) => getLiveInterior(b.components as unknown as Record<string, number>).catch(() => null)),
+  )
+
   return (
     <div>
       <div className="text-center mb-8">
@@ -96,13 +105,17 @@ export default async function ResultadosPage({ searchParams }: PageProps) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {builds.map((b, i) => (
-            <BuildCard
-              key={b.id}
-              build={b}
-              variant={variants[i] ?? 'default'}
-              detailHref={live ? null : undefined}
-              resolution={resolution}
-            />
+            <div key={b.id} style={{ display: 'grid', gap: 8, alignContent: 'start' }}>
+              <BuildCard
+                build={b}
+                variant={variants[i] ?? 'default'}
+                detailHref={live ? null : undefined}
+                resolution={resolution}
+              />
+              {interiors[i] && (
+                <GabineteVivo interior={interiors[i]!} products={{}} compact />
+              )}
+            </div>
           ))}
         </div>
       )}
