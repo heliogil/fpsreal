@@ -417,7 +417,7 @@ export default function GabineteVivo({
                 <line x1={xr} y1={rb.y} x2={xr} y2={fb.y + fb.h} stroke="var(--dim2)" strokeWidth="1" />
                 <line x1={xr - 4} y1={rb.y} x2={xr + 4} y2={rb.y} stroke="var(--dim2)" strokeWidth="1" />
                 <line x1={xr - 4} y1={fb.y + fb.h} x2={xr + 4} y2={fb.y + fb.h} stroke="var(--dim2)" strokeWidth="1" />
-                <text x={xr + 7} y={(rb.y + fb.y + fb.h) / 2 + 3} fill="var(--dim2)" fontSize="9.5" fontFamily="var(--font-plex-mono), monospace">~{mm}mm</text>
+                <text x={xr + 7} y={(rb.y + fb.y + fb.h) / 2 + 3} className="gv-note" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">~{mm}mm</text>
               </g>
             )
           })()}
@@ -430,22 +430,22 @@ export default function GabineteVivo({
             return (
               <g pointerEvents="none">
                 <line x1={frontInner} y1={yMid} x2={b.x - 3} y2={yMid} stroke={gpuClr.is_tight ? 'var(--warn)' : 'var(--fresh)'} strokeWidth="1" strokeDasharray="4 4" />
-                <text x={frontInner + 4} y={yMid - 7} fill={gpuClr.is_tight ? 'var(--warn)' : 'var(--fresh)'} fontSize="10.5" fontFamily="var(--font-plex-mono), monospace">
+                <text x={frontInner + 4} y={yMid - 7} className="gv-cota" fill={gpuClr.is_tight ? 'var(--warn)' : 'var(--fresh)'} fontFamily="var(--font-plex-mono), monospace">
                   folga {Math.round(gpuClr.remaining_mm)}mm
                 </text>
-                <text x={b.x + 6} y={b.y - 6} fill="var(--dim2)" fontSize="10" fontFamily="var(--font-plex-mono), monospace">GPU {Math.round(gpu.w)}mm</text>
+                <text x={b.x + 6} y={b.y - 6} className="gv-cota" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">GPU {Math.round(gpu.w)}mm</text>
               </g>
             )
           })()}
 
           {/* paredes: verde entra · laranja sai · tracejado = previsão livre (clicável) */}
           {g.mounts.map(mountLine)}
-          <text x={ox - 54} y={Yc(H * 0.62)} fill="var(--fresh)" fontSize="10.5" fontWeight="600" fontFamily="var(--font-plex-mono), monospace">entrada</text>
-          <text x={ox - 54} y={Yc(H * 0.62) + 12} fill="var(--dim2)" fontSize="8.5" fontFamily="var(--font-plex-mono), monospace">intake</text>
-          <text x={716} y={Yc(H * 0.68)} textAnchor="end" fill="var(--warn)" fontSize="10.5" fontWeight="600" fontFamily="var(--font-plex-mono), monospace">saída</text>
-          <text x={716} y={Yc(H * 0.68) + 12} textAnchor="end" fill="var(--dim2)" fontSize="8.5" fontFamily="var(--font-plex-mono), monospace">exhaust</text>
+          <text x={ox - 54} y={Yc(H * 0.62)} className="gv-label gv-hide-sm" fill="var(--fresh)" fontFamily="var(--font-plex-mono), monospace">entrada</text>
+          <text x={ox - 54} y={Yc(H * 0.62) + 12} className="gv-micro gv-hide-sm" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">intake</text>
+          <text x={716} y={Yc(H * 0.68)} textAnchor="end" className="gv-label gv-hide-sm" fill="var(--warn)" fontFamily="var(--font-plex-mono), monospace">saída</text>
+          <text x={716} y={Yc(H * 0.68) + 12} textAnchor="end" className="gv-micro gv-hide-sm" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">exhaust</text>
           {hasTop && (
-            <text x={X(D) - 4} y={oy - 8} textAnchor="end" fill="var(--warn)" fontSize="9.5" fontFamily="var(--font-plex-mono), monospace">saída pelo radiador</text>
+            <text x={X(D) - 4} y={oy - 8} textAnchor="end" className="gv-note" fill="var(--warn)" fontFamily="var(--font-plex-mono), monospace">saída pelo radiador</text>
           )}
 
           {/* streamlines */}
@@ -480,7 +480,7 @@ export default function GabineteVivo({
               return Array.from({ length: dots }, (_, di) => {
                 const begin = `${-((di / dots) * dur + si * 0.5).toFixed(2)}s`
                 return (
-                  <circle key={`${st.key}-${di}`} r={2.2 + st.intensity} fill="#A0A0A0" opacity=".8">
+                  <circle key={`${st.key}-${di}`} className={di >= 2 ? 'gv-dot-extra' : undefined} r={2.2 + st.intensity} fill="#A0A0A0" opacity=".8">
                     <animateMotion dur={`${dur}s`} begin={begin} repeatCount="indefinite" path={st.d} rotate="0" />
                     <animate attributeName="fill" values="#A0A0A0;#A0A0A0;#E0A93B;#C85348" keyTimes={`0;${pre};${st.heatT.toFixed(2)};1`} dur={`${dur}s`} begin={begin} repeatCount="indefinite" />
                     <animate attributeName="opacity" values="0;.85;.85;0" keyTimes="0;.04;.97;1" dur={`${dur}s`} begin={begin} repeatCount="indefinite" />
@@ -498,16 +498,16 @@ export default function GabineteVivo({
             return (
               <g pointerEvents="none">
                 <line x1={X(0)} y1={ry} x2={X(D)} y2={ry} stroke="var(--dim2)" strokeWidth="1" opacity=".5" />
-                {ticks.map((mm) => (
-                  <line key={mm} x1={X(mm)} y1={ry - 3} x2={X(mm)} y2={ry + 3} stroke="var(--dim2)" strokeWidth="1" opacity=".5" />
+                {ticks.map((mm, i) => (
+                  <line key={mm} className={i % 2 === 1 ? 'gv-hide-sm' : undefined} x1={X(mm)} y1={ry - 3} x2={X(mm)} y2={ry + 3} stroke="var(--dim2)" strokeWidth="1" opacity=".5" />
                 ))}
-                <text x={X(0)} y={ry + 15} fill="var(--dim2)" fontSize="8.5" fontFamily="var(--font-plex-mono), monospace">0</text>
-                <text x={X(D)} y={ry + 15} textAnchor="end" fill="var(--dim2)" fontSize="8.5" fontFamily="var(--font-plex-mono), monospace">{Math.round(D)}mm · profundidade</text>
+                <text x={X(0)} y={ry + 15} className="gv-micro" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">0</text>
+                <text x={X(D)} y={ry + 15} textAnchor="end" className="gv-micro" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">{Math.round(D)}mm · profundidade</text>
               </g>
             )
           })()}
 
-          <text x={ox + 8} y={bottomY - 8} fill="var(--dim2)" fontSize="9.5" fontFamily="var(--font-plex-mono), monospace" pointerEvents="none">
+          <text x={ox + 8} y={bottomY - 8} className="gv-note" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace" pointerEvents="none">
             estimativa · zone_graph v2 · não é medição
           </text>
         </svg>

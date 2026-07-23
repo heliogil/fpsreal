@@ -106,6 +106,29 @@ a:hover { color: var(--accent); }
   .flowdots { display: none; }
 }
 
+/* ── GabineteVivo — tipografia do SVG e modo estreito ─────────────────────
+   O viewBox tem 720 de largura: num telemóvel de 375px isso escala ~0.48×,
+   logo `font-size: 10.5` renderiza a ~5px — ilegível. Como o SVG escala por
+   igual, aumentar a fonte EM UNIDADES DE VIEWBOX devolve legibilidade sem
+   mexer no layout. Feito por CSS (e não por breakpoint em JS) de propósito:
+   o componente é SSR + client, e decidir layout em JS daria flash na
+   hidratação. `gv-hide-sm` retira o secundário quando falta espaço. */
+.gv-cota  { font-size: 10.5px; }
+.gv-label { font-size: 10.5px; font-weight: 600; }
+.gv-note  { font-size: 9.5px; }
+.gv-micro { font-size: 8.5px; }
+
+@media (max-width: 640px) {
+  .gv-cota  { font-size: 19px; }
+  .gv-label { font-size: 19px; }
+  .gv-note  { font-size: 16px; }
+  .gv-micro { font-size: 15px; }
+  /* rótulos e traços secundários saem p/ o texto principal respirar */
+  .gv-hide-sm { display: none; }
+  /* menos partículas no telemóvel: menos DOM animado, menos bateria */
+  .gv-dot-extra { display: none; }
+}
+
 /* ============================================================================
    LEGACY SHIM — brand-corrected tokens + component classes for pages not yet
    ported to the handoff (build, vs, pecas, wizard, resultados, meu-pc,

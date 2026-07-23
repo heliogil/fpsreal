@@ -57,7 +57,7 @@ export default function TopDownInset({
       aria-label={`Corte superior: largura útil ${Math.round(W)}mm (derivada), cooler ${Math.round(coolerH)}mm${clr ? `, folga ${Math.round(clr.remaining_mm)}mm` : ''}`}
       style={{ display: 'block', width: '100%', height: 'auto', background: 'var(--bg)' }}>
 
-      <text x={ox} y={14} fill="var(--dim2)" fontSize="9.5" fontFamily="var(--font-plex-mono), monospace">
+      <text x={ox} y={14} className="gv-note" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">
         corte superior · profundidade × largura
       </text>
 
@@ -67,9 +67,9 @@ export default function TopDownInset({
 
       {/* bandeja da placa-mãe (parede de referência) e tampa lateral */}
       <line x1={X(0)} y1={trayY} x2={X(D)} y2={trayY} stroke="var(--line)" strokeWidth="2.5" />
-      <text x={X(0) - 6} y={trayY + 4} textAnchor="end" fill="var(--dim2)" fontSize="8.5" fontFamily="var(--font-plex-mono), monospace">bandeja</text>
+      <text x={X(0) - 6} y={trayY + 4} textAnchor="end" className="gv-micro" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">bandeja</text>
       <line x1={X(0)} y1={panelY} x2={X(D)} y2={panelY} stroke="var(--line)" strokeWidth="2" strokeDasharray="6 4" opacity=".8" />
-      <text x={X(0) - 6} y={panelY + 4} textAnchor="end" fill="var(--dim2)" fontSize="8.5" fontFamily="var(--font-plex-mono), monospace">tampa</text>
+      <text x={X(0) - 6} y={panelY + 4} textAnchor="end" className="gv-micro" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">tampa</text>
 
       {/* GPU: comprimento é real; espessura NÃO é estimada (faixa fina, sem número) */}
       {gpu && (() => {
@@ -78,7 +78,7 @@ export default function TopDownInset({
           <g opacity={dim('gpu')} onMouseEnter={() => onHover?.('gpu')} onMouseLeave={() => onHover?.(null)}>
             <rect x={X(gpu.x)} y={gy} width={gpu.w * s} height={Math.max(7, 12 * s)} rx={2}
               fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
-            <text x={X(gpu.x) + 4} y={gy - 4} fill="var(--dim2)" fontSize="8.5" fontFamily="var(--font-plex-mono), monospace">
+            <text x={X(gpu.x) + 4} y={gy - 4} className="gv-micro gv-hide-sm" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">
               GPU {Math.round(gpu.w)}mm · espessura não estimada
             </text>
           </g>
@@ -97,7 +97,7 @@ export default function TopDownInset({
             <rect x={cx} y={trayY} width={cw} height={ch} rx={3}
               fill="var(--panel2)" stroke={coolerTone} strokeWidth="1.4" />
             <text x={cx + cw / 2} y={trayY + ch / 2 + 3} textAnchor="middle"
-              fill="var(--text)" fontSize="10" fontWeight="600" fontFamily="var(--font-plex-mono), monospace">
+              className="gv-cota" fill="var(--text)" fontWeight="600" fontFamily="var(--font-plex-mono), monospace">
               {Math.round(coolerH)}mm
             </text>
             {/* folga até à tampa */}
@@ -106,7 +106,7 @@ export default function TopDownInset({
                 <line x1={cx + cw / 2} y1={trayY + ch} x2={cx + cw / 2} y2={panelY}
                   stroke={coolerTone} strokeWidth="1" strokeDasharray="3 3" />
                 <text x={cx + cw + 8} y={(trayY + ch + panelY) / 2 + 3}
-                  fill={coolerTone} fontSize="10.5" fontWeight="600" fontFamily="var(--font-plex-mono), monospace">
+                  className="gv-cota" fill={coolerTone} fontWeight="600" fontFamily="var(--font-plex-mono), monospace">
                   folga {Math.round(clr.remaining_mm)}mm
                 </text>
               </g>
@@ -120,7 +120,9 @@ export default function TopDownInset({
         <g opacity={dim('rad') * 0.55}>
           <rect x={X(rad.x)} y={trayY + 3} width={rad.w * s} height={Math.max(6, 10 * s)} rx={2}
             fill="none" stroke="var(--warn)" strokeWidth="1" strokeDasharray="5 4" />
-          <text x={X(rad.x) + 4} y={trayY - 4} fill="var(--warn)" fontSize="8.5" fontFamily="var(--font-plex-mono), monospace">
+          {/* fica visível também no estreito: numa build AIO é a única coisa
+              que explica por que este corte aparece quase vazio */}
+          <text x={X(rad.x) + 4} y={trayY - 4} className="gv-micro" fill="var(--warn)" fontFamily="var(--font-plex-mono), monospace">
             radiador no topo (acima deste corte)
           </text>
         </g>
@@ -131,11 +133,11 @@ export default function TopDownInset({
         <line x1={X(D) + 14} y1={trayY} x2={X(D) + 14} y2={panelY} stroke="var(--dim2)" strokeWidth="1" />
         <line x1={X(D) + 10} y1={trayY} x2={X(D) + 18} y2={trayY} stroke="var(--dim2)" strokeWidth="1" />
         <line x1={X(D) + 10} y1={panelY} x2={X(D) + 18} y2={panelY} stroke="var(--dim2)" strokeWidth="1" />
-        <text x={X(D) + 21} y={(trayY + panelY) / 2 - 2} fill="var(--dim2)" fontSize="9" fontFamily="var(--font-plex-mono), monospace">{Math.round(W)}mm</text>
-        <text x={X(D) + 21} y={(trayY + panelY) / 2 + 9} fill="var(--dim2)" fontSize="7.5" fontFamily="var(--font-plex-mono), monospace">{derived ? 'derivado' : 'spec'}</text>
+        <text x={X(D) + 21} y={(trayY + panelY) / 2 - 2} className="gv-micro" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">{Math.round(W)}mm</text>
+        <text x={X(D) + 21} y={(trayY + panelY) / 2 + 9} className="gv-micro gv-hide-sm" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">{derived ? 'derivado' : 'spec'}</text>
       </g>
 
-      <text x={ox} y={VH - 6} fill="var(--dim2)" fontSize="9" fontFamily="var(--font-plex-mono), monospace">
+      <text x={ox} y={VH - 6} className="gv-micro gv-hide-sm" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">
         largura útil derivada da altura máx. de cooler · espessura da GPU não estimada
       </text>
     </svg>
