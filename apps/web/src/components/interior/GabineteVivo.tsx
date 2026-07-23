@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { GeoMount, GeoPlacement, LiveInterior, LiveProduct } from '@/lib/live-server'
 import { MaterialDefs, bevel, pickVariant, renderPart } from './PartMockups'
 import TopDownInset from './TopDownInset'
@@ -65,6 +65,15 @@ export default function GabineteVivo({
 }) {
   const [hovered, setHovered] = useState<string | null>(null)
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null)
+  const [focused, setFocused] = useState<string | null>(null)
+
+  // Esc sai do modo foco venha de onde vier (teclado, leitor de ecrã)
+  useEffect(() => {
+    if (!focused) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFocused(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [focused])
 
   const g = interior.geometry
   const score = interior.airflow.score
@@ -149,6 +158,69 @@ export default function GabineteVivo({
 
   const hasTop = g.flows.some((f) => f.to.side === 'top')
 
+  /* ── modo foco: alvos, ficha e enquadramento ──────────────────────────────
+     Todas as specs vêm do `interior` — nada é inventado aqui. No telemóvel
+     este é o SUBSTITUTO do hover, que simplesmente não existe em toque. */
+  type FocusTarget = { label: string; box: { x: number; y: number; w: number; h: number }; specs: Array<[string, string]> }
+  const mm = (n: number) => `${Math.round(n)}mm`
+  const focusTargets: Record<string, FocusTarget> = {}
+  if (gpu) focusTargets.gpu = {
+    label: 'Placa de vídeo', box: box(gpu),
+    specs: [
+      ['modelo', products.gpu?.name ?? interior.parts.gpu.name ?? '—'],
+      ['comprimento', mm(gpu.w)],
+      ['TDP', `${Math.round(interior.parts.gpu.tdp_w)} W`],
+      ...(gpuClr ? [['folga até a frente', mm(gpuClr.remaining_mm) + (gpuClr.is_tight ? ' (apertado)' : '')] as [string, string]] : []),
+    ],
+  }
+  if (airCooler) focusTargets.cooler = {
+    label: 'Cooler da CPU', box: box(airCooler),
+    specs: [
+      ['modelo', products.cooler?.name ?? interior.parts.cooler.name ?? '—'],
+      ['altura (spec)', mm(coolerRealH)],
+      ...(coolerClr ? [['folga até a tampa', mm(coolerClr.remaining_mm) + (coolerClr.is_tight ? ' (apertado)' : '')] as [string, string]] : []),
+      ['nota', 'a altura está no plano do corte superior'],
+    ],
+  }
+  if (pump) focusTargets.pump = {
+    label: 'Bomba do AIO (water block)', box: box(pump),
+    specs: [
+      ['modelo', products.cooler?.name ?? interior.parts.cooler.name ?? '—'],
+      ['CPU', `${interior.parts.cpu.name ?? '—'} · ${Math.round(interior.parts.cpu.tdp_w)} W`],
+    ],
+  }
+  if (rad) focusTargets.rad = {
+    label: 'Radiador do AIO', box: box(rad),
+    specs: [
+      ['comprimento', mm(rad.w)],
+      ['espessura', mm(rad.h)],
+      ...(radFans ? [['stack rad+fans', mm(rad.h + radFans.h)] as [string, string], ['ventoinhas', String(radFans.fan_count ?? 3)] as [string, string]] : []),
+    ],
+  }
+  if (psu) focusTargets.psu = {
+    label: 'Fonte', box: box(psu),
+    specs: [['modelo', products.psu?.name ?? '—'], ['tipo', vPsu === 'psu-modular' ? 'modular' : 'básica']],
+  }
+  if (mobo) focusTargets.mobo = {
+    label: 'Placa-mãe', box: box(mobo),
+    specs: [['modelo', products.motherboard?.name ?? '—'], ['formato', vMb === 'mb-atx' ? 'ATX' : 'mATX']],
+  }
+  if (ram) focusTargets.ram = {
+    label: 'Memória', box: box(ram),
+    specs: [['modelo', products.ram?.name ?? '—'], ['pentes', String(ram.sticks ?? 2)]],
+  }
+
+  const ft = focused ? focusTargets[focused] : undefined
+  // enquadra a caixa no centro do viewBox (720×430), com limite de ampliação
+  const focusTransform = (() => {
+    if (!ft) return undefined
+    const pad = 26
+    const k = Math.min(720 / (ft.box.w + pad * 2), 430 / (ft.box.h + pad * 2), 3.2)
+    const cx = ft.box.x + ft.box.w / 2
+    const cy = ft.box.y + ft.box.h / 2
+    return `translate(${(360 - k * cx).toFixed(1)} ${(215 - k * cy).toFixed(1)}) scale(${k.toFixed(3)})`
+  })()
+
   /* ── hover: realce + tooltip da marca ─────────────────────────────────── */
   const hoverProps = (id: string, text: string) => ({
     onMouseEnter: () => setHovered(id),
@@ -158,7 +230,23 @@ export default function GabineteVivo({
       if (r) setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text })
     },
   })
-  const dimOf = (id: string) => (hovered && hovered !== id ? 0.25 : 1)
+  const dimOf = (id: string) => {
+    if (focused) return focused === id ? 1 : 0.12
+    return hovered && hovered !== id ? 0.25 : 1
+  }
+
+  /* peça clicável: hover + foco por rato e por teclado */
+  const partProps = (id: string, text: string) => ({
+    ...hoverProps(id, text),
+    onClick: (e: React.MouseEvent) => { e.stopPropagation(); setFocused((f) => (f === id ? null : id)) },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFocused((f) => (f === id ? null : id)) }
+    },
+    tabIndex: 0,
+    role: 'button',
+    'aria-label': text,
+    style: { cursor: 'pointer' as const },
+  })
 
   const mountLine = (m: GeoMount) => {
     const occupied = m.occupied_by !== null
@@ -182,7 +270,7 @@ export default function GabineteVivo({
 
     return (
       <g key={m.id} {...hoverProps(`mount:${m.id}`, label)} opacity={dimOf(`mount:${m.id}`)}
-        onClick={clickable ? () => onToggleFan?.(m.id) : undefined}
+        onClick={clickable ? (e) => { e.stopPropagation(); onToggleFan?.(m.id) } : undefined}
         style={{ cursor: clickable ? 'pointer' : 'help' }}>
         {isTop ? (
           <line data-vent={`${m.orient}-${m.id}`} x1={X(m.x)} y1={oy} x2={X(m.x + m.w)} y2={oy} {...common} />
@@ -256,6 +344,12 @@ export default function GabineteVivo({
         <svg viewBox="0 0 720 430" role="img"
           aria-label={`Interior do ${interior.case.name ?? 'gabinete'}: fluxo estimado ${score} de 100, pressão ${pressao}`}
           onMouseLeave={() => { setHovered(null); setTip(null) }}
+          onClick={(e) => {
+            // sair do foco só quando o clique NÃO nasceu numa peça — depender
+            // de stopPropagation aqui mostrou-se frágil (a peça focava e o
+            // handler do fundo limpava logo a seguir, no mesmo tick)
+            if (!(e.target as Element).closest('[data-part]')) setFocused(null)
+          }}
           style={{ display: 'block', width: '100%', height: 'auto', background: 'var(--bg)', borderTop: '1px solid var(--line2)' }}>
 
           <defs>
@@ -278,6 +372,10 @@ export default function GabineteVivo({
             <MaterialDefs />
           </defs>
 
+          {/* tudo o que é CENA entra neste grupo: é ele que recebe o zoom do
+              modo foco. Régua e rótulo ficam de fora (ver abaixo). */}
+          <g transform={focusTransform} style={{ transition: 'transform .38s cubic-bezier(.4,0,.2,1)' }}>
+
           {/* chassi */}
           <rect x={ox} y={oy} width={D * s} height={H * s} rx={12} fill="url(#gv-back)" stroke="var(--line)" strokeWidth="1.4" />
           <line x1={ox + 12} y1={oy + 2} x2={X(D) - 12} y2={oy + 2} stroke="var(--strong)" strokeWidth="1" opacity=".05" />
@@ -289,7 +387,7 @@ export default function GabineteVivo({
             const fb = box({ x: 0, y: 0, w: Math.min(14, D * 0.04), h: H })
             const t = vFront === 'front-mesh' ? 'painel frontal · mesh (fluxo livre)' : 'painel frontal · sólido (fluxo restrito)'
             return (
-              <g data-part="case_front" data-variant={vFront} opacity={0.9 * dimOf('front')} {...hoverProps('front', t)}>
+              <g data-part="case_front" data-variant={vFront} opacity={0.9 * dimOf('front')} {...partProps('front', t)}>
                 {renderPart('case_front', vFront, fb)}
               </g>
             )
@@ -298,7 +396,7 @@ export default function GabineteVivo({
           {/* placa-mãe */}
           {mobo && (
             <g data-part="motherboard" data-variant={vMb} filter="url(#gv-lift)" opacity={dimOf('mobo')}
-              {...hoverProps('mobo', `placa-mãe ${vMb === 'mb-atx' ? 'ATX' : 'mATX'}`)}>
+              {...partProps('mobo', `placa-mãe ${vMb === 'mb-atx' ? 'ATX' : 'mATX'}`)}>
               {renderPart('motherboard', vMb, box(mobo))}
             </g>
           )}
@@ -310,7 +408,7 @@ export default function GabineteVivo({
           {/* fonte */}
           {psu && (
             <g data-part="psu" data-variant={vPsu} filter="url(#gv-lift)" opacity={dimOf('psu')}
-              {...hoverProps('psu', `fonte ${vPsu === 'psu-modular' ? 'modular' : 'básica'}`)}>
+              {...partProps('psu', `fonte ${vPsu === 'psu-modular' ? 'modular' : 'básica'}`)}>
               {renderPart('psu', vPsu, box(psu))}
             </g>
           )}
@@ -319,13 +417,13 @@ export default function GabineteVivo({
           {/* cooler a ar — altura de DESENHO (corpo). A folga de spec vive na vista superior. */}
           {airCooler && (
             <g data-part="cooler" data-variant={vAir} filter="url(#gv-lift)" opacity={dimOf('cooler')}
-              {...hoverProps('cooler', `cooler ${Math.round(coolerRealH)}mm de altura${coolerClr ? ` · folga ${Math.round(coolerClr.remaining_mm)}mm até a tampa` : ''} — ver corte superior`)}>
+              {...partProps('cooler', `cooler ${Math.round(coolerRealH)}mm de altura${coolerClr ? ` · folga ${Math.round(coolerClr.remaining_mm)}mm até a tampa` : ''} — ver corte superior`)}>
               {renderPart('cooler', vAir, box(airCooler))}
             </g>
           )}
           {pump && (
             <g data-part="cooler" data-variant="cooler-aio-pump" filter="url(#gv-lift)" opacity={dimOf('pump')}
-              {...hoverProps('pump', 'bomba do AIO (water block sobre a CPU)')}>
+              {...partProps('pump', 'bomba do AIO (water block sobre a CPU)')}>
               {renderPart('cooler', 'cooler-aio-pump', box(pump))}
             </g>
           )}
@@ -350,18 +448,18 @@ export default function GabineteVivo({
           })()}
           {ram && (
             <g data-part="ram" data-variant={vRam} opacity={dimOf('ram')}
-              {...hoverProps('ram', `memória${vRam === 'ram-heatspreader' ? ' com dissipador' : ''}`)}>
+              {...partProps('ram', `memória${vRam === 'ram-heatspreader' ? ' com dissipador' : ''}`)}>
               {renderPart('ram', vRam, box(ram))}
             </g>
           )}
           {gpu && (
             <g data-part="gpu" data-variant={vGpu} filter="url(#gv-lift)" opacity={dimOf('gpu')}
-              {...hoverProps('gpu', `GPU ${Math.round(gpu.w)}mm${gpuClr ? ` · folga ${Math.round(gpuClr.remaining_mm)}mm até a frente` : ''}`)}>
+              {...partProps('gpu', `GPU ${Math.round(gpu.w)}mm${gpuClr ? ` · folga ${Math.round(gpuClr.remaining_mm)}mm até a frente` : ''}`)}>
               {renderPart('gpu', vGpu, box(gpu))}
             </g>
           )}
           {m2 && (
-            <g data-part="storage" data-variant="ssd-m2" opacity={dimOf('m2')} {...hoverProps('m2', 'SSD M.2')}>
+            <g data-part="storage" data-variant="ssd-m2" opacity={dimOf('m2')} {...partProps('m2', 'SSD M.2')}>
               {renderPart('storage', 'ssd-m2', box(m2))}
             </g>
           )}
@@ -389,7 +487,7 @@ export default function GabineteVivo({
           {rad && (() => {
             const b = box(rad)
             return (
-              <g data-part="cooler-radiator" filter="url(#gv-lift)" opacity={dimOf('rad')} {...hoverProps('rad', 'radiador do AIO')}>
+              <g data-part="cooler-radiator" filter="url(#gv-lift)" opacity={dimOf('rad')} {...partProps('rad', 'radiador do AIO')}>
                 <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={3} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
                 <rect x={b.x + 4} y={b.y + 3} width={b.w - 8} height={Math.max(4, b.h - 6)} rx={2} fill="var(--line2)" />
                 <rect x={b.x + 4} y={b.y + 3} width={b.w - 8} height={Math.max(4, b.h - 6)} fill="url(#mat-fins-v)" />
@@ -493,9 +591,11 @@ export default function GabineteVivo({
               })
             })}
           </g>
+          </g>{/* ── fim da cena com zoom ── */}
 
-          {/* régua de escala */}
-          {(() => {
+          {/* Régua ESCONDIDA no modo foco: com a cena ampliada a escala deixa
+              de bater, e uma régua errada é pior do que régua nenhuma. */}
+          {!focused && (() => {
             const ry = bottomY + 12
             const ticks: number[] = []
             for (let mm = 0; mm <= D + 1; mm += 50) ticks.push(mm)
@@ -516,8 +616,36 @@ export default function GabineteVivo({
           </text>
         </svg>
 
+        {/* ficha da peça em foco — no telemóvel é o que substitui o hover */}
+        {ft && (
+          <div className="mono" style={{
+            position: 'absolute', left: 12, top: 12, zIndex: 6, maxWidth: 260,
+            background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 10,
+            padding: '10px 12px', boxShadow: 'var(--shadow-sm)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <strong style={{ fontSize: 11.5, color: 'var(--text)' }}>{ft.label}</strong>
+              <span style={{ flex: 1 }} />
+              <button type="button" onClick={() => setFocused(null)} aria-label="Sair do foco"
+                style={{
+                  fontSize: 10.5, padding: '2px 8px', borderRadius: 99, cursor: 'pointer',
+                  border: '1px solid var(--line)', background: 'transparent', color: 'var(--dim)',
+                }}>voltar</button>
+            </div>
+            <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '3px 10px', fontSize: 10.5 }}>
+              {ft.specs.map(([k, v]) => (
+                <div key={k} style={{ display: 'contents' }}>
+                  <dt style={{ color: 'var(--dim2)' }}>{k}</dt>
+                  <dd style={{ margin: 0, color: 'var(--text)' }}>{v}</dd>
+                </div>
+              ))}
+            </dl>
+            <div style={{ marginTop: 6, fontSize: 9, color: 'var(--dim2)' }}>estimativa · Esc ou fundo p/ sair</div>
+          </div>
+        )}
+
         {/* tooltip da marca (substitui o <title> nativo) */}
-        {tip && (
+        {!focused && tip && (
           <div className="mono" role="status" style={{
             position: 'absolute', left: Math.max(6, Math.min(tip.x + 14, 620)), top: Math.max(6, tip.y - 34),
             pointerEvents: 'none', zIndex: 5, background: 'var(--panel2)', color: 'var(--text)',
