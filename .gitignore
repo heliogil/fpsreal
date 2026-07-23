@@ -5,7 +5,10 @@ __pycache__/
 *.pyc
 .venv/
 dist/
-build/
+# ANCORADO na raiz: `build/` solto casava com QUALQUER dir `build`, incluindo a
+# rota do app `apps/web/src/app/build/` — que deixava ficheiros de rota (ex.: o
+# opengraph-image) fora do git sem ninguém reparar.
+/build/
 *.egg-info/
 .DS_Store
 *.log

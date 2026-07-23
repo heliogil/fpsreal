@@ -245,6 +245,10 @@ export type GeoMount = {
   stock: boolean
   occupied_by: 'stock_fan' | 'aio_radiator' | 'what_if_fan' | null
   cfm: number
+  /** quantas ventoinhas cabem neste mount (rad_bay aceita várias) */
+  capacity?: number
+  /** nº simulado neste mount (what-if empilhado) */
+  fan_count?: number
 }
 export type GeoPlacement = {
   part: string
@@ -255,6 +259,8 @@ export type GeoPlacement = {
   mount?: string
   /** ventoinha desenhada por SIMULAÇÃO (what-if), não de fábrica */
   simulated?: boolean
+  /** baia horizontal (topo): desenha N ventoinhas ao longo da largura */
+  wide?: boolean
 }
 export type GeoFlow = {
   from: { x: number; y: number; h: number }
@@ -289,12 +295,15 @@ export type InteriorDiagnosis = {
   /** mount livre do lado que falta — liga o diagnóstico ao what-if */
   suggest_mount: string | null
   suggest_orient: 'intake' | 'exhaust' | null
+  /** ganho projetado no fluxo se a ventoinha sugerida for adicionada */
+  suggest_delta?: number | null
   gpu_slots?: number | null
 }
 
 /** Eco da simulação "e se eu puser uma ventoinha aqui?" (motor no backend). */
 export type InteriorWhatIf = {
   fans: string[]
+  counts?: Record<string, number>
   added_intake_cfm: number
   added_exhaust_cfm: number
   base_intake_cfm: number
@@ -342,7 +351,11 @@ export async function getLiveInterior(
 }
 
 /** Gabinetes do catálogo — alimenta o seletor de comparação do viewer. */
-export type LiveCaseOption = { id: number; name: string; airflow_class?: string | null }
+export type LiveCaseOption = {
+  id: number; name: string; airflow_class?: string | null
+  max_gpu_length_mm?: number | null
+  max_cooler_height_mm?: number | null
+}
 export async function getLiveCases(): Promise<LiveCaseOption[]> {
   const rows = await getJson<Array<{ id: number; name: string; specs?: Record<string, unknown> }>>(
     '/products/?category=case&limit=50',
@@ -351,6 +364,8 @@ export async function getLiveCases(): Promise<LiveCaseOption[]> {
     id: p.id,
     name: p.name,
     airflow_class: (p.specs?.airflow_class as string) ?? null,
+    max_gpu_length_mm: (p.specs?.max_gpu_length_mm as number) ?? null,
+    max_cooler_height_mm: (p.specs?.max_cooler_height_mm as number) ?? null,
   }))
 }
 

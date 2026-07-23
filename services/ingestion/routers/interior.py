@@ -50,21 +50,26 @@ FAN_CFM_BY_KIND = {"fan120": 55.0, "fan140": 70.0, "fan160": 80.0}
 
 
 def _what_if_fan_cfm(mount: dict) -> float:
-    """CFM de UMA ventoinha adicionada neste mount (estimativa).
-
-    Um clique = uma ventoinha, sempre. Numa baia larga (ex.: rad_bay de 360)
-    cabem várias, mas simular três de uma vez exagerava o efeito e chegava a
-    inverter a pressão do gabinete num único clique.
-    """
+    """CFM de UMA ventoinha adicionada neste mount (estimativa)."""
     kind = str(mount.get("kind") or "")
     if kind in FAN_CFM_BY_KIND:
         return FAN_CFM_BY_KIND[kind]
-    # baia genérica: uma ventoinha, do maior tamanho que a baia aceita
+    # baia genérica: do maior tamanho que a baia aceita
     accepts = [str(a) for a in (mount.get("accepts") or [])]
     for k in ("fan160", "fan140", "fan120"):
         if k in accepts:
             return FAN_CFM_BY_KIND[k]
     return FAN_CFM_BY_KIND["fan120"]
+
+
+def _mount_fan_capacity(mount: dict) -> int:
+    """Quantas ventoinhas cabem neste mount. Um bay de fan = 1; um rad_bay
+    (ex.: 360) aceita várias — quantas cabem na largura."""
+    kind = str(mount.get("kind") or "")
+    if kind in FAN_CFM_BY_KIND:
+        return 1
+    w = _num(mount.get("w"))
+    return max(1, int(w // 120)) if w else 1
 
 
 def _zone_status(cfm: float, heat_w: float, need_ratio: float) -> str:
@@ -135,24 +140,42 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
     base_intake, base_exhaust = intake, exhaust
 
     # ---- what-if: ventoinhas que o utilizador pediu para simular -------------
-    what_if_ids = {str(i) for i in (body.what_if_fans or [])}
+    # O contrato agora CONTA repetições: `["top_bay","top_bay"]` = 2 ventoinhas
+    # naquele bay (empilhamento), limitado pela capacidade física do mount.
+    _wi_counts: Dict[str, int] = {}
+    for _i in (body.what_if_fans or []):
+        _wi_counts[str(_i)] = _wi_counts.get(str(_i), 0) + 1
+    what_if_ids = set(_wi_counts)
+    wi_n: Dict[str, int] = {}           # nº efetivo (após cap) por mount
     wi_intake = wi_exhaust = 0.0
     wi_applied: List[str] = []
     _mounts_raw = cs.get("mounts")
-    if what_if_ids and isinstance(_mounts_raw, list):
+    if _wi_counts and isinstance(_mounts_raw, list):
         for _m in _mounts_raw:
-            if str(_m.get("id")) in what_if_ids and not _m.get("stock"):
-                add = _what_if_fan_cfm(_m)
+            mid = str(_m.get("id"))
+            if mid in _wi_counts and not _m.get("stock"):
+                n = min(_wi_counts[mid], _mount_fan_capacity(_m))
+                add = _what_if_fan_cfm(_m) * n
                 if str(_m.get("orient")) == "intake":
                     wi_intake += add
                 else:
                     wi_exhaust += add
-                wi_applied.append(str(_m.get("id")))
+                wi_n[mid] = n
+                wi_applied.append(mid)
     intake += wi_intake
     exhaust += wi_exhaust
 
+    # ---- resistência do PAINEL FRONTAL --------------------------------------
+    # Um frontal sólido restringe a entrada: a ventoinha empurra, mas o painel
+    # estrangula. `airflow_class` já classifica isto (o mesmo dado que escolhe
+    # mesh vs sólido no desenho) — agora ele MEXE no fluxo, não só na textura.
+    # É a entrada EFETIVA (o que passa) que cai; o CFM nominal do fan é o mesmo.
+    _aclass = str(cs.get("airflow_class") or "").lower()
+    front_factor = 1.0 if _aclass == "high" else (0.9 if _aclass == "medium" else 0.8)
+    intake_eff = intake * front_factor
+
     # Fresh cool air over the parts is the driver; exhaust helps evacuate heat.
-    effective = intake + 0.5 * exhaust
+    effective = intake_eff + 0.5 * exhaust
     balance = intake - exhaust
     pressure = "positive" if balance > 30 else ("negative" if balance < -30 else "neutral")
     fans = {"intake": max(0, round(intake / 75)), "exhaust": max(0, round(exhaust / 75))}
@@ -187,8 +210,9 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
     zones = [
         {"zone": "intake_front", "type": "intake", "status": "ok" if intake > 0 else "dead_zone"},
         {"zone": "cpu_zone", "type": "internal", "status": _zone_status(effective, cpu_w, 1.4)},
-        # front intake alimenta a GPU direto — mas a placa grossa tapa parte dele
-        {"zone": "gpu_zone", "type": "internal", "status": _zone_status(intake * gpu_flow_factor, gpu_w, 0.7)},
+        # front intake alimenta a GPU direto — o painel frontal restringe e a
+        # placa grossa tapa parte do que passa
+        {"zone": "gpu_zone", "type": "internal", "status": _zone_status(intake_eff * gpu_flow_factor, gpu_w, 0.7)},
         {"zone": "exhaust_rear", "type": "exhaust", "status": "ok" if exhaust > 0 else "dead_zone"},
     ]
 
@@ -219,6 +243,7 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         for m in mounts:
             m["occupied_by"] = "stock_fan" if m.get("stock") else None
             m["cfm"] = 0.0
+            m["capacity"] = _mount_fan_capacity(m)  # quantas ventoinhas cabem
         if is_aio:
             for m in mounts:
                 acc = m.get("accepts") or []
@@ -244,7 +269,8 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
                 m["cfm"] = round(base_exhaust / len(stock_out), 1)
         for m in mounts:
             if m["occupied_by"] == "what_if_fan":
-                m["cfm"] = round(_what_if_fan_cfm(m), 1)
+                m["fan_count"] = wi_n.get(str(m["id"]), 1)
+                m["cfm"] = round(_what_if_fan_cfm(m) * m["fan_count"], 1)
         aio_fan_count = int(_num(ks.get("fan_count"))) or (3 if "360" in (rad_class + cooler_type) else 2)
         if rad_mount is not None:
             rad_mount["cfm"] = round(aio_fan_count * AIO_FAN_RAW * RAD_PASS, 1)
@@ -321,9 +347,14 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
             # ventoinha desenhada: a de fábrica e também a SIMULADA (what-if),
             # marcada com `simulated` p/ o viewer a distinguir visualmente.
             if m["occupied_by"] in ("stock_fan", "what_if_fan"):
-                placements.append({"part": "case_fan", "x": _num(m["x"]), "y": _num(m["y"]),
-                                   "w": FAN_TH, "h": _num(m["h"]), "mount": m["id"],
+                _wide = _num(m["w"]) > _num(m["h"])   # baia horizontal (topo) vs parede
+                placements.append({"part": "case_fan",
+                                   "x": _num(m["x"]), "y": _num(m["y"]),
+                                   "w": (_num(m["w"]) if _wide else FAN_TH),
+                                   "h": (FAN_TH if _wide else _num(m["h"])),
+                                   "mount": m["id"], "wide": _wide,
                                    "simulated": m["occupied_by"] == "what_if_fan",
+                                   "fan_count": int(m.get("fan_count") or 1),
                                    "source": "spec"})
 
         # ---- fluxos: cada fonte (intake) alimenta cada dreno (exhaust) ----
@@ -436,6 +467,24 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
             suggest_mount = next(
                 (m["id"] for m in geometry["mounts"] if m["occupied_by"] is None), None)
 
+    # QUANTIFICA a sugestão: roda o what-if internamente e diz de quanto o fluxo
+    # sobe — o CTA deixa de ser genérico ("simule") e passa a ter número
+    # ("+1 ventoinha ≈ +8 no fluxo"). Mesmo motor, sem duplicar matemática.
+    suggest_delta = None
+    if suggest_mount and geometry:
+        _sm = next((m for m in geometry["mounts"] if m["id"] == suggest_mount), None)
+        if _sm is not None:
+            _add = _what_if_fan_cfm(_sm)
+            _ni = intake + (_add if _sm["orient"] == "intake" else 0.0)
+            _ne = exhaust + (_add if _sm["orient"] == "exhaust" else 0.0)
+            _eff = _ni * front_factor + 0.5 * _ne
+            _ns = int(max(0, min(100, round(100 * _eff / (total_w * SCORE_K))))) if total_w > 0 else 0
+            if gpu_thick_pen > 0 and _ns > 0:
+                _ns = int(round(_ns * (1.0 - 0.18 * gpu_thick_pen * (0.3 + 0.7 * side_pen))))
+            if _ne <= 0 and _ni > 0:
+                _ns = min(_ns, 40)
+            suggest_delta = _ns - score
+
     return {
         "method": "zone_graph_estimate",
         "diagnosis": {
@@ -446,6 +495,7 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
             "total_w": round(total_w),
             "suggest_mount": suggest_mount,
             "suggest_orient": need_orient,
+            "suggest_delta": suggest_delta,
             "gpu_slots": gpu_slots or None,
         },
         "case": {
@@ -475,6 +525,7 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         # Eco do what-if: a UI rotula "simulado" e mostra o delta vs fábrica.
         "what_if": {
             "fans": sorted(wi_applied),
+            "counts": wi_n,                       # nº por mount (empilhamento)
             "added_intake_cfm": round(wi_intake, 1),
             "added_exhaust_cfm": round(wi_exhaust, 1),
             "base_intake_cfm": base_intake,

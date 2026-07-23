@@ -87,7 +87,7 @@ export default function TopDownInset({
               <rect x={X(gpu.x)} y={trayY} width={gpu.w * s} height={gh} rx={2}
                 fill="var(--panel2)" stroke={tone} strokeWidth="1.3" />
               <text x={X(gpu.x) + 5} y={trayY + gh / 2 + 3} className="gv-cota" fill="var(--text)" fontWeight="600" fontFamily="var(--font-plex-mono), monospace">
-                {slots ? `${slots}-slot · ${Math.round(gThick)}mm` : `${Math.round(gThick)}mm`}
+                {slots ? `${slots}-slot · ~${Math.round(gThick)}mm típico` : `~${Math.round(gThick)}mm`}
               </text>
               {/* folga até a tampa */}
               {sideClr && (
@@ -141,22 +141,36 @@ export default function TopDownInset({
                 </text>
               </g>
             )}
+            {/* HEURÍSTICA: uma torre alta costuma avançar sobre o 1º slot de RAM.
+                Sem dado de overhang no catálogo, é um "confira", não uma afirmação. */}
+            {airCooler && coolerH >= 158 && (
+              <text x={cx} y={trayY - 5} className="gv-micro gv-hide-sm" fill="var(--warn)" fontFamily="var(--font-plex-mono), monospace">
+                torre alta — confira a folga da 1ª RAM
+              </text>
+            )}
           </g>
         )
       })()}
 
-      {/* radiador no topo: visto de cima ocupa a profundidade da baia */}
-      {rad && (
-        <g opacity={dim('rad') * 0.55}>
-          <rect x={X(rad.x)} y={trayY + 3} width={rad.w * s} height={Math.max(6, 10 * s)} rx={2}
-            fill="none" stroke="var(--warn)" strokeWidth="1" strokeDasharray="5 4" />
-          {/* fica visível também no estreito: numa build AIO é a única coisa
-              que explica por que este corte aparece quase vazio */}
-          <text x={X(rad.x) + 4} y={trayY - 4} className="gv-micro" fill="var(--warn)" fontFamily="var(--font-plex-mono), monospace">
-            radiador no topo (acima deste corte)
-          </text>
-        </g>
-      )}
+      {/* radiador no topo: visto de cima ele CAPA quase toda a largura útil
+          (bandeja→tampa) ao longo da sua profundidade. Deixou de ser um contorno
+          fino — agora mostra a espessura/footprint que ele realmente ocupa. */}
+      {rad && (() => {
+        const rth = (interior.parts.cooler.height_mm || 28) * s   // espessura do rad
+        const ry = trayY + 3
+        return (
+          <g opacity={dim('rad') * 0.6}>
+            <rect x={X(rad.x)} y={ry} width={rad.w * s} height={Math.max(8, W * s - 8)} rx={3}
+              fill="var(--warn-bg)" stroke="var(--warn)" strokeWidth="1" strokeDasharray="5 4" />
+            {/* faixa da espessura do core, encostada à tampa */}
+            <rect x={X(rad.x)} y={panelY - rth} width={rad.w * s} height={Math.max(4, rth)} rx={2}
+              fill="var(--panel2)" stroke="var(--warn)" strokeWidth="1" opacity={0.8} />
+            <text x={X(rad.x) + 4} y={trayY - 4} className="gv-micro" fill="var(--warn)" fontFamily="var(--font-plex-mono), monospace">
+              radiador no topo · ~{Math.round(interior.parts.cooler.height_mm || 28)}mm de espessura
+            </text>
+          </g>
+        )
+      })()}
 
       {/* cota da largura útil */}
       <g>

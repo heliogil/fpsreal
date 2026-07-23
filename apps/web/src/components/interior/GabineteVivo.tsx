@@ -51,7 +51,7 @@ function eddyArc(cx: number, cy: number, r: number): string {
 }
 
 export default function GabineteVivo({
-  interior, products, whatIfFans = [], onToggleFan, onClearWhatIf, pending = false, compact = false,
+  interior, products, whatIfFans = [], onToggleFan, onFanDelta, onClearWhatIf, pending = false, compact = false,
 }: {
   interior: LiveInterior
   products: Products
@@ -59,6 +59,8 @@ export default function GabineteVivo({
   whatIfFans?: string[]
   /** clicar num mount livre pede a simulação ao motor */
   onToggleFan?: (mountId: string) => void
+  /** +1/−1 ventoinha num mount (empilhamento em baias largas) */
+  onFanDelta?: (mountId: string, delta: number) => void
   onClearWhatIf?: () => void
   pending?: boolean
   /** modo comparação lado a lado: esconde inset/legenda p/ caber */
@@ -67,6 +69,12 @@ export default function GabineteVivo({
   const [hovered, setHovered] = useState<string | null>(null)
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null)
   const [focused, setFocused] = useState<string | null>(null)
+  // Em toque não há hover — o tooltip pisca no tap. Detetamos ponteiro grosso
+  // p/ suprimi-lo (o modo foco assume no telemóvel). SSR-safe: só no cliente.
+  const [coarse, setCoarse] = useState(false)
+  useEffect(() => {
+    setCoarse(typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches)
+  }, [])
 
   // Esc sai do modo foco venha de onde vier (teclado, leitor de ecrã)
   useEffect(() => {
@@ -180,7 +188,7 @@ export default function GabineteVivo({
     specs: [
       ['modelo', products.gpu?.name ?? interior.parts.gpu.name ?? '—'],
       ['comprimento', mm(gpu.w)],
-      ...(interior.parts.gpu.thickness_mm ? [['espessura', `${interior.parts.gpu.slots ?? '?'}-slot · ${mm(interior.parts.gpu.thickness_mm)}`] as [string, string]] : []),
+      ...(interior.parts.gpu.thickness_mm ? [['espessura', `${interior.parts.gpu.slots ?? '?'}-slot · ~${mm(interior.parts.gpu.thickness_mm)} típico`] as [string, string]] : []),
       ['TDP', `${Math.round(interior.parts.gpu.tdp_w)} W`],
       ...(gpuClr ? [['folga até a frente', mm(gpuClr.remaining_mm) + (gpuClr.is_tight ? ' (apertado)' : '')] as [string, string]] : []),
       ...(interior.clearances.gpu_side ? [['folga até a tampa', mm(interior.clearances.gpu_side.remaining_mm) + (interior.clearances.gpu_side.is_tight ? ' (apertado)' : '')] as [string, string]] : []),
@@ -228,7 +236,7 @@ export default function GabineteVivo({
   const focusTransform = (() => {
     if (!ft) return undefined
     const pad = 26
-    const k = Math.min(720 / (ft.box.w + pad * 2), 430 / (ft.box.h + pad * 2), 3.2)
+    const k = Math.min(720 / (ft.box.w + pad * 2), 430 / (ft.box.h + pad * 2), 2.8)
     const cx = ft.box.x + ft.box.w / 2
     const cy = ft.box.y + ft.box.h / 2
     return `translate(${(360 - k * cx).toFixed(1)} ${(215 - k * cy).toFixed(1)}) scale(${k.toFixed(3)})`
@@ -373,7 +381,7 @@ export default function GabineteVivo({
       {header}
 
       <div style={{ position: 'relative' }}>
-        <svg viewBox="0 0 720 430" role="img"
+        <svg viewBox="0 0 720 430" role="img" className={compact ? 'gv-compact' : undefined}
           aria-label={`Interior do ${interior.case.name ?? 'gabinete'}: fluxo estimado ${score} de 100, pressão ${pressao}`}
           onMouseLeave={() => { setHovered(null); setTip(null) }}
           onClick={(e) => {
@@ -393,6 +401,15 @@ export default function GabineteVivo({
               <stop offset="0" style={{ stopColor: 'var(--bg)', stopOpacity: 0 }} />
               <stop offset="1" style={{ stopColor: 'var(--bg)', stopOpacity: 0.55 }} />
             </linearGradient>
+            <linearGradient id="gv-rim" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" style={{ stopColor: 'var(--strong)', stopOpacity: 0.09 }} />
+              <stop offset="1" style={{ stopColor: 'var(--strong)', stopOpacity: 0 }} />
+            </linearGradient>
+            {/* sombra de contato: elipse escura sob as peças pesadas, ancora-as no piso */}
+            <radialGradient id="gv-contact">
+              <stop offset="0" style={{ stopColor: 'var(--bg)', stopOpacity: 0.5 }} />
+              <stop offset="1" style={{ stopColor: 'var(--bg)', stopOpacity: 0 }} />
+            </radialGradient>
             <radialGradient id="gv-heat">
               <stop offset="0" style={{ stopColor: 'var(--danger)', stopOpacity: 0.85 }} />
               <stop offset="0.45" style={{ stopColor: 'var(--danger)', stopOpacity: 0.28 }} />
@@ -409,10 +426,20 @@ export default function GabineteVivo({
           <g transform={focusTransform} style={{ transition: 'transform .38s cubic-bezier(.4,0,.2,1)' }}>
 
           {/* chassi */}
-          <rect x={ox} y={oy} width={D * s} height={H * s} rx={12} fill="url(#gv-back)" stroke="var(--line)" strokeWidth="1.4" />
-          <line x1={ox + 12} y1={oy + 2} x2={X(D) - 12} y2={oy + 2} stroke="var(--strong)" strokeWidth="1" opacity=".05" />
+          <rect x={ox} y={oy} width={D * s} height={H * s} rx={12} fill="url(#gv-back)" stroke="var(--line)" strokeWidth="1.4" vectorEffect={focused ? 'non-scaling-stroke' : undefined} />
+          {/* rim-light no topo: no dark a sombra preta (gv-lift) quase não lê,
+              então o volume do chassi vem daqui — luz de cima mais presente */}
+          <rect x={ox + 8} y={oy + 1.5} width={D * s - 16} height={22} rx={8} fill="url(#gv-rim)" pointerEvents="none" />
+          <line x1={ox + 12} y1={oy + 2} x2={X(D) - 12} y2={oy + 2} stroke="var(--strong)" strokeWidth="1" opacity=".08" />
           <rect x={ox + 2} y={bottomY - 40} width={D * s - 4} height={38} fill="url(#gv-floor)" opacity={0.6} />
           <line x1={ox + 4} y1={Yc(g.case.shroud_h_mm)} x2={X(D) - 4} y2={Yc(g.case.shroud_h_mm)} stroke="var(--line2)" strokeWidth="1.2" />
+
+          {/* sombras de CONTATO — ancoram as peças pesadas (a GPU projeta no
+              shroud, a fonte assenta no piso do basement). Puro grounding. */}
+          <g pointerEvents="none">
+            {gpu && (() => { const b = box(gpu); const sy = Yc(g.case.shroud_h_mm); return <ellipse cx={b.x + b.w / 2} cy={sy} rx={b.w * 0.42} ry={7} fill="url(#gv-contact)" opacity={0.7} /> })()}
+            {psu && (() => { const b = box(psu); return <ellipse cx={b.x + b.w / 2} cy={b.y + b.h} rx={b.w * 0.5} ry={6} fill="url(#gv-contact)" /> })()}
+          </g>
 
           {/* parede frontal (mesh = fluxo livre · sólido = restrito) */}
           {(() => {
@@ -459,16 +486,23 @@ export default function GabineteVivo({
               {renderPart('cooler', 'cooler-aio-pump', box(pump))}
             </g>
           )}
-          {/* tubos bomba → radiador */}
+          {/* tubos bomba → radiador. Os tubos de um AIO saem por UMA PORTA numa
+              extremidade do radiador (não pelo meio): roteamos para a ponta mais
+              próxima da bomba, e as duas mangueiras encostam lado a lado ali. */}
           {pump && rad && (() => {
             const pb = box(pump); const rb = box(rad)
             const bx1 = pb.x + pb.w * 0.33; const bx2 = pb.x + pb.w * 0.67; const by = pb.y - 4
             const ry = rb.y + rb.h
-            const anchor = Math.max(rb.x + 16, Math.min(rb.x + rb.w - 16, pb.x + pb.w / 2))
-            const rx1 = anchor - 9; const rx2 = anchor + 9
+            const pumpCx = pb.x + pb.w / 2
+            // ponta do radiador mais perto da bomba = a porta real
+            const nearLeft = Math.abs(pumpCx - rb.x) <= Math.abs(pumpCx - (rb.x + rb.w))
+            const port = nearLeft ? rb.x + 18 : rb.x + rb.w - 18
+            const rx1 = port - 8; const rx2 = port + 8
             const midY = (by + ry) / 2
-            const d1 = `M${bx1},${by} C${bx1 - 16},${midY} ${rx1 - 12},${midY} ${rx1},${ry}`
-            const d2 = `M${bx2},${by} C${bx2 + 16},${midY} ${rx2 + 12},${midY} ${rx2},${ry}`
+            // curva mais pronunciada quanto mais lateral for a porta (mangueira sobra)
+            const bow = nearLeft ? -18 : 18
+            const d1 = `M${bx1},${by} C${bx1 + bow},${midY} ${rx1 - bow * 0.5},${midY} ${rx1},${ry}`
+            const d2 = `M${bx2},${by} C${bx2 + bow},${midY} ${rx2 - bow * 0.5},${midY} ${rx2},${ry}`
             return (
               <g fill="none" strokeLinecap="round" pointerEvents="none" opacity={dimOf('pump')}>
                 <path d={d1} stroke="var(--line)" strokeWidth="5.5" opacity=".5" />
@@ -500,16 +534,26 @@ export default function GabineteVivo({
           {caseFans.map((f, i) => {
             const b = box(f)
             const sim = f.simulated === true
+            const nf = Math.max(1, f.fan_count ?? 1)   // empilhamento (what-if)
+            const wide = f.wide === true
             const fid = `fan:${f.mount ?? i}`
+            // N discos ao longo do eixo longo (baia horizontal = topo)
+            const discs = Array.from({ length: nf }, (_, k) => {
+              const t = (k + 0.5) / nf
+              return wide ? { cx: b.x + b.w * t, cy: b.y + b.h / 2 } : { cx: b.x + b.w / 2, cy: b.y + b.h * t }
+            })
+            const r = Math.min((wide ? b.w / nf : b.h / nf) * 0.34, 5)
             return (
               <g key={`cf${i}`} data-part="case_fan" opacity={dimOf(fid)}
-                {...hoverProps(fid, sim ? 'ventoinha SIMULADA (what-if)' : 'ventoinha de fábrica')}>
+                {...hoverProps(fid, sim ? `${nf > 1 ? `${nf} ventoinhas` : 'ventoinha'} SIMULADA${nf > 1 ? 's' : ''} (what-if)` : 'ventoinha de fábrica')}>
                 <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={3}
                   fill={sim ? 'var(--accent-soft)' : 'var(--panel2)'}
                   stroke={sim ? 'var(--accent)' : 'var(--line)'} strokeWidth="1"
                   strokeDasharray={sim ? '4 3' : undefined} />
-                <circle cx={b.x + b.w / 2} cy={b.y + b.h / 2} r={Math.min(b.w * 0.32, 5)}
-                  fill="var(--panel)" stroke={sim ? 'var(--accent)' : 'var(--line)'} strokeWidth="1" />
+                {discs.map((d, k) => (
+                  <circle key={k} cx={d.cx} cy={d.cy} r={r}
+                    fill="var(--panel)" stroke={sim ? 'var(--accent)' : 'var(--line)'} strokeWidth="1" />
+                ))}
                 {bevel(b, 2, 3)}
               </g>
             )
@@ -658,6 +702,24 @@ export default function GabineteVivo({
             )
           })()}
 
+          {/* régua de ALTURA na calha esquerda — o outro eixo no plano da vista
+              lateral, onde vivem as folgas de GPU e cooler. Some no telemóvel e
+              no foco (escala deixa de bater). */}
+          {!focused && (() => {
+            const rx = ox - 14
+            const ticks: number[] = []
+            for (let mm = 0; mm <= H + 1; mm += 50) ticks.push(mm)
+            return (
+              <g pointerEvents="none" className="gv-hide-sm">
+                <line x1={rx} y1={Yc(0)} x2={rx} y2={Yc(H)} stroke="var(--dim2)" strokeWidth="1" opacity=".5" />
+                {ticks.map((mm, i) => (
+                  <line key={mm} className={i % 2 === 1 ? 'gv-hide-sm' : undefined} x1={rx - 3} y1={Yc(mm)} x2={rx + 3} y2={Yc(mm)} stroke="var(--dim2)" strokeWidth="1" opacity=".5" />
+                ))}
+                <text x={rx - 5} y={Yc(H) + 3} textAnchor="end" className="gv-micro" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace" transform={`rotate(-90 ${rx - 5} ${Yc(H) + 3})`}>{Math.round(H)}mm · altura</text>
+              </g>
+            )
+          })()}
+
           <text x={ox + 8} y={bottomY - 8} className="gv-note" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace" pointerEvents="none">
             estimativa · zone_graph v2 · não é medição
           </text>
@@ -692,7 +754,7 @@ export default function GabineteVivo({
         )}
 
         {/* tooltip da marca (substitui o <title> nativo) */}
-        {!focused && tip && (
+        {!focused && !coarse && tip && (
           <div className="mono" role="status" style={{
             position: 'absolute', left: Math.max(6, Math.min(tip.x + 14, 620)), top: Math.max(6, tip.y - 34),
             pointerEvents: 'none', zIndex: 5, background: 'var(--panel2)', color: 'var(--text)',
@@ -708,7 +770,7 @@ export default function GabineteVivo({
       {/* vista superior — onde a altura do cooler está no plano */}
       {!compact && (
         <div style={{ borderTop: '1px solid var(--line2)' }}>
-          <TopDownInset interior={interior} g={g} hovered={hovered} onHover={setHovered} />
+          <TopDownInset interior={interior} g={g} hovered={focused ?? hovered} onHover={setHovered} />
         </div>
       )}
 
@@ -739,15 +801,33 @@ export default function GabineteVivo({
         <span className="mono" style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 99, border: '1px solid var(--line)', color: 'var(--dim)' }}>
           pressão {pressao}
         </span>
-        {g.mounts.filter((m) => m.cfm > 0).map((m) => (
-          <span key={m.id} className="mono" style={{
-            fontSize: 10.5, padding: '3px 9px', borderRadius: 99,
-            border: `1px solid ${m.occupied_by === 'what_if_fan' ? 'var(--accent-dim)' : 'var(--line)'}`,
-            color: m.occupied_by === 'what_if_fan' ? 'var(--accent)' : 'var(--dim)',
-          }}>
-            {m.id.replace(/_/g, ' ')}: {m.orient === 'intake' ? '+' : '−'}{Math.round(m.cfm)} CFM{m.occupied_by === 'what_if_fan' ? ' · simulado' : ''}
-          </span>
-        ))}
+        {g.mounts.filter((m) => m.cfm > 0).map((m) => {
+          const isSim = m.occupied_by === 'what_if_fan'
+          const cnt = interior.what_if?.counts?.[m.id] ?? m.fan_count ?? 1
+          const cap = m.capacity ?? 1
+          const stepper = isSim && onFanDelta && cap > 1
+          return (
+            <span key={m.id} className="mono" style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              fontSize: 10.5, padding: '3px 9px', borderRadius: 99,
+              border: `1px solid ${isSim ? 'var(--accent-dim)' : 'var(--line)'}`,
+              color: isSim ? 'var(--accent)' : 'var(--dim)',
+              background: isSim ? 'var(--accent-soft)' : 'transparent',
+            }}>
+              {m.id.replace(/_/g, ' ')}: {m.orient === 'intake' ? '+' : '−'}{Math.round(m.cfm)} CFM
+              {isSim && ` · ${cnt}×${stepper ? '' : ' simulado'}`}
+              {stepper && (
+                <>
+                  <button type="button" aria-label="menos uma" onClick={() => onFanDelta(m.id, -1)}
+                    style={{ cursor: 'pointer', border: '1px solid var(--accent-dim)', background: 'transparent', color: 'var(--accent)', borderRadius: 4, width: 16, height: 16, lineHeight: 1, padding: 0 }}>−</button>
+                  <button type="button" aria-label="mais uma" disabled={cnt >= cap} onClick={() => onFanDelta(m.id, 1)}
+                    style={{ cursor: cnt >= cap ? 'default' : 'pointer', border: '1px solid var(--accent-dim)', background: 'transparent', color: cnt >= cap ? 'var(--dim2)' : 'var(--accent)', borderRadius: 4, width: 16, height: 16, lineHeight: 1, padding: 0 }}>+</button>
+                  <span style={{ color: 'var(--dim2)' }}>de {cap}</span>
+                </>
+              )}
+            </span>
+          )
+        })}
         {g.mounts.filter((m) => m.occupied_by === null).map((m) => (
           <button key={m.id} type="button" className="mono"
             onClick={onToggleFan ? () => onToggleFan(m.id) : undefined}

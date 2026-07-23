@@ -76,7 +76,10 @@ export default function BottleneckNote({
             border: '1px solid var(--accent-dim)', background: 'var(--accent-soft)', color: 'var(--accent)',
             whiteSpace: 'nowrap',
           }}>
+          {/* QUANTIFICADO: o motor já rodou o what-if e devolveu o ganho */}
           simular ventoinha em {diagnosis.suggest_mount.replace(/_/g, ' ')}
+          {typeof diagnosis.suggest_delta === 'number' && diagnosis.suggest_delta > 0
+            ? ` · ≈ +${diagnosis.suggest_delta} no fluxo` : ''}
         </button>
       )}
     </div>

@@ -121,7 +121,7 @@ const gpuBody = (b: Box, fans: number, thick: boolean, flagship: boolean, spin?:
       ))}
       {/* shroud */}
       <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={5} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={5} fill="url(#mat-brushed)" className="gv-hide-sm" />
+      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={5} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
       {bevel(b, 3, 5)}
       {flagship && <rect x={b.x} y={b.y + b.h - 5} width={b.w} height={5} rx={2} fill="var(--accent)" opacity=".8" />}
       {!flagship && <rect x={b.x + 4} y={b.y + b.h - 4} width={b.w * 0.35} height={2.5} rx={1} fill="var(--accent-dim)" />}
@@ -144,7 +144,7 @@ const moboBoard = (b: Box, wScale: number, hScale: number): ReactNode => {
     <g>
       {/* PCB */}
       <rect x={b.x} y={b.y} width={bw} height={bh} rx={6} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
-      <rect x={b.x} y={b.y} width={bw} height={bh} rx={6} fill="url(#mat-pcb)" className="gv-hide-sm" />
+      <rect x={b.x} y={b.y} width={bw} height={bh} rx={6} fill="url(#mat-pcb)" className="gv-hide-sm gv-mat-fine" />
       {/* traços do PCB */}
       <path d={`M ${px(0.1)} ${py(0.78)} H ${px(0.62)}`} stroke="var(--line2)" strokeWidth="1" />
       <path d={`M ${px(0.12)} ${py(0.12)} V ${py(0.6)}`} stroke="var(--line2)" strokeWidth="1" />
@@ -217,7 +217,7 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
           <rect x={cx + bx - 3} y={b.y - 6} width={6} height={7} rx={2} fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
           {/* corpo do bloco */}
           <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={7} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-          <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={7} fill="url(#mat-brushed)" className="gv-hide-sm" />
+          <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={7} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
           {bevel(b, 3, 7)}
           {/* cap central iluminado */}
           <circle cx={cx} cy={cy} r={R * 0.3} fill="var(--panel)" stroke="var(--accent)" strokeWidth="1.6" />
@@ -268,7 +268,7 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
     'psu-basic': (b) => (
       <g>
         <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="url(#mat-brushed)" className="gv-hide-sm" />
+        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
         {bevel(b, 3, 4)}
         <circle cx={b.x + b.h * 0.55} cy={b.y + b.h / 2} r={b.h * 0.32} fill="none" stroke="var(--line)" strokeWidth="1.2" />
         {[0, 60, 120].map((a) => (
@@ -279,7 +279,7 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
     'psu-modular': (b) => (
       <g>
         <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="url(#mat-brushed)" className="gv-hide-sm" />
+        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
         {bevel(b, 3, 4)}
         <circle cx={b.x + b.h * 0.55} cy={b.y + b.h / 2} r={b.h * 0.32} fill="none" stroke="var(--line)" strokeWidth="1.2" />
         {[0, 1, 2, 3].map((i) => (

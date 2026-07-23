@@ -68,7 +68,16 @@ export default function GabineteVivoLive({
   }, [components])
 
   const toggleFan = useCallback((mountId: string) => {
+    // clicar num mount livre = +1 (primeira ventoinha); num já simulado = zera
     const next = whatIf.includes(mountId) ? whatIf.filter((m) => m !== mountId) : [...whatIf, mountId]
+    void refetch(next)
+  }, [whatIf, refetch])
+
+  // +1/−1 no mesmo mount (empilhamento em baias largas) — repetições no array
+  const fanDelta = useCallback((mountId: string, d: number) => {
+    let next = [...whatIf]
+    if (d > 0) next.push(mountId)
+    else { const i = next.lastIndexOf(mountId); if (i >= 0) next.splice(i, 1) }
     void refetch(next)
   }, [whatIf, refetch])
 
@@ -83,9 +92,20 @@ export default function GabineteVivoLive({
     setComparePending(false)
   }, [components])
 
+  // #11: só compara com gabinetes onde a build CABE. Os incompatíveis não são
+  // escondidos (o utilizador pode querer saber) — vêm marcados e desabilitados.
+  const gpuLen = initial.parts.gpu.length_mm || 0
+  const coolerH = initial.parts.cooler.height_mm || 0
   const otherCases = useMemo(
-    () => cases.filter((c) => c.id !== components.case_id),
-    [cases, components.case_id],
+    () => cases
+      .filter((c) => c.id !== components.case_id)
+      .map((c) => {
+        const gpuOk = !c.max_gpu_length_mm || !gpuLen || c.max_gpu_length_mm >= gpuLen
+        const coolerOk = !c.max_cooler_height_mm || !coolerH || c.max_cooler_height_mm >= coolerH
+        return { ...c, fits: gpuOk && coolerOk }
+      })
+      .sort((a, b) => Number(b.fits) - Number(a.fits)),
+    [cases, components.case_id, gpuLen, coolerH],
   )
 
   return (
@@ -115,7 +135,16 @@ export default function GabineteVivoLive({
                 borderRadius: 8, padding: '4px 8px', fontSize: 11,
               }}>
               <option value="">— nenhum —</option>
-              {otherCases.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {otherCases.some((c) => c.fits) && (
+                <optgroup label="cabem nesta build">
+                  {otherCases.filter((c) => c.fits).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </optgroup>
+              )}
+              {otherCases.some((c) => !c.fits) && (
+                <optgroup label="não cabem (GPU/cooler)">
+                  {otherCases.filter((c) => !c.fits).map((c) => <option key={c.id} value={c.id} disabled>{c.name} ✕</option>)}
+                </optgroup>
+              )}
             </select>
             {comparePending && <span>carregando…</span>}
           </span>
@@ -131,6 +160,7 @@ export default function GabineteVivoLive({
           products={products}
           whatIfFans={whatIf}
           onToggleFan={toggleFan}
+          onFanDelta={fanDelta}
           onClearWhatIf={clearWhatIf}
           pending={pending}
           compact={!!compare}

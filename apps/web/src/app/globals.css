@@ -118,6 +118,14 @@ a:hover { color: var(--accent); }
 .gv-note  { font-size: 9.5px; }
 .gv-micro { font-size: 8.5px; }
 
+/* tier INTERMÉDIO (641–900px): o texto ainda escalava pequeno aqui */
+@media (min-width: 641px) and (max-width: 900px) {
+  .gv-cota  { font-size: 14px; }
+  .gv-label { font-size: 14px; }
+  .gv-note  { font-size: 12.5px; }
+  .gv-micro { font-size: 11.5px; }
+}
+
 @media (max-width: 640px) {
   .gv-cota  { font-size: 19px; }
   .gv-label { font-size: 19px; }
@@ -128,6 +136,10 @@ a:hover { color: var(--accent); }
   /* menos partículas no telemóvel: menos DOM animado, menos bateria */
   .gv-dot-extra { display: none; }
 }
+
+/* modo COMPACTO (viewer em /resultados): os padrões finos aliasam a ~340px —
+   escondê-los deixa a leitura limpa sem perder as peças. */
+.gv-compact .gv-mat-fine { display: none; }
 
 /* ============================================================================
    LEGACY SHIM — brand-corrected tokens + component classes for pages not yet

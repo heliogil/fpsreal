@@ -60,11 +60,14 @@ services:
     depends_on:
       - pcb_api
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3100/ > /dev/null || exit 1"]
+      # o web só é 'healthy' se SERVE e se ALCANÇA a sua API — assim uma quebra
+      # da integração (rede/DNS docker entre os serviços) é apanhada aqui, e não
+      # só nos checks isolados de cada container.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3100/ > /dev/null && wget -qO- http://pcb_api:8100/health > /dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 20s
+      start_period: 25s
 
 networks:
   pcb_net:

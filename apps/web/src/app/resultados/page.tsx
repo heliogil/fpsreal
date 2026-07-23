@@ -113,7 +113,15 @@ export default async function ResultadosPage({ searchParams }: PageProps) {
                 resolution={resolution}
               />
               {interiors[i] && (
-                <GabineteVivo interior={interiors[i]!} products={{}} compact />
+                <>
+                  <GabineteVivo interior={interiors[i]!} products={{}} compact />
+                  {b.slug && (
+                    <Link href={`/build/${b.slug}`} className="mono"
+                      style={{ fontSize: 11, color: 'var(--accent-2)', textAlign: 'center', padding: '2px 0' }}>
+                      abrir gabinete em detalhe →
+                    </Link>
+                  )}
+                </>
               )}
             </div>
           ))}
