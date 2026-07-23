@@ -13,7 +13,7 @@ INTEGRITY: airflow is an *estimate* ("estimativa de fluxo"), never a measurement
 """
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -33,6 +33,9 @@ SCORE_K = 0.75
 
 class InteriorRequest(BaseModel):
     components: Dict[str, Optional[int]]
+    # Simulação "e se eu puser uma ventoinha aqui?": ids de mounts livres do
+    # gabinete. O MOTOR é um só — o cliente não recalcula nada, só pede.
+    what_if_fans: Optional[List[str]] = None
 
 
 def _num(v) -> float:
@@ -40,6 +43,20 @@ def _num(v) -> float:
         return float(v)
     except (TypeError, ValueError):
         return 0.0
+
+
+# CFM nominal por classe de ventoinha (estimativa de catálogo, não medição).
+FAN_CFM_BY_KIND = {"fan120": 55.0, "fan140": 70.0, "fan160": 80.0}
+
+
+def _what_if_fan_cfm(mount: dict) -> float:
+    """CFM que uma ventoinha adicionada neste mount entrega (estimativa)."""
+    kind = str(mount.get("kind") or "")
+    if kind in FAN_CFM_BY_KIND:
+        return FAN_CFM_BY_KIND[kind]
+    # baia genérica (ex.: rad_bay): quantos 120 mm cabem na largura
+    w = _num(mount.get("w"))
+    return 55.0 * max(1, int(w // 120) if w else 1)
 
 
 def _zone_status(cfm: float, heat_w: float, need_ratio: float) -> str:
@@ -94,6 +111,27 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
     exhaust = _num(cs.get("exhaust_cfm"))
     if intake <= 0 and exhaust <= 0:  # backward-compat with Phase-1 base_cfm
         intake = exhaust = _num(cs.get("base_cfm"))
+    # CFM base do gabinete (ventoinhas de fábrica) — guardado antes do what-if
+    # porque a divisão por mount stock usa o valor de fábrica.
+    base_intake, base_exhaust = intake, exhaust
+
+    # ---- what-if: ventoinhas que o utilizador pediu para simular -------------
+    what_if_ids = {str(i) for i in (body.what_if_fans or [])}
+    wi_intake = wi_exhaust = 0.0
+    wi_applied: List[str] = []
+    _mounts_raw = cs.get("mounts")
+    if what_if_ids and isinstance(_mounts_raw, list):
+        for _m in _mounts_raw:
+            if str(_m.get("id")) in what_if_ids and not _m.get("stock"):
+                add = _what_if_fan_cfm(_m)
+                if str(_m.get("orient")) == "intake":
+                    wi_intake += add
+                else:
+                    wi_exhaust += add
+                wi_applied.append(str(_m.get("id")))
+    intake += wi_intake
+    exhaust += wi_exhaust
+
     # Fresh cool air over the parts is the driver; exhaust helps evacuate heat.
     effective = intake + 0.5 * exhaust
     balance = intake - exhaust
@@ -150,16 +188,24 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
                         m["occupied_by"] = "aio_radiator"
                         rad_mount = m
                         break
+        # what-if: só ocupa o que continua livre depois do stock e do radiador
+        for m in mounts:
+            if m["occupied_by"] is None and str(m["id"]) in what_if_ids:
+                m["occupied_by"] = "what_if_fan"
 
-        # CFM por mount: agregado do gabinete dividido pelos fans stock; AIO soma exaustão
+        # CFM por mount: agregado de FÁBRICA dividido pelos fans stock; a
+        # ventoinha simulada leva o CFM dela própria; AIO soma exaustão.
         stock_in = [m for m in mounts if m["occupied_by"] == "stock_fan" and m["orient"] == "intake"]
         stock_out = [m for m in mounts if m["occupied_by"] == "stock_fan" and m["orient"] == "exhaust"]
-        if stock_in and intake > 0:
+        if stock_in and base_intake > 0:
             for m in stock_in:
-                m["cfm"] = round(intake / len(stock_in), 1)
-        if stock_out and exhaust > 0:
+                m["cfm"] = round(base_intake / len(stock_in), 1)
+        if stock_out and base_exhaust > 0:
             for m in stock_out:
-                m["cfm"] = round(exhaust / len(stock_out), 1)
+                m["cfm"] = round(base_exhaust / len(stock_out), 1)
+        for m in mounts:
+            if m["occupied_by"] == "what_if_fan":
+                m["cfm"] = round(_what_if_fan_cfm(m), 1)
         aio_fan_count = int(_num(ks.get("fan_count"))) or (3 if "360" in (rad_class + cooler_type) else 2)
         if rad_mount is not None:
             rad_mount["cfm"] = round(aio_fan_count * AIO_FAN_RAW * RAD_PASS, 1)
@@ -204,9 +250,20 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
                     placements.append({"part": "aio_fans", "x": rx, "y": H - rad_th - FAN_TH, "w": rad_len,
                                        "h": FAN_TH, "fan_count": aio_fan_count, "source": "form_factor_default"})
             else:
+                # ATENÇÃO (fidelidade): `height_mm` do catálogo é a folga
+                # PERPENDICULAR à placa (bandeja→tampa) — NÃO é a altura do
+                # corpo nesta vista lateral. Usá-la aqui fazia a torre furar o
+                # teto. A altura de DESENHO vem do corpo (torre ≈ tão alta
+                # quanto profunda); a medida de spec vive na vista superior.
                 body_w = _num(ks.get("body_w_mm")) or 90.0
-                placements.append({"part": "air_cooler", "x": sock_cx - body_w / 2, "y": sock_cy + 5,
-                                   "w": body_w, "h": cooler_h or 80.0,
+                is_low_profile = 0 < cooler_h < 100
+                body_h = 55.0 if is_low_profile else max(110.0, min(body_w * 1.15, 150.0))
+                # a torre é CENTRADA no socket (a CPU fica a meia altura do
+                # bloco de aletas), e presa dentro do volume interior
+                body_y = sock_cy - body_h / 2
+                body_y = max(SHROUD_H + 8, min(body_y, H - body_h - 8))
+                placements.append({"part": "air_cooler", "x": sock_cx - body_w / 2, "y": body_y,
+                                   "w": body_w, "h": body_h,
                                    "source": "spec" if cooler_h else "form_factor_default"})
 
         placements.append({"part": "ram", "x": sock_cx + 58, "y": sock_cy + 5, "w": 26.0, "h": 45.0,
@@ -222,13 +279,13 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         placements.append({"part": "psu", "x": D - 165.0, "y": 6.0, "w": 150.0, "h": 86.0,
                            "source": "form_factor_default"})
         for m in mounts:
-            if m["occupied_by"] == "stock_fan":
-                if m["orient"] == "intake":
-                    placements.append({"part": "case_fan", "x": _num(m["x"]), "y": _num(m["y"]),
-                                       "w": FAN_TH, "h": _num(m["h"]), "mount": m["id"], "source": "spec"})
-                else:
-                    placements.append({"part": "case_fan", "x": _num(m["x"]), "y": _num(m["y"]),
-                                       "w": FAN_TH, "h": _num(m["h"]), "mount": m["id"], "source": "spec"})
+            # ventoinha desenhada: a de fábrica e também a SIMULADA (what-if),
+            # marcada com `simulated` p/ o viewer a distinguir visualmente.
+            if m["occupied_by"] in ("stock_fan", "what_if_fan"):
+                placements.append({"part": "case_fan", "x": _num(m["x"]), "y": _num(m["y"]),
+                                   "w": FAN_TH, "h": _num(m["h"]), "mount": m["id"],
+                                   "simulated": m["occupied_by"] == "what_if_fan",
+                                   "source": "spec"})
 
         # ---- fluxos: cada fonte (intake) alimenta cada dreno (exhaust) ----
         gpu_box = next((p for p in placements if p["part"] == "gpu"), None)
@@ -271,7 +328,12 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         geometry = {
             "unit": "mm",
             "note": "estimativa dimensional — ficha técnica aproximada + padrões de form factor",
-            "case": {"depth_mm": D, "height_mm": H, "shroud_h_mm": SHROUD_H},
+            # width_mm é DERIVADO: a altura máx. de cooler é, por definição, o
+            # vão útil da bandeja da placa até à tampa lateral. Serve a vista
+            # superior — onde a altura do cooler é a dimensão que está no plano.
+            "case": {"depth_mm": D, "height_mm": H, "shroud_h_mm": SHROUD_H,
+                     "width_mm": (max_cooler if max_cooler > 0 else 170.0),
+                     "width_is_derived": True},
             "mounts": mounts,
             "placements": placements,
             "flows": flows,
@@ -301,6 +363,14 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
             "fans": fans,
             "heat": {"cpu_w": cpu_w, "gpu_w": gpu_w, "total_w": total_w},
             "zones": zones,
+        },
+        # Eco do what-if: a UI rotula "simulado" e mostra o delta vs fábrica.
+        "what_if": {
+            "fans": sorted(wi_applied),
+            "added_intake_cfm": round(wi_intake, 1),
+            "added_exhaust_cfm": round(wi_exhaust, 1),
+            "base_intake_cfm": base_intake,
+            "base_exhaust_cfm": base_exhaust,
         },
         "geometry": geometry,
     }

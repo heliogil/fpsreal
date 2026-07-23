@@ -7,9 +7,10 @@ import {
   getLiveProduct,
   getLiveBestOffer,
   getLiveInterior,
+  getLiveCases,
 } from '@/lib/live-server'
 import type { LiveProduct } from '@/lib/live-server'
-import GabineteVivo from '@/components/interior/GabineteVivo'
+import GabineteVivoLive from '@/components/interior/GabineteVivoLive'
 import FpsBadge from '@/components/FpsBadge'
 import type { BuildComponents, CuratedBuild, GameSlug } from '@/lib/repositories/types'
 import { gameLabel } from '@/lib/labels'
@@ -79,10 +80,11 @@ export default async function BuildDetailPage({ params, searchParams }: PageProp
 
   const components = build.components as unknown as Record<string, number>
 
-  const [fpsEstimates, compatRaw, interior, cpfs, slotData] = await Promise.all([
+  const [fpsEstimates, compatRaw, interior, caseOptions, cpfs, slotData] = await Promise.all([
     getLiveFpsByBuild(build.components.cpu_id, build.components.gpu_id, res),
     checkLiveCompatibility(components),
     getLiveInterior(components),
+    getLiveCases(),
     Promise.all((builds ?? []).map(async (b) => ({ slug: b.slug, cpf: await cpfOf(b), absoluto: b.is_rei_absoluto }))),
     Promise.all(
       SLOTS.map(async ({ key, slot, label }) => {
@@ -265,7 +267,12 @@ export default async function BuildDetailPage({ params, searchParams }: PageProp
         {/* direita — O MOAT: gabinete vivo em destaque */}
         <div className="rv" style={{ animationDelay: '.1s' }}>
           {interior ? (
-            <GabineteVivo interior={interior} products={products} />
+            <GabineteVivoLive
+              initial={interior}
+              products={products}
+              components={components}
+              cases={caseOptions}
+            />
           ) : (
             <div style={{ background: 'var(--card)', border: '1px dashed var(--line)', borderRadius: 12, padding: 40, textAlign: 'center' }}>
               <span className="mono" style={{ fontSize: 12, color: 'var(--dim2)' }}>interior em análise — sem dados do gabinete</span>

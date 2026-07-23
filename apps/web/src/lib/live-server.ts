@@ -243,7 +243,7 @@ export type GeoMount = {
   x: number; y: number; w: number; h: number
   orient: 'intake' | 'exhaust'
   stock: boolean
-  occupied_by: 'stock_fan' | 'aio_radiator' | null
+  occupied_by: 'stock_fan' | 'aio_radiator' | 'what_if_fan' | null
   cfm: number
 }
 export type GeoPlacement = {
@@ -253,6 +253,8 @@ export type GeoPlacement = {
   fan_count?: number
   sticks?: number
   mount?: string
+  /** ventoinha desenhada por SIMULAÇÃO (what-if), não de fábrica */
+  simulated?: boolean
 }
 export type GeoFlow = {
   from: { x: number; y: number; h: number }
@@ -264,10 +266,24 @@ export type GeoFlow = {
 export type InteriorGeometry = {
   unit: 'mm'
   note: string
-  case: { depth_mm: number; height_mm: number; shroud_h_mm: number }
+  case: {
+    depth_mm: number; height_mm: number; shroud_h_mm: number
+    /** vão útil bandeja→tampa lateral. DERIVADO da altura máx. de cooler. */
+    width_mm?: number
+    width_is_derived?: boolean
+  }
   mounts: GeoMount[]
   placements: GeoPlacement[]
   flows: GeoFlow[]
+}
+
+/** Eco da simulação "e se eu puser uma ventoinha aqui?" (motor no backend). */
+export type InteriorWhatIf = {
+  fans: string[]
+  added_intake_cfm: number
+  added_exhaust_cfm: number
+  base_intake_cfm: number
+  base_exhaust_cfm: number
 }
 
 export type LiveInterior = {
@@ -295,13 +311,31 @@ export type LiveInterior = {
     heat: { cpu_w: number; gpu_w: number; total_w: number }
     zones: InteriorZone[]
   }
+  what_if?: InteriorWhatIf
   geometry: InteriorGeometry | null
 }
 
 export async function getLiveInterior(
   components: Record<string, number>,
+  whatIfFans?: string[],
 ): Promise<LiveInterior | null> {
-  return postJson<LiveInterior>('/interior/estimate', { components })
+  return postJson<LiveInterior>('/interior/estimate', {
+    components,
+    ...(whatIfFans && whatIfFans.length ? { what_if_fans: whatIfFans } : {}),
+  })
+}
+
+/** Gabinetes do catálogo — alimenta o seletor de comparação do viewer. */
+export type LiveCaseOption = { id: number; name: string; airflow_class?: string | null }
+export async function getLiveCases(): Promise<LiveCaseOption[]> {
+  const rows = await getJson<Array<{ id: number; name: string; specs?: Record<string, unknown> }>>(
+    '/products/?category=case&limit=50',
+  )
+  return (rows ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    airflow_class: (p.specs?.airflow_class as string) ?? null,
+  }))
 }
 
 // ---------------------------------------------------------------------------
