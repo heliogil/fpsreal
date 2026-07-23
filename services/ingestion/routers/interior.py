@@ -50,13 +50,21 @@ FAN_CFM_BY_KIND = {"fan120": 55.0, "fan140": 70.0, "fan160": 80.0}
 
 
 def _what_if_fan_cfm(mount: dict) -> float:
-    """CFM que uma ventoinha adicionada neste mount entrega (estimativa)."""
+    """CFM de UMA ventoinha adicionada neste mount (estimativa).
+
+    Um clique = uma ventoinha, sempre. Numa baia larga (ex.: rad_bay de 360)
+    cabem várias, mas simular três de uma vez exagerava o efeito e chegava a
+    inverter a pressão do gabinete num único clique.
+    """
     kind = str(mount.get("kind") or "")
     if kind in FAN_CFM_BY_KIND:
         return FAN_CFM_BY_KIND[kind]
-    # baia genérica (ex.: rad_bay): quantos 120 mm cabem na largura
-    w = _num(mount.get("w"))
-    return 55.0 * max(1, int(w // 120) if w else 1)
+    # baia genérica: uma ventoinha, do maior tamanho que a baia aceita
+    accepts = [str(a) for a in (mount.get("accepts") or [])]
+    for k in ("fan160", "fan140", "fan120"):
+        if k in accepts:
+            return FAN_CFM_BY_KIND[k]
+    return FAN_CFM_BY_KIND["fan120"]
 
 
 def _zone_status(cfm: float, heat_w: float, need_ratio: float) -> str:
