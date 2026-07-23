@@ -172,19 +172,29 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         mb_ff = str(mbs.get("form_factor") or "ATX").lower()
         mobo_w, mobo_h = (244.0, 244.0) if mb_ff.startswith("m") else (244.0, 305.0)
         mobo_x1 = D - 12.0
-        mobo = {"part": "motherboard", "x": mobo_x1 - mobo_w, "y": SHROUD_H + 8, "w": mobo_w, "h": mobo_h,
+        mobo_y = SHROUD_H + 8
+        mobo_h = min(mobo_h, H - mobo_y - 6)  # não estourar o teto em gabinetes baixos
+        mobo = {"part": "motherboard", "x": mobo_x1 - mobo_w, "y": mobo_y, "w": mobo_w, "h": mobo_h,
                 "source": "form_factor_default"}
         placements.append(mobo)
 
+        board_top = mobo["y"] + mobo_h
+        # socket da CPU: ~95 mm abaixo do topo do board, ~150 mm da traseira
         sock_cx = mobo["x"] + mobo_w - 150.0
-        sock_cy = mobo["y"] + mobo_h - 90.0
+        sock_cy = board_top - 95.0
         placements.append({"part": "cpu_socket", "x": sock_cx - 22, "y": sock_cy - 5, "w": 44.0, "h": 10.0,
                            "source": "form_factor_default"})
 
         if cooler is not None:
             if is_aio:
-                placements.append({"part": "aio_pump", "x": sock_cx - 34, "y": sock_cy + 5, "w": 68.0, "h": 68.0,
-                                   "source": "form_factor_default"})
+                # water block compacto, centrado no socket; fica ABAIXO do stack
+                # do radiador p/ os tubos terem curso visível (sem sobrepor)
+                PUMP = 60.0
+                rad_stack_bottom = (H - rad_th - FAN_TH) if rad_mount is not None else H
+                pump_y = min(sock_cy - PUMP / 2, rad_stack_bottom - 8 - PUMP)
+                pump_y = max(pump_y, SHROUD_H + 8)
+                placements.append({"part": "aio_pump", "x": sock_cx - PUMP / 2, "y": pump_y,
+                                   "w": PUMP, "h": PUMP, "source": "form_factor_default"})
                 if rad_mount is not None:
                     rx = _num(rad_mount["x"]) + max(0.0, (_num(rad_mount["w"]) - rad_len) / 2)
                     # radiador encostado no teto; fila de fans logo abaixo —
@@ -202,9 +212,10 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         placements.append({"part": "ram", "x": sock_cx + 58, "y": sock_cy + 5, "w": 26.0, "h": 45.0,
                            "sticks": 2, "source": "form_factor_default"})
 
-        gpu_slot_y = mobo["y"] + mobo_h - 200.0
+        gpu_slot_y = board_top - 205.0  # slot PCIe do topo, abaixo do socket
         if gpu is not None and gpu_len:
-            placements.append({"part": "gpu", "x": mobo_x1 - 8 - gpu_len, "y": gpu_slot_y - 55.0,
+            gpu_x = max(4.0, mobo_x1 - 8 - gpu_len)  # não escapar pela frente do desenho
+            placements.append({"part": "gpu", "x": gpu_x, "y": gpu_slot_y - 55.0,
                                "w": gpu_len, "h": 55.0, "source": "spec"})
         placements.append({"part": "m2_ssd", "x": sock_cx - 60, "y": gpu_slot_y + 18, "w": 80.0, "h": 9.0,
                            "source": "form_factor_default"})

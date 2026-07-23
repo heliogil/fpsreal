@@ -61,16 +61,66 @@ function finLines(x: number, y: number, w: number, h: number, n: number, vertica
 const gpuBody = (b: Box, fans: number, thick: boolean, flagship: boolean, spin?: boolean) => {
   const r = Math.min(b.h * 0.34, 15)
   const cxs = Array.from({ length: fans }, (_, i) => b.x + b.w * ((i + 1) / (fans + 1)))
+  // Conector de força no topo, perto da traseira (mm→px já resolvido pelo caller).
+  const pcx = b.x + b.w * (flagship ? 0.66 : 0.72)
+  const pw = flagship ? 16 : 12
   return (
     <g>
+      {/* backplate (chapa traseira da PCB) */}
+      <rect x={b.x - 1.5} y={b.y - 5} width={b.w + 3} height={5.5} rx={1.5} fill="var(--panel)" stroke="var(--line)" strokeWidth=".7" />
       {/* PCB */}
       <rect x={b.x} y={b.y - 4} width={b.w} height={4} rx={1} fill="var(--accent-dim)" />
+      {/* conector de força (8-pin / 12VHPWR) */}
+      <rect x={pcx} y={b.y - 9} width={pw} height={6} rx={1.4} fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
+      {Array.from({ length: flagship ? 4 : 3 }, (_, i) => (
+        <line key={i} x1={pcx + (pw / (flagship ? 4 : 3)) * (i + 0.5)} y1={b.y - 8.2} x2={pcx + (pw / (flagship ? 4 : 3)) * (i + 0.5)} y2={b.y - 3.8} stroke="var(--line)" strokeWidth="1" />
+      ))}
       {/* shroud */}
       <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={5} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+      {/* highlight superior (luz vem de cima) */}
+      <line x1={b.x + 5} y1={b.y + 1.4} x2={b.x + b.w - 5} y2={b.y + 1.4} stroke="var(--strong)" strokeWidth="1" opacity=".05" />
       {flagship && <rect x={b.x} y={b.y + b.h - 5} width={b.w} height={5} rx={2} fill="var(--accent)" opacity=".8" />}
       {!flagship && <rect x={b.x + 4} y={b.y + b.h - 4} width={b.w * 0.35} height={2.5} rx={1} fill="var(--accent-dim)" />}
       {cxs.map((cx, i) => <FanDisc key={i} cx={cx} cy={b.y + b.h / 2} r={r} spin={spin} dur={2 + i * 0.3} />)}
       {thick && <rect x={b.x} y={b.y - 8} width={b.w} height={4} rx={1} fill="var(--panel)" stroke="var(--line)" strokeWidth=".8" />}
+    </g>
+  )
+}
+
+/* ── Placa-mãe (backdrop) ──────────────────────────────────────────────────
+   Detalhes que o olho reconhece num relance: I/O shield na traseira,
+   dissipadores de VRM flanqueando o socket, socket, slot PCIe (onde a GPU
+   encaixa) e heatsink do chipset. wScale/hScale = fração ocupada (mATX < ATX). */
+const moboBoard = (b: Box, wScale: number, hScale: number): ReactNode => {
+  const bw = b.w * wScale
+  const bh = b.h * hScale
+  const px = (t: number) => b.x + bw * t
+  const py = (t: number) => b.y + bh * t
+  return (
+    <g>
+      {/* PCB */}
+      <rect x={b.x} y={b.y} width={bw} height={bh} rx={6} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
+      {/* traços do PCB */}
+      <path d={`M ${px(0.1)} ${py(0.78)} H ${px(0.62)}`} stroke="var(--line2)" strokeWidth="1" />
+      <path d={`M ${px(0.12)} ${py(0.12)} V ${py(0.6)}`} stroke="var(--line2)" strokeWidth="1" />
+      {/* I/O shield (traseira do gabinete) */}
+      <rect x={px(0.9)} y={py(0.05)} width={bw * 0.09} height={bh * 0.34} rx={2} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
+      {[0.09, 0.17, 0.25, 0.33].map((t) => (
+        <rect key={t} x={px(0.905)} y={py(t)} width={bw * 0.07} height={bh * 0.05} rx={1} fill="var(--line)" opacity=".6" />
+      ))}
+      {/* dissipadores de VRM (flanqueando o socket, topo) */}
+      {[0.5, 0.74].map((t) => (
+        <g key={t}>
+          <rect x={px(t)} y={py(0.06)} width={bw * 0.13} height={bh * 0.16} rx={2} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
+          {finLines(px(t) + 2, py(0.07), bw * 0.13 - 4, bh * 0.14, 4)}
+        </g>
+      ))}
+      {/* socket da CPU */}
+      <rect x={px(0.52)} y={py(0.3)} width={bw * 0.2} height={bh * 0.2} rx={2} fill="none" stroke="var(--line)" strokeWidth="1" opacity=".7" />
+      {/* slot PCIe — onde a GPU encaixa (borda frontal do board) */}
+      <rect x={px(0.02)} y={py(0.6)} width={bw * 0.34} height={bh * 0.045} rx={1.5} fill="var(--accent-dim)" />
+      {/* heatsink do chipset */}
+      <rect x={px(0.58)} y={py(0.68)} width={bw * 0.16} height={bh * 0.14} rx={2} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
     </g>
   )
 }
@@ -100,15 +150,33 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
         <FanDisc cx={b.x + b.w * 0.14} cy={b.y + b.h * 0.42} r={Math.min(b.w * 0.16, b.h * 0.3)} spin={o?.spin} dur={2.6} />
       </g>
     ),
-    'cooler-aio-pump': (b) => (
-      /* só o bloco da bomba — os tubos até o radiador são desenhados pelo
-         GabineteVivo a partir das posições reais (data-driven) */
-      <g>
-        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={6} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-        <circle cx={b.x + b.w / 2} cy={b.y + b.h / 2} r={Math.min(b.w, b.h) * 0.3} fill="var(--panel)" stroke="var(--accent)" strokeWidth="1.6" />
-        <circle cx={b.x + b.w / 2} cy={b.y + b.h / 2} r={Math.min(b.w, b.h) * 0.12} fill="var(--accent-dim)" />
-      </g>
-    ),
+    'cooler-aio-pump': (b) => {
+      /* water block sobre a CPU — corpo + bracket de montagem + cap com anel
+         + barbs (entradas dos tubos) no topo. Os tubos até o radiador são
+         desenhados pelo GabineteVivo a partir das posições reais. */
+      const cx = b.x + b.w / 2, cy = b.y + b.h / 2, R = Math.min(b.w, b.h)
+      const bx = R * 0.32
+      return (
+        <g>
+          {/* bracket de montagem em X (parafusos nos cantos) */}
+          <line x1={b.x + 5} y1={b.y + 5} x2={b.x + b.w - 5} y2={b.y + b.h - 5} stroke="var(--line)" strokeWidth="1" />
+          <line x1={b.x + b.w - 5} y1={b.y + 5} x2={b.x + 5} y2={b.y + b.h - 5} stroke="var(--line)" strokeWidth="1" />
+          {[[b.x + 4, b.y + 4], [b.x + b.w - 4, b.y + 4], [b.x + 4, b.y + b.h - 4], [b.x + b.w - 4, b.y + b.h - 4]].map(([sx, sy], i) => (
+            <circle key={i} cx={sx} cy={sy} r={1.6} fill="var(--panel)" stroke="var(--line)" strokeWidth=".8" />
+          ))}
+          {/* barbs no topo (onde os tubos encaixam) */}
+          <rect x={cx - bx - 3} y={b.y - 6} width={6} height={7} rx={2} fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
+          <rect x={cx + bx - 3} y={b.y - 6} width={6} height={7} rx={2} fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
+          {/* corpo do bloco */}
+          <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={7} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+          <line x1={b.x + 7} y1={b.y + 2} x2={b.x + b.w - 7} y2={b.y + 2} stroke="var(--strong)" strokeWidth="1" opacity=".06" />
+          {/* cap central iluminado */}
+          <circle cx={cx} cy={cy} r={R * 0.3} fill="var(--panel)" stroke="var(--accent)" strokeWidth="1.6" />
+          <circle cx={cx} cy={cy} r={R * 0.3} fill="var(--accent-soft)" />
+          <circle cx={cx} cy={cy} r={R * 0.11} fill="var(--accent-dim)" />
+        </g>
+      )
+    },
     'cooler-aio': (b) => (
       <g>
         {/* pump block sobre o socket — o radiador é desenhado no top bay pelo GabineteVivo */}
@@ -188,21 +256,8 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
   },
 
   motherboard: {
-    'mb-matx': (b) => (
-      <g>
-        <rect x={b.x} y={b.y} width={b.w * 0.82} height={b.h * 0.85} rx={6} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
-        <path d={`M ${b.x + b.w * 0.1} ${b.y + b.h * 0.75} H ${b.x + b.w * 0.6}`} stroke="var(--line2)" strokeWidth="1" />
-        <path d={`M ${b.x + b.w * 0.12} ${b.y + b.h * 0.12} V ${b.y + b.h * 0.6}`} stroke="var(--line2)" strokeWidth="1" />
-      </g>
-    ),
-    'mb-atx': (b) => (
-      <g>
-        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={6} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
-        <path d={`M ${b.x + b.w * 0.08} ${b.y + b.h * 0.8} H ${b.x + b.w * 0.8}`} stroke="var(--line2)" strokeWidth="1" />
-        <path d={`M ${b.x + b.w * 0.1} ${b.y + b.h * 0.1} V ${b.y + b.h * 0.7}`} stroke="var(--line2)" strokeWidth="1" />
-        <path d={`M ${b.x + b.w * 0.3} ${b.y + b.h * 0.15} H ${b.x + b.w * 0.9}`} stroke="var(--line2)" strokeWidth="1" />
-      </g>
-    ),
+    'mb-matx': (b) => moboBoard(b, 0.82, 0.85),
+    'mb-atx': (b) => moboBoard(b, 1, 1),
   },
 
   fan: {
