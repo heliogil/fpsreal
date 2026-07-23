@@ -23,6 +23,8 @@ export function bottleneckText(d: InteriorDiagnosis): { tone: string; text: stri
   const cfm = (n: number) => `${Math.round(n)} CFM`
   const zona = d.worst_zone ? ZONE_PT[d.worst_zone] ?? d.worst_zone : null
   switch (d.code) {
+    case 'gpu_obstructed':
+      return { tone: 'var(--warn)', text: `a placa ${d.gpu_slots ? `${d.gpu_slots}-slot ` : 'grossa '}estrangula ${zona ?? 'a zona da GPU'}: o ar de entrada não a atravessa. Um gabinete mais largo (ou frontal mais aberto) alivia` }
     case 'no_intake':
       return { tone: 'var(--danger)', text: `sem entrada de ar: nada empurra ar fresco sobre as ${d.total_w} W da build` }
     case 'no_exhaust':

@@ -281,7 +281,7 @@ export type InteriorGeometry = {
 
 /** Diagnóstico do gargalo — o motor diz O QUE segura o fluxo; a UI compõe a frase. */
 export type InteriorDiagnosis = {
-  code: 'ok' | 'no_intake' | 'no_exhaust' | 'exhaust_limited' | 'intake_limited' | 'airflow_low'
+  code: 'ok' | 'no_intake' | 'no_exhaust' | 'exhaust_limited' | 'intake_limited' | 'airflow_low' | 'gpu_obstructed'
   worst_zone: string | null
   intake_cfm: number
   exhaust_cfm: number
@@ -289,6 +289,7 @@ export type InteriorDiagnosis = {
   /** mount livre do lado que falta — liga o diagnóstico ao what-if */
   suggest_mount: string | null
   suggest_orient: 'intake' | 'exhaust' | null
+  gpu_slots?: number | null
 }
 
 /** Eco da simulação "e se eu puser uma ventoinha aqui?" (motor no backend). */

@@ -164,11 +164,31 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
     if exhaust <= 0 and intake > 0:  # heat trap: no way out
         score = min(score, 40)
 
+    # ---- Obstrução da GPU sobre a PRÓPRIA zona (elo que faltava) -------------
+    # A placa grossa (nº de slots) tapa a câmara inferior, e pior ainda colada
+    # na tampa (gabinete estreito). Isto NÃO muda o CFM total do gabinete — ele
+    # é o mesmo; muda a DISTRIBUIÇÃO: menos do ar de entrada atravessa a zona da
+    # GPU. Por isso mexe no STATUS da gpu_zone (que a pessoa lê no chip) e dá um
+    # hit modesto no score só quando a placa está de facto apertada.
+    # Regra explicável de propósito: é estimativa, não CFD.
+    gpu_thick_pen = min(1.0, gpu_thick / 71.0) if gpu_thick else 0.0
+    _side = clearances.get("gpu_side")
+    side_pen = 0.0
+    if _side is not None:
+        _rem = _side["remaining_mm"]
+        side_pen = 1.0 if _rem < 8 else (max(0.0, (35.0 - _rem) / 35.0) if _rem < 35 else 0.0)
+    # fração do ar de entrada que efetivamente passa pela zona da GPU
+    gpu_flow_factor = max(0.5, 1.0 - 0.35 * gpu_thick_pen * (0.7 + 0.6 * side_pen))
+    # hit no score: pesa sobretudo o aperto lateral (placa gorda em caixa larga
+    # quase não penaliza; colada na tampa penaliza)
+    if gpu_thick_pen > 0 and score > 0:
+        score = int(round(score * (1.0 - 0.18 * gpu_thick_pen * (0.3 + 0.7 * side_pen))))
+
     zones = [
         {"zone": "intake_front", "type": "intake", "status": "ok" if intake > 0 else "dead_zone"},
         {"zone": "cpu_zone", "type": "internal", "status": _zone_status(effective, cpu_w, 1.4)},
-        # front intake feeds the GPU directly in a modern front-to-back case
-        {"zone": "gpu_zone", "type": "internal", "status": _zone_status(intake, gpu_w, 0.7)},
+        # front intake alimenta a GPU direto — mas a placa grossa tapa parte dele
+        {"zone": "gpu_zone", "type": "internal", "status": _zone_status(intake * gpu_flow_factor, gpu_w, 0.7)},
         {"zone": "exhaust_rear", "type": "exhaust", "status": "ok" if exhaust > 0 else "dead_zone"},
     ]
 
@@ -381,6 +401,11 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
     # diagnóstico que não se consegue explicar não serve para decidir compra.
     worst_zone = (next((z["zone"] for z in zones if z["status"] == "critical"), None)
                   or next((z["zone"] for z in zones if z["status"] == "tight"), None))
+    gpu_zone_status = next((z["status"] for z in zones if z["zone"] == "gpu_zone"), "ok")
+    # a GPU é a CAUSA quando a placa grossa estrangula a própria zona e o resto
+    # do gabinete está razoável (fans não são o problema — a placa é)
+    gpu_is_cause = (gpu_flow_factor < 0.82 and gpu_zone_status in ("critical", "tight")
+                    and intake > 0 and exhaust > 0)
 
     if intake <= 0:
         diag_code, need_orient = "no_intake", "intake"
@@ -392,6 +417,10 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         diag_code, need_orient = "exhaust_limited", "exhaust"
     elif intake < exhaust * 0.6:
         diag_code, need_orient = "intake_limited", "intake"
+    elif gpu_is_cause:
+        # fans equilibrados mas a placa grossa ainda estrangula a zona → a
+        # placa É a causa (e o conselho honesto não é "mais uma ventoinha")
+        diag_code, need_orient = "gpu_obstructed", "intake"
     else:
         diag_code, need_orient = "airflow_low", "intake"
 
@@ -417,6 +446,7 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
             "total_w": round(total_w),
             "suggest_mount": suggest_mount,
             "suggest_orient": need_orient,
+            "gpu_slots": gpu_slots or None,
         },
         "case": {
             "name": case.name if case else None,
