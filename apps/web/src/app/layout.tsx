@@ -8,6 +8,7 @@ const plex = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '
 const plexMono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-plex-mono', display: 'swap' })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://reidofps.com.br'),
   title: 'Rei do FPS — o melhor R$ por FPS hoje, medido contra o Rei',
   description:
     'Comparador brasileiro de PCs gamer. Com seu orçamento e seus jogos, o melhor R$ por FPS hoje — e cada build medida contra o Rei. A gente não inventa FPS: toda métrica com fonte, data e banda de confiança.',
