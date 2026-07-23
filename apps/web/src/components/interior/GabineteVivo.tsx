@@ -573,20 +573,30 @@ export default function GabineteVivo({
             )
           })}
 
-          {/* FLUXO — partículas */}
+          {/* FLUXO — RASTROS de vento.
+              Eram círculos de tamanho fixo, que liam como "pontinhos". Agora é
+              uma gota afilada com `rotate="auto"`: o animateMotion alinha o eixo
+              +x com a direção do trajeto, então a cabeça vai à frente e a cauda
+              fica para trás — lê como VENTO, que é a coisa que o produto vende.
+              Comprimento e opacidade ∝ intensidade (velocidade); contagem menor
+              porque rastro longo diz mais que muitos pontos — e pesa menos. */}
           <g className="flowdots" pointerEvents="none">
             {streams.map((st, si) => {
               const dur = Math.max(3, 6.6 - st.intensity * 2.4) + (si % 3) * 0.35
-              const dots = 3 + Math.round(st.intensity * 5)
+              const trails = 2 + Math.round(st.intensity * 3)
               const pre = Math.max(0.05, st.heatT - 0.12).toFixed(2)
-              return Array.from({ length: dots }, (_, di) => {
-                const begin = `${-((di / dots) * dur + si * 0.5).toFixed(2)}s`
+              const L = 5 + st.intensity * 9      // comprimento do rastro
+              const w = 1.3 + st.intensity * 1.1  // meia-largura da cabeça
+              const peak = (0.45 + 0.4 * st.intensity).toFixed(2)
+              const d = `M${-L},0 C${(-L * 0.6).toFixed(1)},${-w} ${-w},${-w} 0,0 C${-w},${w} ${(-L * 0.6).toFixed(1)},${w} ${-L},0 Z`
+              return Array.from({ length: trails }, (_, di) => {
+                const begin = `${-((di / trails) * dur + si * 0.5).toFixed(2)}s`
                 return (
-                  <circle key={`${st.key}-${di}`} className={di >= 2 ? 'gv-dot-extra' : undefined} r={2.2 + st.intensity} fill="#A0A0A0" opacity=".8">
-                    <animateMotion dur={`${dur}s`} begin={begin} repeatCount="indefinite" path={st.d} rotate="0" />
+                  <path key={`${st.key}-${di}`} className={di >= 2 ? 'gv-dot-extra' : undefined} d={d} fill="#A0A0A0" opacity={peak}>
+                    <animateMotion dur={`${dur}s`} begin={begin} repeatCount="indefinite" path={st.d} rotate="auto" />
                     <animate attributeName="fill" values="#A0A0A0;#A0A0A0;#E0A93B;#C85348" keyTimes={`0;${pre};${st.heatT.toFixed(2)};1`} dur={`${dur}s`} begin={begin} repeatCount="indefinite" />
-                    <animate attributeName="opacity" values="0;.85;.85;0" keyTimes="0;.04;.97;1" dur={`${dur}s`} begin={begin} repeatCount="indefinite" />
-                  </circle>
+                    <animate attributeName="opacity" values={`0;${peak};${peak};0`} keyTimes="0;.04;.97;1" dur={`${dur}s`} begin={begin} repeatCount="indefinite" />
+                  </path>
                 )
               })
             })}
