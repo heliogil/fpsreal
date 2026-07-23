@@ -170,8 +170,10 @@ export default function GabineteVivo({
     specs: [
       ['modelo', products.gpu?.name ?? interior.parts.gpu.name ?? '—'],
       ['comprimento', mm(gpu.w)],
+      ...(interior.parts.gpu.thickness_mm ? [['espessura', `${interior.parts.gpu.slots ?? '?'}-slot · ${mm(interior.parts.gpu.thickness_mm)}`] as [string, string]] : []),
       ['TDP', `${Math.round(interior.parts.gpu.tdp_w)} W`],
       ...(gpuClr ? [['folga até a frente', mm(gpuClr.remaining_mm) + (gpuClr.is_tight ? ' (apertado)' : '')] as [string, string]] : []),
+      ...(interior.clearances.gpu_side ? [['folga até a tampa', mm(interior.clearances.gpu_side.remaining_mm) + (interior.clearances.gpu_side.is_tight ? ' (apertado)' : '')] as [string, string]] : []),
     ],
   }
   if (airCooler) focusTargets.cooler = {

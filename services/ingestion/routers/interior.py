@@ -101,6 +101,12 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
     max_cooler = _num(cs.get("max_cooler_height_mm"))
     gpu_len = _num(gs.get("length_mm"))
     cooler_h = _num(ks.get("height_mm"))
+    # espessura da GPU: dado real do catálogo (nº de slots × passo do slot).
+    # A largura útil do gabinete é DERIVADA da altura máx. de cooler (o mesmo
+    # vão bandeja→tampa). Ambos servem a folga lateral da GPU na vista superior.
+    gpu_slots = _num(gs.get("slots"))
+    gpu_thick = _num(gs.get("thickness_mm")) or (round(gpu_slots * 20.32) if gpu_slots else 0.0)
+    case_width = max_cooler or 170.0
 
     clearances: Dict[str, dict] = {}
     if max_gpu and gpu_len:
@@ -109,6 +115,11 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
     if max_cooler and cooler_h:
         rem = round(max_cooler - cooler_h, 1)
         clearances["cooler"] = {"remaining_mm": rem, "is_tight": 0 <= rem < TIGHT_MM}
+    # folga da GPU até à tampa lateral (a espessura come da largura útil) — é a
+    # medida que só a vista superior mostra: placa 3.5-slot em gabinete estreito.
+    if gpu_thick and case_width:
+        rem = round(case_width - gpu_thick, 1)
+        clearances["gpu_side"] = {"remaining_mm": rem, "is_tight": 0 <= rem < 12.0}
 
     # ---- Airflow (zone-graph estimate, Phase 2: real intake/exhaust fans) ----
     cpu_w = _num(cps.get("tdp_w"))
@@ -296,8 +307,16 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
                                    "source": "spec"})
 
         # ---- fluxos: cada fonte (intake) alimenta cada dreno (exhaust) ----
+        # Motor CONSCIENTE DE OBSTRUÇÃO: cada caminho perde vazão para o que
+        # fisicamente o atravessa. Já não é um fator fixo — a resistência da GPU
+        # escala com a ESPESSURA (nº de slots) e um radiador no topo restringe a
+        # saída superior (o ar tem de passar pelo core). Cada fluxo devolve a
+        # lista do que o obstrui, para o viewer e o diagnóstico poderem explicar.
         gpu_box = next((p for p in placements if p["part"] == "gpu"), None)
         cooler_box = next((p for p in placements if p["part"] in ("air_cooler", "aio_pump")), None)
+        # 2-slot (~41mm) mal estorva; 3.5-slot (~71mm) afoga a câmara inferior.
+        gpu_res = round(0.18 + 0.5 * min(1.0, gpu_thick / 71.0), 2) if gpu_thick else 0.3
+        rad_in_top = any(m.get("occupied_by") == "aio_radiator" for m in mounts)
         sources = [m for m in mounts if m["cfm"] > 0 and m["orient"] == "intake"]
         sinks = [m for m in mounts if m["cfm"] > 0 and m["orient"] == "exhaust"]
         tot_sink = sum(m["cfm"] for m in sinks) or 1.0
@@ -309,17 +328,23 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
                 raw = s_m["cfm"] * (k_m["cfm"] / tot_sink)
                 res = 0.0
                 heat: list[float] = []
+                obstr: list[dict] = []
                 if gpu_box is not None:
                     gy0, gy1 = gpu_box["y"], gpu_box["y"] + gpu_box["h"]
                     k_cy = H if is_top else _num(k_m["y"]) + _num(k_m["h"]) / 2
                     lo, hi = min(s_cy, k_cy), max(s_cy, k_cy)
                     if lo < gy1 + 40 and hi > gy0 - 40:
-                        res += 0.35
+                        res += gpu_res
+                        obstr.append({"part": "gpu", "factor": gpu_res})
                         heat.append(round((gpu_box["x"] + gpu_box["w"] / 2) / D, 2))
                 if cooler_box is not None and (is_top or s_cy > H * 0.35):
                     res += 0.2
+                    obstr.append({"part": cooler_box["part"], "factor": 0.2})
                     heat.append(round((cooler_box["x"] + cooler_box["w"] / 2) / D, 2))
-                eff = raw * (1 - min(0.5, res * 0.6))
+                if is_top and rad_in_top:
+                    res += 0.25
+                    obstr.append({"part": "aio_radiator", "factor": 0.25})
+                eff = raw * (1 - min(0.6, res * 0.6))
                 flows.append({
                     "from": {"x": _num(s_m["x"]) + _num(s_m["w"]), "y": s_cy, "h": _num(s_m["h"])},
                     "to": ({"x": _num(k_m["x"]), "y": H, "w": _num(k_m["w"]), "side": "top"}
@@ -328,6 +353,7 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
                             "side": "rear"}),
                     "cfm": round(eff, 1),
                     "heat_at": sorted(set(heat)) or [0.55],
+                    "obstructions": obstr,
                 })
         max_flow = max((f["cfm"] for f in flows), default=0.0) or 1.0
         for f in flows:
@@ -401,7 +427,8 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         },
         "parts": {
             "cpu": {"name": cpu.name if cpu else None, "tdp_w": cpu_w},
-            "gpu": {"name": gpu.name if gpu else None, "length_mm": gpu_len, "tdp_w": gpu_w},
+            "gpu": {"name": gpu.name if gpu else None, "length_mm": gpu_len, "tdp_w": gpu_w,
+                    "slots": gpu_slots or None, "thickness_mm": gpu_thick or None},
             "cooler": {"name": cooler.name if cooler else None, "height_mm": cooler_h},
         },
         "clearances": clearances,

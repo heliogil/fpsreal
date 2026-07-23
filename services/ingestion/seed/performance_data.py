@@ -77,7 +77,7 @@ CONFIDENCE_BAND_PCT = 18.0
 
 def _gpu_by_sku() -> dict[str, dict]:
     out = {}
-    for sku, name, brand, tdp, length, vram, bus, fps in GPUS:
+    for sku, name, brand, tdp, length, vram, bus, fps, *_ in GPUS:
         out[sku] = {"name": name, "fps_1080p_agg": fps}
     return out
 

@@ -262,6 +262,8 @@ export type GeoFlow = {
   cfm: number
   intensity: number
   heat_at: number[]
+  /** o que fisicamente obstrui este caminho (motor consciente de obstrução) */
+  obstructions?: Array<{ part: string; factor: number }>
 }
 export type InteriorGeometry = {
   unit: 'mm'
@@ -309,7 +311,7 @@ export type LiveInterior = {
   }
   parts: {
     cpu: { name: string | null; tdp_w: number }
-    gpu: { name: string | null; length_mm: number; tdp_w: number }
+    gpu: { name: string | null; length_mm: number; tdp_w: number; slots?: number | null; thickness_mm?: number | null }
     cooler: { name: string | null; height_mm: number }
   }
   clearances: Record<string, { remaining_mm: number; is_tight: boolean }>

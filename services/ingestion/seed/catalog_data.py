@@ -8,24 +8,27 @@ from .geometry_data import CASE_GEOMETRY, COOLER_GEOMETRY
 # NOTE: RTX 5070 Ti corrected to 180 (was 145 — wrongly below RTX 4070 SUPER).
 # Real-world: 5070 Ti ≈ 4080 range, ~20% above 4070 SUPER. Audit 2026-07-11.
 GPUS = [
-    # sku,                name,                         brand,    tdp, len,  vram, bus,        fps_1080p_agg
-    ("gpu-rtx-5090",      "GeForce RTX 5090",           "NVIDIA", 575, 304, 32, "PCIe 5.0", 240),
-    ("gpu-rtx-5080",      "GeForce RTX 5080",           "NVIDIA", 360, 304, 16, "PCIe 5.0", 200),
-    ("gpu-rtx-5070-ti",   "GeForce RTX 5070 Ti",        "NVIDIA", 300, 300, 16, "PCIe 5.0", 180),
-    ("gpu-rtx-5070",      "GeForce RTX 5070",           "NVIDIA", 250, 250, 12, "PCIe 5.0", 140),
-    ("gpu-rtx-5060-ti",   "GeForce RTX 5060 Ti 16GB",   "NVIDIA", 180, 242, 16, "PCIe 5.0", 110),
-    ("gpu-rtx-5060",      "GeForce RTX 5060",           "NVIDIA", 145, 242,  8, "PCIe 5.0",  90),
-    ("gpu-rtx-4090",      "GeForce RTX 4090",           "NVIDIA", 450, 304, 24, "PCIe 4.0", 220),
-    ("gpu-rtx-4070-super","GeForce RTX 4070 SUPER",     "NVIDIA", 220, 244, 12, "PCIe 4.0", 150),
-    ("gpu-rtx-4060-ti",   "GeForce RTX 4060 Ti 8GB",    "NVIDIA", 160, 242,  8, "PCIe 4.0", 100),
-    ("gpu-rtx-4060",      "GeForce RTX 4060",           "NVIDIA", 115, 242,  8, "PCIe 4.0",  85),
-    ("gpu-rtx-3060",      "GeForce RTX 3060 12GB",      "NVIDIA", 170, 242, 12, "PCIe 4.0",  60),
-    ("gpu-rx-9070-xt",    "Radeon RX 9070 XT",          "AMD",    304, 320, 16, "PCIe 5.0", 135),
-    ("gpu-rx-7900-xtx",   "Radeon RX 7900 XTX",         "AMD",    355, 287, 24, "PCIe 4.0", 190),
-    ("gpu-rx-7800-xt",    "Radeon RX 7800 XT",          "AMD",    263, 267, 16, "PCIe 4.0", 135),
-    ("gpu-rx-7700-xt",    "Radeon RX 7700 XT",          "AMD",    245, 267, 12, "PCIe 4.0", 115),
-    ("gpu-rx-7600",       "Radeon RX 7600",             "AMD",    165, 204,  8, "PCIe 4.0",  80),
-    ("gpu-rx-6600",       "Radeon RX 6600",             "AMD",    132, 190,  8, "PCIe 4.0",  52),
+    # slots = nº de slots PCIe ocupados (dado de catálogo publicado pelo fabricante,
+    # como o comprimento). A espessura em mm é DERIVADA: passo do slot PCIe = 20,32 mm
+    # (constante física), então thickness ≈ slots × 20,32. Representativo por tier.
+    # sku,                name,                         brand,    tdp, len,  vram, bus,        fps, slots
+    ("gpu-rtx-5090",      "GeForce RTX 5090",           "NVIDIA", 575, 304, 32, "PCIe 5.0", 240, 3.5),
+    ("gpu-rtx-5080",      "GeForce RTX 5080",           "NVIDIA", 360, 304, 16, "PCIe 5.0", 200, 3.0),
+    ("gpu-rtx-5070-ti",   "GeForce RTX 5070 Ti",        "NVIDIA", 300, 300, 16, "PCIe 5.0", 180, 2.5),
+    ("gpu-rtx-5070",      "GeForce RTX 5070",           "NVIDIA", 250, 250, 12, "PCIe 5.0", 140, 2.0),
+    ("gpu-rtx-5060-ti",   "GeForce RTX 5060 Ti 16GB",   "NVIDIA", 180, 242, 16, "PCIe 5.0", 110, 2.0),
+    ("gpu-rtx-5060",      "GeForce RTX 5060",           "NVIDIA", 145, 242,  8, "PCIe 5.0",  90, 2.0),
+    ("gpu-rtx-4090",      "GeForce RTX 4090",           "NVIDIA", 450, 304, 24, "PCIe 4.0", 220, 3.5),
+    ("gpu-rtx-4070-super","GeForce RTX 4070 SUPER",     "NVIDIA", 220, 244, 12, "PCIe 4.0", 150, 2.5),
+    ("gpu-rtx-4060-ti",   "GeForce RTX 4060 Ti 8GB",    "NVIDIA", 160, 242,  8, "PCIe 4.0", 100, 2.0),
+    ("gpu-rtx-4060",      "GeForce RTX 4060",           "NVIDIA", 115, 242,  8, "PCIe 4.0",  85, 2.0),
+    ("gpu-rtx-3060",      "GeForce RTX 3060 12GB",      "NVIDIA", 170, 242, 12, "PCIe 4.0",  60, 2.0),
+    ("gpu-rx-9070-xt",    "Radeon RX 9070 XT",          "AMD",    304, 320, 16, "PCIe 5.0", 135, 3.0),
+    ("gpu-rx-7900-xtx",   "Radeon RX 7900 XTX",         "AMD",    355, 287, 24, "PCIe 4.0", 190, 2.5),
+    ("gpu-rx-7800-xt",    "Radeon RX 7800 XT",          "AMD",    263, 267, 16, "PCIe 4.0", 135, 2.5),
+    ("gpu-rx-7700-xt",    "Radeon RX 7700 XT",          "AMD",    245, 267, 12, "PCIe 4.0", 115, 2.5),
+    ("gpu-rx-7600",       "Radeon RX 7600",             "AMD",    165, 204,  8, "PCIe 4.0",  80, 2.0),
+    ("gpu-rx-6600",       "Radeon RX 6600",             "AMD",    132, 190,  8, "PCIe 4.0",  52, 2.0),
 ]
 
 CPUS = [
@@ -85,14 +88,19 @@ COOLERS = [
 def build_products() -> list[dict]:
     products: list[dict] = []
 
-    for sku, name, brand, tdp, length, vram, bus, fps in GPUS:
+    PCIE_SLOT_MM = 20.32  # passo do slot PCIe — constante física
+    for sku, name, brand, tdp, length, vram, bus, fps, slots in GPUS:
+        thickness = round(slots * PCIE_SLOT_MM)
         products.append({
             "sku": sku, "name": name, "category": "gpu", "brand": brand,
             "specs": {"tdp_w": tdp, "length_mm": length, "vram_gb": vram,
-                      "bus": bus, "fps_1080p_agg": fps},
-            "footprint": {"length_mm": length, "installed_thickness_mm": 55,
+                      "bus": bus, "fps_1080p_agg": fps,
+                      "slots": slots, "thickness_mm": thickness},
+            "footprint": {"length_mm": length, "installed_thickness_mm": thickness,
                           "slot_type_required": "pcie_x16", "airflow_zone": "gpu_zone",
-                          "airflow_resistance_factor": 0.35},
+                          # a resistência ao ar já não é fixa: uma placa 3.5-slot
+                          # obstrui a câmara inferior muito mais que uma 2-slot
+                          "airflow_resistance_factor": round(0.18 + 0.09 * slots, 2)},
         })
     for sku, name, brand, socket, tdp, cores, threads, igpu, tier in CPUS:
         products.append({
