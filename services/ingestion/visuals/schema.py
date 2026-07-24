@@ -90,6 +90,122 @@ class DescriptorError(ValueError):
     """Descritor fora do schema ou em contradição com a ficha técnica."""
 
 
+# ── glossário: o que cada valor QUER DIZER, em linguagem visual ──────────────
+# Existe por causa dos modelos mais fracos: `shroud=industrial` não se adivinha
+# do nome. Descrever cada opção é o que mantém a qualidade aceitável fora dos
+# modelos de topo — e como é gerado desta mesma fonte, não pode divergir.
+FIELD_HELP: dict[str, dict[str, Any]] = {
+    "gpu": {
+        "fans": ("nº de ventoinhas visíveis na face da placa", {}),
+        "fan_style": ("forma das ventoinhas", {
+            "ring": "aro contínuo a toda a volta das pás",
+            "blade": "pás normais, sem aro à volta",
+            "blower": "uma só turbina que expulsa o ar pela traseira",
+            "none": "sem ventoinha (placa passiva)"}),
+        "shroud": ("aspecto da carcaça", {
+            "flat": "lisa e simples, sem relevo",
+            "dual_tone": "dois materiais/tons bem distintos",
+            "angular": "facetas e linhas diagonais agressivas",
+            "industrial": "metal sóbrio, sem recortes decorativos"}),
+        "vent_cut": ("recortes de ventilação na carcaça", {
+            "none": "fechada", "diagonal": "rasgos na diagonal",
+            "hex": "favo de mel", "slot": "rasgos rectos paralelos"}),
+        "accent": ("detalhe decorativo aplicado", {
+            "none": "nenhum", "strip_bottom": "faixa ao longo da aresta inferior",
+            "edge": "detalhe curto numa aresta", "plate": "placa/emblema aplicado"}),
+        "power": ("conector(es) de energia no topo da placa", {
+            "none": "sem conector", "6pin": "um de 6 pinos", "8pin": "um de 8 pinos",
+            "8x2": "dois de 8 pinos", "12vhpwr": "um conector pequeno e muito denso"}),
+        "backplate": ("chapa rígida a cobrir as costas da placa", {}),
+        "lighting": ("iluminação visível", {
+            "none": "não acende", "logo": "só o emblema acende",
+            "edge": "uma aresta acende", "fans": "os aros das ventoinhas acendem",
+            "full": "vários elementos acendem"}),
+    },
+    "cooler": {
+        "kind": ("tipo de cooler", {
+            "tower": "torre de aletas com ventoinha",
+            "low_profile": "bloco baixo e largo assente sobre o socket",
+            "aio": "bloco/bomba sobre a CPU com tubos para um radiador"}),
+        "towers": ("nº de blocos de aletas", {}),
+        "fans": ("nº de ventoinhas no cooler", {}),
+        "fin_style": ("aspecto das aletas", {
+            "dense": "juntas e finas", "open": "espaçadas",
+            "stacked": "em blocos empilhados/separados"}),
+        "top_plate": ("tampa no topo", {
+            "none": "sem tampa", "brushed": "tampa metálica lisa",
+            "logo_plate": "tampa com emblema"}),
+        "side_fan": ("ventoinha presa na lateral do bloco", {}),
+        "lighting": ("iluminação visível", {
+            "none": "não acende", "ring": "anel aceso", "logo": "emblema aceso",
+            "full": "vários elementos acendem"}),
+    },
+    "psu": {
+        "cabling": ("cabos", {
+            "fixed": "todos presos à fonte", "semi": "alguns presos, alguns encaixáveis",
+            "modular": "todos encaixáveis"}),
+        "grill": ("grelha da ventoinha", {
+            "honeycomb": "favo de mel", "round": "aro circular", "slot": "rasgos"}),
+        "fan_pos": ("onde está a ventoinha", {"bottom": "na face larga", "rear": "na traseira"}),
+        "shroud_window": ("janela na tampa", {}),
+    },
+    "ram": {
+        "spreader": ("dissipador do módulo", {
+            "bare": "PCB nu, sem dissipador", "low": "dissipador baixo",
+            "tall": "dissipador alto", "tall_diffuser": "alto com barra translúcida"}),
+        "sticks": ("nº de módulos visíveis", {}),
+        "lighting": ("iluminação", {"none": "não acende", "diffuser": "barra difusora acesa"}),
+    },
+    "case_front": {
+        "surface": ("painel frontal", {
+            "mesh": "malha perfurada", "solid": "painel fechado",
+            "glass": "vidro", "hybrid": "parte fechada + parte em malha"}),
+        "cut": ("recorte de entrada de ar", {
+            "none": "nenhum", "side_intake": "rasgo lateral", "slit": "rasgos horizontais"}),
+        "dust_filter": ("filtro de pó visível", {}),
+        "lighting": ("iluminação", {"none": "não acende", "strip": "faixa acesa",
+                                     "ring": "anel aceso"}),
+    },
+    "motherboard": {
+        "vrm_heatsink": ("dissipadores ao lado do socket", {
+            "none": "nenhum", "small": "pequenos", "large": "grandes/contínuos"}),
+        "io_cover": ("cobertura plástica sobre a zona de I/O", {
+            "none": "nenhuma", "partial": "cobre parte", "full": "cobre tudo"}),
+        "m2_shields": ("nº de chapas de M.2", {}),
+    },
+}
+
+
+def prompt_spec(category: str) -> str:
+    """Rende o schema fechado como INSTRUÇÃO explícita, valor a valor.
+
+    É a peça que sustenta a qualidade fora dos modelos de topo: em vez de
+    esperar que o modelo saiba o vocabulário, damos-lhe o vocabulário todo.
+    """
+    category = canon(category)
+    if category not in ENUMS:
+        raise DescriptorError(f"categoria sem schema: {category}")
+    help_ = FIELD_HELP.get(category, {})
+    out: list[str] = []
+    for field, allowed in ENUMS[category].items():
+        desc, vals = help_.get(field, ("", {}))
+        out.append(f"- {field}: {desc}" if desc else f"- {field}:")
+        for v in allowed:
+            gloss = vals.get(v)
+            out.append(f"    {v}{' = ' + gloss if gloss else ''}")
+    for field, (lo, hi) in INT_RANGES.get(category, {}).items():
+        desc = help_.get(field, ("", {}))[0]
+        opts = ", ".join(str(n) for n in range(lo, hi + 1))
+        out.append(f"- {field}: {desc} — inteiro, um de: {opts}")
+    for field in BOOLS.get(category, ()):
+        desc = help_.get(field, ("", {}))[0]
+        out.append(f"- {field}: {desc} — true ou false")
+    out.append("- confidence: quão legível é a peça NESTA foto — número entre 0 e 1. "
+               "Foto em ângulo, render, foto de caixa, peça tapada, ou dúvida entre "
+               "dois valores => abaixo de 0.5.")
+    return "\n".join(out)
+
+
 def json_schema_for(category: str) -> dict:
     """JSON Schema DERIVADO deste schema fechado, para decodificação restrita.
 

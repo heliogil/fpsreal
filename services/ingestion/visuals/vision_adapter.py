@@ -4,30 +4,32 @@
 ficha técnica sabe (nº de ventoinhas por comprimento, conector por TDP); este lê
 o que só a foto sabe — estilo do shroud, recorte das grelhas, se a peça acende.
 
-COMO A INTEGRIDADE É MANTIDA (não por confiança no modelo, por construção):
+FORNECEDOR: agnóstico, via ``visuals.backends``. O default é a **MiniMax**
+(decisão de custo do founder); a Anthropic fica disponível mas só entra com
+``VISUALS_VISION_PROVIDER=anthropic``.
 
-1. **Decodificação restrita ao schema.** O modelo não devolve texto livre: a
-   resposta é forçada a um JSON Schema gerado a partir de ``visuals.schema``
-   (``json_schema_for``). Ele escolhe de um enum — não pode inventar valores,
-   e o schema não pode divergir da validação porque é a MESMA fonte.
-2. **O portão cruzado continua a valer.** O que sai daqui passa por
-   ``validate(category, descriptor, specs)`` como qualquer descritor: se a foto
-   "mostrar" 3 ventoinhas numa placa de 190mm, é REJEITADO. A ficha técnica
-   ganha da foto, sempre.
-3. **A foto nunca é guardada nem redistribuída.** Guarda-se o ``photo_hash``
-   (sha256 dos bytes) e o descritor derivado. O hash serve também de cache: foto
-   igual, zero chamadas — é o controlo de custo.
-4. **Nunca logótipo, marca gráfica ou cor.** O schema não tem campo para isso e
-   o prompt proíbe-o explicitamente.
-5. **Nunca dimensão.** Dimensão vem do catálogo e do motor de geometria.
-6. **Vista não-canónica ⇒ confiança baixa ⇒ cai no tier.** Abaixo do limiar
-   devolve ``None`` e o ``SpecsAdapter`` continua a ser o piso.
+PORQUE UM MODELO MAIS FRACO É ACEITÁVEL AQUI — a integridade não depende da
+qualidade do modelo, depende da construção:
 
-Nada disto chega ao viewer sem ``reviewed_at`` — o portão humano é o último.
+1. **A tarefa é dada por extenso.** O prompt é gerado do schema fechado
+   (``prompt_spec``) com CADA valor explicado em linguagem visual. O modelo não
+   precisa de saber o vocabulário — recebe-o. É o que mais recupera qualidade
+   fora dos modelos de topo.
+2. **Enums fechados + portão cruzado.** A resposta é validada contra os enums e
+   cruzada com a ficha técnica **dentro** do adapter. Valor fora do enum, ou
+   contradição física (3 ventoinhas numa placa de 190mm), é REJEITADO.
+3. **Uma tentativa de reparação.** Se falhar, devolve-se ao modelo o erro exacto
+   e pede-se a correcção — uma só vez, para o custo do lote ficar previsível.
+4. **Confiança baixa ⇒ cai no tier.** Vista em ângulo, render, foto de caixa.
+5. **A foto nunca é guardada nem redistribuída** — só o ``photo_hash`` (sha256),
+   que é também o cache de custo: foto igual, zero chamadas.
+6. **Nunca logótipo, marca gráfica ou cor** (não há campo e o prompt proíbe-o) e
+   **nunca dimensão** — essa vem do catálogo e do motor de geometria.
 
-LIGAR: definir ``ANTHROPIC_API_KEY`` e ter foto no produto
-(``specs.image_url``). Sem chave ou sem foto devolve ``None`` — a ingestão
-continua a correr pelo SpecsAdapter, sem erro.
+Consequência do desenho: um modelo pior custa **cobertura** (menos peças
+descritas), nunca **verdade** (descritor errado no ar). O que não passa cai no
+``SpecsAdapter``, que continua a ser o piso. E nada chega ao viewer sem
+``reviewed_at``.
 """
 from __future__ import annotations
 
@@ -37,16 +39,15 @@ import logging
 import os
 from typing import Optional
 
+from .backends import VisionBackend, get_backend
 from .base import RawVisual
-from .schema import DescriptorError, canon, json_schema_for
+from .schema import DescriptorError, canon, json_schema_for, prompt_spec, validate
 
 log = logging.getLogger("pcb.visuals.vision")
 
-MODEL = os.environ.get("VISUALS_VISION_MODEL", "claude-opus-4-8")
+PROVIDER = os.environ.get("VISUALS_VISION_PROVIDER", "minimax")
 #: abaixo disto o descritor não vale a pena — cai no tier
 MIN_CONFIDENCE = float(os.environ.get("VISUALS_MIN_CONFIDENCE", "0.5"))
-#: 'low' chega para classificar num enum fechado e mantém o custo do lote baixo
-EFFORT = os.environ.get("VISUALS_VISION_EFFORT", "low")
 
 _MEDIA = {b"\xff\xd8\xff": "image/jpeg", b"\x89PNG": "image/png",
           b"GIF8": "image/gif", b"RIFF": "image/webp"}
@@ -58,15 +59,16 @@ SYSTEM = (
     "REGRAS INEGOCIÁVEIS:\n"
     "1. Descreve só o que está VISÍVEL na foto. Não deduzas do nome do produto "
     "nem do que costuma ser verdade na categoria.\n"
-    "2. NUNCA identifiques marca, logótipo, modelo ou fabricante, e nunca "
+    "2. NUNCA identifiques marca, logótipo, modelo ou fabricante, e NUNCA "
     "descrevas cor — não há campo para isso e não é isso que se pede.\n"
     "3. NUNCA estimes dimensões (comprimento, altura, espessura). Essas vêm da "
     "ficha técnica, não da foto.\n"
-    "4. A ficha técnica é dada como CONTEXTO para desambiguar o que vês, não "
-    "para preencher o que não vês. Se a foto contradiz a ficha, descreve a "
-    "FOTO e baixa a confiança.\n"
-    "5. Confiança é sobre ESTA foto: vista em ângulo, render, foto de "
-    "embalagem, peça tapada, ou dúvida entre dois valores ⇒ abaixo de 0.5."
+    "4. A ficha técnica é CONTEXTO para desambiguar o que vês, não para "
+    "preencher o que não vês. Se a foto contradiz a ficha, descreve a FOTO e "
+    "baixa a confiança.\n"
+    "5. Se não conseguires ver um detalhe, escolhe o valor mais conservador e "
+    "baixa a confiança — não inventes.\n"
+    "6. Responde SÓ com JSON válido."
 )
 
 
@@ -110,7 +112,7 @@ def _specs_context(specs: dict) -> str:
     return json.dumps(got, ensure_ascii=False) if got else "(sem ficha)"
 
 
-def fetch_photo(product: dict) -> Optional[tuple[bytes, str, str]]:
+def fetch_photo(product: dict) -> Optional[tuple]:
     """(bytes, media_type, sha256) da foto do produto — SEM chamar o modelo.
 
     Serve o cache de custo: o chamador calcula o hash primeiro e só paga uma
@@ -134,27 +136,26 @@ class LLMVisionAdapter:
 
     source = "visao"
 
-    def __init__(self, model: str = MODEL, min_confidence: float = MIN_CONFIDENCE):
-        self.model = model
+    def __init__(self, backend: Optional[VisionBackend] = None,
+                 min_confidence: float = MIN_CONFIDENCE):
+        self.backend = backend or get_backend(PROVIDER)
         self.min_confidence = min_confidence
-        self._client = None
 
-    def _get_client(self):
-        if self._client is None:
-            import anthropic                     # importado tarde: sem chave, o
-            self._client = anthropic.Anthropic()  # módulo continua importável
-        return self._client
+    @property
+    def model(self) -> str:
+        return getattr(self.backend, "model", self.backend.name)
 
     def describe(self, product: dict) -> Optional[RawVisual]:
         category = canon(str(product.get("category") or ""))
         try:
             schema = json_schema_for(category)
+            spec_txt = prompt_spec(category)
         except DescriptorError:
             return None                          # categoria sem schema: nada a ler
 
-        if not (os.environ.get("ANTHROPIC_API_KEY")
-                or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
-            log.info("visuals: sem credencial de visão — a usar só a ficha")
+        if not getattr(self.backend, "available", lambda: True)():
+            log.info("visuals: fornecedor %s sem credencial — a usar só a ficha",
+                     self.backend.name)
             return None
 
         # o chamador pode já ter buscado a foto (cache por hash) — não rebusca
@@ -167,61 +168,61 @@ class LLMVisionAdapter:
         b64 = base64.standard_b64encode(data).decode("ascii")
         specs = product.get("specs") or {}
         prompt = (
-            f"Categoria: {category}\n"
-            f"Ficha técnica (contexto, não é a resposta): {_specs_context(specs)}\n\n"
-            "Descreve a aparência VISÍVEL desta peça preenchendo o schema."
+            "CATEGORIA: " + category + "\n"
+            "FICHA TÉCNICA (contexto para desambiguar, NÃO é a resposta): "
+            + _specs_context(specs) + "\n\n"
+            "Responde SÓ com um objecto JSON com EXACTAMENTE estas chaves, "
+            "escolhendo um dos valores listados para cada uma:\n\n"
+            + spec_txt + "\n\n"
+            "Sem texto antes ou depois do JSON. Sem comentários."
         )
 
-        try:
-            client = self._get_client()
-            resp = client.messages.create(
-                model=self.model,
-                max_tokens=2000,
-                system=SYSTEM,
-                thinking={"type": "adaptive"},
-                output_config={"effort": EFFORT,
-                               "format": {"type": "json_schema", "schema": schema}},
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "image", "source": {"type": "base64",
-                                                     "media_type": media_type,
-                                                     "data": b64}},
-                        {"type": "text", "text": prompt},
-                    ],
-                }],
-            )
-        except Exception as e:
-            # qualquer falha de visão é degradação, não paragem: o lote continua
-            log.warning("visuals: chamada de visão falhou para %s: %s",
-                        product.get("sku"), e)
-            return None
+        # Uma tentativa de REPARAÇÃO: modelos mais fracos acertam muitas vezes à
+        # segunda quando se lhes diz exactamente o que falhou. Fica em 1 para o
+        # custo do lote continuar previsível.
+        clean = None
+        err_hint = ""
+        for attempt in (1, 2):
+            raw = self.backend.read(system=SYSTEM, prompt=prompt + err_hint,
+                                    image_b64=b64, media_type=media_type,
+                                    schema=schema)
+            if raw is None:
+                return None
+            conf = raw.get("confidence", 0.0)
+            try:
+                conf = min(1.0, max(0.0, float(conf)))
+            except (TypeError, ValueError):
+                conf = 0.0
+            raw["confidence"] = round(conf, 3)
+            try:
+                # valida JÁ AQUI (enums fechados + contradição com a ficha) para
+                # poder reparar; o ingest volta a validar — é idempotente
+                clean = validate(category, raw, specs)
+                break
+            except DescriptorError as e:
+                if attempt == 1:
+                    log.info("visuals: resposta inválida (%s) — a pedir correcção", e)
+                    err_hint = (
+                        "\n\nA tua resposta anterior foi REJEITADA: " + str(e) + "\n"
+                        "Corrige APENAS esse ponto e devolve o JSON completo outra "
+                        "vez, respeitando os valores permitidos."
+                    )
+                    continue
+                log.warning("visuals: %s rejeitado após correcção: %s",
+                            product.get("sku"), e)
+                return None                      # cai no SpecsAdapter
 
-        if getattr(resp, "stop_reason", None) == "refusal":
-            log.warning("visuals: pedido recusado para %s", product.get("sku"))
+        if clean is None:
             return None
-
-        try:
-            text = next(b.text for b in resp.content if b.type == "text")
-            desc = json.loads(text)
-        except (StopIteration, ValueError) as e:
-            log.warning("visuals: resposta ilegível para %s: %s", product.get("sku"), e)
-            return None
-
-        conf = desc.get("confidence", 0.0)
-        try:
-            conf = min(1.0, max(0.0, float(conf)))
-        except (TypeError, ValueError):
-            conf = 0.0
-        desc["confidence"] = round(conf, 3)
-        if conf < self.min_confidence:
+        if clean.get("confidence", 0.0) < self.min_confidence:
             # vista não-canónica ou dúvida: melhor o tier do que um palpite
             log.info("visuals: confiança %.2f < %.2f em %s — fica pela ficha",
-                     conf, self.min_confidence, product.get("sku"))
+                     clean.get("confidence", 0.0), self.min_confidence,
+                     product.get("sku"))
             return None
 
         return RawVisual(
             product_sku=str(product["sku"]), category=category,
-            descriptor=desc, source=self.source, photo_hash=photo_hash,
-            notes=f"lido da foto ({self.model}, efeito {EFFORT})",
+            descriptor=clean, source=self.source, photo_hash=photo_hash,
+            notes="lido da foto (" + self.backend.name + "/" + str(self.model) + ")",
         )

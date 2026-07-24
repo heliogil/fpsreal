@@ -186,10 +186,16 @@ def main() -> None:
                 print(f"revogados: {revoke(cur, skus)}")
             else:
                 use_vision = "--visao" in args
-                if use_vision and not (os.environ.get("ANTHROPIC_API_KEY")
-                                       or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
-                    print("AVISO: --visao pedido mas sem ANTHROPIC_API_KEY —"
-                          " a correr só pela ficha técnica.")
+                if use_vision:
+                    # pergunta ao backend ACTIVO (default MiniMax), não a um
+                    # fornecedor fixo — trocar de fornecedor é só a env var
+                    from visuals.backends import get_backend
+                    _b = get_backend()
+                    if not _b.available():
+                        print(f"AVISO: --visao pedido, fornecedor '{_b.name}' sem "
+                              f"credencial — a correr só pela ficha técnica.")
+                    else:
+                        print(f"visão: {_b.name} / {getattr(_b, 'model', '-')}")
                 ok, skipped, rejected = ingest(cur, use_vision=use_vision)
                 print(f"descritores gerados/actualizados: {ok} · "
                       f"sem adapter: {skipped} · rejeitados pelo portão: {rejected}")

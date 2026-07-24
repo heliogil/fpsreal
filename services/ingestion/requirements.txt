@@ -9,5 +9,9 @@ httpx>=0.27.0
 python-dotenv>=1.0.0
 psycopg2-binary>=2.9.9
 slowapi>=0.1.9
-# ingestor de modelos: adapter de visão (visuals/vision_adapter.py)
-anthropic>=0.69.0
+# Ingestor de modelos — adapter de visão (visuals/vision_adapter.py).
+# O backend DEFAULT é a MiniMax, que fala HTTP compatível com OpenAI e usa o
+# httpx já acima — não precisa de SDK. O SDK da Anthropic só é preciso para
+# VISUALS_VISION_PROVIDER=anthropic; sem ele esse backend degrada em None e a
+# ingestão continua pela ficha técnica. Descomentar só se for para usar:
+# anthropic>=0.69.0
