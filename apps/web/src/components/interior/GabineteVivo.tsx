@@ -335,7 +335,56 @@ export default function GabineteVivo({
     Math.min(1, (f.obstructions?.reduce((a, o) => a + o.factor, 0) ?? 0) / 0.9)
   type Stream = { d: string; intensity: number; heatT: number; choke: number; key: string }
   const streams: Stream[] = []
-  g.flows.forEach((f, fi) => {
+
+  /* CAMPO RESOLVIDO (Onda 2): o motor devolve linhas de corrente calculadas
+     sobre o mapa real de obstáculos — elas contornam a GPU porque a parede da
+     peça impõe fluxo-nulo, não porque alguém desenhou a curva. Substituem as
+     béziers heurísticas; sem campo, cai-se nelas exactamente como antes. */
+  const field = g.flow_field ?? null
+  /** T normalizado do campo, amostrado em mm (0 fora / em célula sólida) */
+  const sampleT = (mx: number, my: number): number => {
+    const th = field?.thermal
+    if (!th) return 0
+    const i = Math.max(0, Math.min(th.cols - 1, Math.floor((mx / D) * th.cols)))
+    const j = Math.max(0, Math.min(th.rows - 1, Math.floor((my / H) * th.rows)))
+    const v = th.t[j]?.[i] ?? 0
+    return v < 0 ? 0 : v
+  }
+
+  if (field && field.streamlines.length > 0) {
+    field.streamlines.forEach((sl, si) => {
+      const pts = sl.pts
+      if (pts.length < 2) return
+      const stride = pts.length > 60 ? 2 : 1
+      let d = ''
+      for (let i = 0; i < pts.length; i += stride) {
+        d += `${i === 0 ? 'M' : 'L'}${X(pts[i][0]).toFixed(1)},${Yc(pts[i][1]).toFixed(1)}`
+      }
+      const last = pts[pts.length - 1]
+      d += `L${X(last[0]).toFixed(1)},${Yc(last[1]).toFixed(1)}`
+      const sp = sl.speed.length ? sl.speed : [0.5]
+      const mean = sp.reduce((a, b) => a + b, 0) / sp.length
+      // onde a linha AQUECE: 1ª fração do trajeto onde T passa 40% do máximo
+      // dela — deixa de ser palpite, passa a ser leitura do campo térmico.
+      let heatT = 0.6
+      let tmaxLine = 0.001
+      const temps: number[] = []
+      for (let i = 0; i < pts.length; i++) {
+        const t = sampleT(pts[i][0], pts[i][1])
+        temps.push(t)
+        if (t > tmaxLine) tmaxLine = t
+      }
+      const hit = temps.findIndex((v) => v >= tmaxLine * 0.4)
+      if (hit > 0) heatT = Math.min(0.86, Math.max(0.12, hit / temps.length))
+      streams.push({
+        key: `sf${si}`, d,
+        intensity: Math.min(1, mean * 1.7),
+        heatT,
+        // caminho lento = sufocado: o "gaguejo" agora vem da velocidade REAL
+        choke: Math.min(1, Math.max(0, 1 - mean * 1.9)),
+      })
+    })
+  } else g.flows.forEach((f, fi) => {
     const sx = ox - 26
     const sy = Yc(f.from.y)
     const heatT = Math.min(0.86, 0.18 + (f.heat_at[0] ?? 0.55) * 0.6)
@@ -360,6 +409,45 @@ export default function GabineteVivo({
       }
     }
   })
+
+  /* CAMPO TÉRMICO CONTÍNUO (Onda 2 #3) — substitui os dois glows radiais.
+     A temperatura vem do MESMO campo que move o ar: fontes nas peças (por TDP),
+     ambiente entrando pelos intakes, advecção-difusão sobre a grade. Deixa de
+     ser "duas manchas por peça" e passa a ser a pluma que o escoamento desenha.
+     Reamostrado 2×2 (≈4× menos nós) — depois do borrão fica indistinguível. */
+  const thermalCells = (() => {
+    const th = field?.thermal
+    if (!th || !th.t?.length) return null
+    const B = 2
+    const cw = (D / th.cols) * s * B
+    const chh = (H / th.rows) * s * B
+    const out: Array<{ x: number; y: number; t: number }> = []
+    for (let j = 0; j < th.rows; j += B) {
+      for (let i = 0; i < th.cols; i += B) {
+        let acc = 0, n = 0
+        for (let dj = 0; dj < B; dj++) {
+          for (let di = 0; di < B; di++) {
+            const v = th.t[j + dj]?.[i + di]
+            if (v !== undefined && v >= 0) { acc += v; n++ }
+          }
+        }
+        if (!n) continue
+        const t = acc / n
+        if (t < 0.16) continue          // frio: não pinta (mantém a cena limpa)
+        out.push({
+          x: ox + (i / th.cols) * D * s,
+          y: oy + (H - ((j + B) / th.rows) * H) * s,
+          t,
+        })
+      }
+    }
+    return out.length ? { cells: out, w: cw + 0.8, h: chh + 0.8 } : null
+  })()
+  const thermalBlur = thermalCells ? Math.max(4, thermalCells.w * 0.85) : 6
+  /** Rampa quente em TOKENS da marca (GUIA §2) — nada de rgb() fixo: assim o
+      campo acompanha o tema claro/escuro. Duas bandas bastam: depois do borrão
+      gaussiano elas fundem-se e leem como gradiente contínuo. */
+  const heatFill = (t: number) => (t < 0.42 ? 'var(--warn)' : 'var(--danger)')
 
   /* obstrução por peça (somada em todos os fluxos) — vinda do motor */
   const obstrByPart: Record<string, number> = {}
@@ -431,6 +519,11 @@ export default function GabineteVivo({
             <filter id="gv-lift" x="-20%" y="-20%" width="140%" height="150%">
               <feDropShadow dx="0" dy="2.2" stdDeviation="2.6" floodColor="#000" floodOpacity="0.34" />
             </filter>
+            {/* campo térmico: as células da grade fundem-se num gradiente
+                contínuo — é o borrão que transforma a grade em CAMPO */}
+            <filter id="gv-thermal" x="-12%" y="-12%" width="124%" height="124%">
+              <feGaussianBlur stdDeviation={Math.max(4, thermalBlur)} />
+            </filter>
             <MaterialDefs />
           </defs>
 
@@ -473,9 +566,20 @@ export default function GabineteVivo({
             </g>
           )}
 
-          {/* calor: gradiente radial (pulso pelo grupo .heatpulse) */}
-          {gpu && (() => { const b = box(gpu); const c = center(b); const r = Math.max(b.w, b.h) * 0.6 * (0.9 + 0.15 * gpuHeatM); const op = Math.min(0.5, (0.13 + 0.2 * gpuHeat) * gpuHeatM); return <g className="heatpulse" style={{ animationDuration: `${3.2 - gpuHeat}s` }} pointerEvents="none"><ellipse cx={c.x} cy={c.y} rx={r} ry={r * 0.62} fill="url(#gv-heat)" opacity={op} /></g> })()}
-          {(airCooler || pump || socket) && (() => { const b = box((airCooler ?? pump ?? socket)!); const c = center(b); const r = Math.max(b.w, b.h) * 0.66 * (0.9 + 0.15 * cpuHeatM); const op = Math.min(0.46, (0.11 + 0.17 * cpuHeat) * cpuHeatM); return <g className="heatpulse" style={{ animationDuration: `${3.4 - cpuHeat}s` }} pointerEvents="none"><ellipse cx={c.x} cy={c.y} rx={r} ry={r * 0.66} fill="url(#gv-heat)" opacity={op} /></g> })()}
+          {/* calor: CAMPO contínuo do solver; sem campo, os dois glows de antes */}
+          {thermalCells ? (
+            <g data-thermal="field" filter="url(#gv-thermal)" pointerEvents="none">
+              {thermalCells.cells.map((c, i) => (
+                <rect key={`th${i}`} x={c.x} y={c.y} width={thermalCells.w} height={thermalCells.h}
+                  fill={heatFill(c.t)} opacity={Math.min(0.4, 0.04 + c.t * 0.4)} />
+              ))}
+            </g>
+          ) : (
+            <>
+              {gpu && (() => { const b = box(gpu); const c = center(b); const r = Math.max(b.w, b.h) * 0.6 * (0.9 + 0.15 * gpuHeatM); const op = Math.min(0.5, (0.13 + 0.2 * gpuHeat) * gpuHeatM); return <g className="heatpulse" style={{ animationDuration: `${3.2 - gpuHeat}s` }} pointerEvents="none"><ellipse cx={c.x} cy={c.y} rx={r} ry={r * 0.62} fill="url(#gv-heat)" opacity={op} /></g> })()}
+              {(airCooler || pump || socket) && (() => { const b = box((airCooler ?? pump ?? socket)!); const c = center(b); const r = Math.max(b.w, b.h) * 0.66 * (0.9 + 0.15 * cpuHeatM); const op = Math.min(0.46, (0.11 + 0.17 * cpuHeat) * cpuHeatM); return <g className="heatpulse" style={{ animationDuration: `${3.4 - cpuHeat}s` }} pointerEvents="none"><ellipse cx={c.x} cy={c.y} rx={r} ry={r * 0.66} fill="url(#gv-heat)" opacity={op} /></g> })()}
+            </>
+          )}
 
           {/* fonte */}
           {psu && (

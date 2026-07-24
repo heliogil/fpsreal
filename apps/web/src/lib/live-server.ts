@@ -271,6 +271,18 @@ export type GeoFlow = {
   /** o que fisicamente obstrui este caminho (motor consciente de obstrução) */
   obstructions?: Array<{ part: string; factor: number }>
 }
+/** Campo de fluxo resolvido (potencial em grade grossa) — ESTIMATIVA, não CFD.
+ *  `streamlines.pts` em mm, no mesmo referencial das placements. Ausente ⇒ o
+ *  viewer cai nas béziers heurísticas de antes. */
+export type GeoFlowField = {
+  grid: { cols: number; rows: number; cell_mm: number; dx: number; dy: number }
+  streamlines: Array<{ pts: number[][]; speed: number[] }>
+  speed_max: number
+  /** T normalizado 0..1 por célula; -1 marca célula sólida (peça) */
+  thermal: { cols: number; rows: number; t: number[][]; t_max: number }
+  method: string
+}
+
 export type InteriorGeometry = {
   unit: 'mm'
   note: string
@@ -283,6 +295,7 @@ export type InteriorGeometry = {
   mounts: GeoMount[]
   placements: GeoPlacement[]
   flows: GeoFlow[]
+  flow_field?: GeoFlowField | null
 }
 
 /** Diagnóstico do gargalo — o motor diz O QUE segura o fluxo; a UI compõe a frase. */

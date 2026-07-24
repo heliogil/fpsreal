@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from airflow_field import solve_flow_field
 from deps import get_db
 from models import Product
 
@@ -432,6 +433,31 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         for f in flows:
             f["intensity"] = round(f["cfm"] / max_flow, 2)
 
+        # ---- campo de fluxo por potencial sobre o mapa REAL de obstáculos ----
+        # Substitui as béziers heurísticas: as linhas contornam as peças porque
+        # a condição de fluxo-nulo na parede da peça as torna tangentes a ela.
+        # A PLACA-MÃE não entra — é o plano de fundo desta vista, não obstrui;
+        # tratá-la como sólida muraria o interior inteiro.
+        _SOLID = {"gpu", "air_cooler", "aio_pump", "aio_radiator", "aio_fans",
+                  "ram", "psu"}
+        _obst = [{"x": p["x"], "y": p["y"], "w": p["w"], "h": p["h"]}
+                 for p in placements if p["part"] in _SOLID]
+        _open = lambda m: {"x": _num(m["x"]), "y": _num(m["y"]),
+                           "w": _num(m["w"]), "h": _num(m["h"]), "cfm": m["cfm"]}
+        _heat = []
+        if gpu_box is not None and gpu_w > 0:
+            _heat.append({"x": gpu_box["x"], "y": gpu_box["y"], "w": gpu_box["w"],
+                          "h": gpu_box["h"], "watts": gpu_w})
+        if cooler_box is not None and cpu_w > 0:
+            _heat.append({"x": cooler_box["x"], "y": cooler_box["y"],
+                          "w": cooler_box["w"], "h": cooler_box["h"], "watts": cpu_w})
+        try:
+            flow_field = solve_flow_field(
+                D, H, SHROUD_H, _obst,
+                [_open(m) for m in sources], [_open(m) for m in sinks], _heat)
+        except Exception:   # o campo é enriquecimento visual: nunca derruba a estimativa
+            flow_field = None
+
         geometry = {
             "unit": "mm",
             "note": "estimativa dimensional — ficha técnica aproximada + padrões de form factor",
@@ -444,6 +470,8 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
             "mounts": mounts,
             "placements": placements,
             "flows": flows,
+            # campo resolvido (estimativa): linhas de corrente reais + térmico
+            "flow_field": flow_field,
         }
 
     # ---- diagnóstico: QUAL é o gargalo? -------------------------------------
