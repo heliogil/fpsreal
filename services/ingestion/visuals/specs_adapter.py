@@ -151,24 +151,5 @@ class SpecsAdapter:
         }
 
 
-class LLMVisionAdapter:
-    """STUB — lê foto do feed + ficha e devolve o descritor no schema fechado.
-
-    Fica por ligar até haver (a) feed afiliado com foto e (b) decisão do founder
-    sobre custo/credenciais de visão. Requisitos quando for ligado:
-      - decodificação restrita ao schema (``visuals.schema.ENUMS``/``INT_RANGES``);
-      - NUNCA guardar nem redistribuir a foto — só ``photo_hash`` e o descritor;
-      - NUNCA extrair logótipo, marca gráfica ou cor;
-      - confiança real do modelo, para o limiar de revisão.
-    """
-
-    source = "visao"
-
-    def describe(self, product: dict) -> RawVisual | None:
-        raise NotImplementedError(
-            "LLMVisionAdapter por ligar — ver spec 2026-07-23, secção Pipeline"
-        )
-
-
 # checagem de contrato em tempo de import (mesmo padrão dos preços)
 _: VisionAdapter = SpecsAdapter()

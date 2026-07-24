@@ -1,6 +1,7 @@
 """Ingestor de modelos visuais — gera, valida e persiste descritores de aparência.
 
-    python -m seed.ingest_visuals                # gera/actualiza (NÃO aprova)
+    python -m seed.ingest_visuals                # gera/actualiza pela FICHA (NÃO aprova)
+    python -m seed.ingest_visuals --visao        # tenta a FOTO, cai na ficha
     python -m seed.ingest_visuals --status       # o que está pendente/aprovado
     python -m seed.ingest_visuals --approve-all  # portão de revisão (explícito)
     python -m seed.ingest_visuals --approve SKU [SKU...]
@@ -54,14 +55,42 @@ def _connect():
     return psycopg2.connect(dsn)
 
 
-def ingest(cur) -> tuple[int, int, int]:
-    adapter = SpecsAdapter()
+def ingest(cur, use_vision: bool = False) -> tuple[int, int, int]:
+    """Gera descritores. Com ``use_vision``, tenta primeiro a FOTO e cai na
+    ficha técnica quando não há foto, não há credencial, ou a confiança é baixa
+    — a ficha é sempre o piso, a visão é enriquecimento.
+
+    CUSTO: a foto é buscada e hasheada ANTES de qualquer chamada ao modelo; se
+    o ``photo_hash`` não mudou e já existe um descritor de visão, o produto é
+    saltado sem gastar nada."""
+    specs_adapter = SpecsAdapter()
+    vision = None
+    if use_vision:
+        from visuals import LLMVisionAdapter
+        from visuals.vision_adapter import fetch_photo
+        vision = LLMVisionAdapter()
+
     cur.execute("SELECT id, sku, name, category, specs FROM products WHERE is_active")
     rows = cur.fetchall()
+    cur.execute("SELECT product_id, photo_hash, source FROM product_visuals")
+    seen = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+
     ok = skipped = rejected = 0
+    cached = 0
     for pid, sku, name, category, specs in rows:
         product = {"sku": sku, "name": name, "category": category, "specs": specs or {}}
-        raw = adapter.describe(product)
+        raw = None
+        if vision is not None:
+            got = fetch_photo(product)
+            if got is not None:
+                prev_hash, prev_src = seen.get(pid, (None, None))
+                if prev_hash == got[2] and prev_src == "visao":
+                    cached += 1          # foto igual: nada a re-ler, nada a pagar
+                    continue
+                product["_photo"] = got
+                raw = vision.describe(product)
+        if raw is None:
+            raw = specs_adapter.describe(product)   # a ficha é o piso
         if raw is None:
             skipped += 1
             continue
@@ -96,6 +125,8 @@ def ingest(cur) -> tuple[int, int, int]:
              raw.photo_hash, clean.get("confidence", 0), raw.notes),
         )
         ok += 1
+    if cached:
+        print(f"  {cached} produto(s) com foto inalterada — sem chamada de visão")
     return ok, skipped, rejected
 
 
@@ -154,7 +185,12 @@ def main() -> None:
                     sys.exit("--revoke precisa de pelo menos um SKU")
                 print(f"revogados: {revoke(cur, skus)}")
             else:
-                ok, skipped, rejected = ingest(cur)
+                use_vision = "--visao" in args
+                if use_vision and not (os.environ.get("ANTHROPIC_API_KEY")
+                                       or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+                    print("AVISO: --visao pedido mas sem ANTHROPIC_API_KEY —"
+                          " a correr só pela ficha técnica.")
+                ok, skipped, rejected = ingest(cur, use_vision=use_vision)
                 print(f"descritores gerados/actualizados: {ok} · "
                       f"sem adapter: {skipped} · rejeitados pelo portão: {rejected}")
                 status(cur)

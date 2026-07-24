@@ -4,8 +4,9 @@ A dimensão vem sempre do motor de geometria; isto só descreve como a peça é
 desenhada dentro da caixa em mm. Ver spec 2026-07-23.
 """
 from .base import RawVisual, VisionAdapter
-from .schema import DescriptorError, SCHEMA_VERSION, validate
-from .specs_adapter import LLMVisionAdapter, SpecsAdapter
+from .schema import DescriptorError, SCHEMA_VERSION, json_schema_for, validate
+from .specs_adapter import SpecsAdapter
+from .vision_adapter import LLMVisionAdapter
 
 __all__ = ["RawVisual", "VisionAdapter", "DescriptorError", "SCHEMA_VERSION",
-           "validate", "SpecsAdapter", "LLMVisionAdapter"]
+           "validate", "json_schema_for", "SpecsAdapter", "LLMVisionAdapter"]

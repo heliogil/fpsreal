@@ -90,6 +90,42 @@ class DescriptorError(ValueError):
     """Descritor fora do schema ou em contradição com a ficha técnica."""
 
 
+def json_schema_for(category: str) -> dict:
+    """JSON Schema DERIVADO deste schema fechado, para decodificação restrita.
+
+    É o que impede o modelo de visão de inventar valores: ele não escolhe texto
+    livre, escolhe de um enum. E porque é gerado a partir de ENUMS/INT_RANGES/
+    BOOLS, não pode divergir da validação — mudar o enum muda o schema e a
+    validação ao mesmo tempo.
+
+    Nota: a API não suporta `minimum`/`maximum`, por isso as faixas de inteiros
+    viram enum explícito.
+    """
+    category = canon(category)
+    if category not in ENUMS:
+        raise DescriptorError(f"categoria sem schema: {category}")
+    props: dict[str, Any] = {}
+    required: list[str] = []
+    for field, allowed in ENUMS[category].items():
+        props[field] = {"type": "string", "enum": list(allowed)}
+        required.append(field)
+    for field, (lo, hi) in INT_RANGES.get(category, {}).items():
+        props[field] = {"type": "integer", "enum": list(range(lo, hi + 1))}
+        required.append(field)
+    for field in BOOLS.get(category, ()):
+        props[field] = {"type": "boolean"}
+        required.append(field)
+    props["confidence"] = {
+        "type": "number",
+        "description": ("0..1 — quão legível é a peça NESTA foto. Vista em ângulo, "
+                        "render, foto de caixa, peça parcialmente tapada ou dúvida "
+                        "entre dois valores => abaixo de 0.5."),
+    }
+    required.append("confidence")
+    return {"type": "object", "properties": props,
+            "required": required, "additionalProperties": False}
+
+
 def _num(v: Any) -> float:
     try:
         return float(v)
