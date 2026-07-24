@@ -17,10 +17,17 @@ from __future__ import annotations
 
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2   # v2: campo `lighting` (iluminação DECLARADA pelo fabricante)
 
 # ── enums fechados por categoria ─────────────────────────────────────────────
 # (campo -> valores aceites). Inteiros declaram faixa em INT_RANGES.
+#
+# ILUMINAÇÃO (`lighting`): só entra quando a FONTE declara. Hoje o catálogo não
+# tem campo de luz nenhum e nenhum nome de produto diz RGB/ARGB, por isso todos
+# os descritores saem com `none` — e é essa a resposta correta. Inventar que
+# peça acende seria fabricar um critério de compra. Quando o feed de afiliado
+# trouxer os nomes reais (peça gamer quase sempre declara RGB no nome), acende
+# sozinho; e o LLMVisionAdapter pode confirmá-lo pela foto.
 ENUMS: dict[str, dict[str, tuple[str, ...]]] = {
     "gpu": {
         "fan_style": ("ring", "blade", "blower", "none"),
@@ -28,11 +35,13 @@ ENUMS: dict[str, dict[str, tuple[str, ...]]] = {
         "vent_cut": ("none", "diagonal", "hex", "slot"),
         "accent": ("none", "strip_bottom", "edge", "plate"),
         "power": ("none", "6pin", "8pin", "8x2", "12vhpwr"),
+        "lighting": ("none", "logo", "edge", "fans", "full"),
     },
     "cooler": {
         "kind": ("tower", "low_profile", "aio"),
         "fin_style": ("dense", "open", "stacked"),
         "top_plate": ("none", "brushed", "logo_plate"),
+        "lighting": ("none", "ring", "logo", "full"),
     },
     "psu": {
         "cabling": ("fixed", "semi", "modular"),
@@ -41,10 +50,12 @@ ENUMS: dict[str, dict[str, tuple[str, ...]]] = {
     },
     "ram": {
         "spreader": ("bare", "low", "tall", "tall_diffuser"),
+        "lighting": ("none", "diffuser"),
     },
     "case_front": {
         "surface": ("mesh", "solid", "glass", "hybrid"),
         "cut": ("none", "side_intake", "slit"),
+        "lighting": ("none", "strip", "ring"),
     },
     "motherboard": {
         "vrm_heatsink": ("none", "small", "large"),

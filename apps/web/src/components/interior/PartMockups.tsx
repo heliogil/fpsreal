@@ -62,6 +62,13 @@ export function MaterialDefs() {
       <pattern id="mat-fins-h" patternUnits="userSpaceOnUse" width="4" height="4">
         <line x1="0" y1="0.5" x2="4" y2="0.5" stroke="var(--line)" strokeWidth="1" />
       </pattern>
+      {/* brilho da iluminação: a luz só aparece quando o descritor a declara
+          (ver visuals/schema.py). Usa tokens da marca — o schema não tem campo
+          de COR de propósito. */}
+      <filter id="mat-glow" x="-45%" y="-45%" width="190%" height="190%">
+        <feGaussianBlur stdDeviation="2.1" result="b" />
+        <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+      </filter>
       <pattern id="mat-mesh" patternUnits="userSpaceOnUse" width="7" height="7">
         <circle cx="3.5" cy="3.5" r="1.05" fill="var(--line)" />
       </pattern>
@@ -356,6 +363,7 @@ const D_GPU = (b: Box, d: VisualDescriptor): ReactNode => {
   const accent = String(d.accent ?? 'none')
   const backplate = d.backplate === true
   const power = String(d.power ?? 'none')
+  const lit = String(d.lighting ?? 'none')
   const r = Math.min(b.h * 0.34, 15)
   const cxs = Array.from({ length: fans }, (_, i) => b.x + b.w * ((i + 1) / (fans + 1)))
   const pins = power === '12vhpwr' ? 4 : power === '8x2' ? 4 : power === '8pin' ? 3 : power === '6pin' ? 2 : 0
@@ -393,6 +401,22 @@ const D_GPU = (b: Box, d: VisualDescriptor): ReactNode => {
       {accent === 'strip_bottom' && <rect x={b.x} y={b.y + b.h - 5} width={b.w} height={5} rx={2} fill="var(--accent)" opacity=".8" />}
       {accent === 'edge' && <rect x={b.x + 4} y={b.y + b.h - 4} width={b.w * 0.35} height={2.5} rx={1} fill="var(--accent-dim)" />}
       {accent === 'plate' && <rect x={b.x + b.w * 0.62} y={b.y + 4} width={b.w * 0.3} height={5} rx={2} fill="var(--accent-dim)" />}
+      {lit !== 'none' && (
+        <g filter="url(#mat-glow)" pointerEvents="none">
+          {(lit === 'fans' || lit === 'full') && cxs.map((cx, i) => (
+            <circle key={`lf${i}`} cx={cx} cy={b.y + b.h / 2} r={r * 0.88} fill="none"
+              stroke="var(--accent-2)" strokeWidth="1.8" opacity=".7" />
+          ))}
+          {(lit === 'edge' || lit === 'full') && (
+            <rect x={b.x + 2} y={b.y + b.h - 3.6} width={Math.max(0, b.w - 4)} height={2.4} rx={1.2}
+              fill="var(--accent-2)" opacity=".85" />
+          )}
+          {(lit === 'logo' || lit === 'full') && (
+            <rect x={b.x + b.w * 0.62} y={b.y + 3} width={b.w * 0.3} height={3.6} rx={1.8}
+              fill="var(--accent-2)" opacity=".85" />
+          )}
+        </g>
+      )}
       {cxs.map((cx, i) => (
         style === 'blower'
           ? <g key={i}><circle cx={cx} cy={b.y + b.h / 2} r={r * 0.8} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" /><rect x={cx + r} y={b.y + b.h * 0.3} width={b.w * 0.25} height={b.h * 0.4} rx={2} fill="var(--panel)" stroke="var(--line)" strokeWidth=".8" /></g>
@@ -413,6 +437,7 @@ const D_COOLER = (b: Box, d: VisualDescriptor): ReactNode => {
   const fin = String(d.fin_style ?? 'dense')
   const plate = String(d.top_plate ?? 'none')
   const sideFan = d.side_fan === true
+  const lit = String(d.lighting ?? 'none')
   if (kind === 'aio') return PART_REGISTRY.cooler['cooler-aio-pump'](b)
   if (kind === 'low_profile') {
     const lp = { x: b.x + b.w * 0.2, y: b.y + b.h * 0.55, w: b.w * 0.6, h: b.h * 0.45 }
@@ -442,6 +467,18 @@ const D_COOLER = (b: Box, d: VisualDescriptor): ReactNode => {
       })}
       {plate !== 'none' && <rect x={x0} y={b.y + 1} width={tw * towers + gap * (towers - 1)} height={4} rx={2} fill={plate === 'logo_plate' ? 'var(--accent-dim)' : 'var(--panel)'} stroke="var(--line)" strokeWidth=".8" />}
       {sideFan && <FanDisc cx={b.x + b.w * 0.13} cy={b.y + b.h * 0.42} r={Math.min(b.w * 0.15, b.h * 0.28)} />}
+      {lit !== 'none' && (
+        <g filter="url(#mat-glow)" pointerEvents="none">
+          {(lit === 'ring' || lit === 'full') && (
+            <circle cx={b.x + b.w / 2} cy={b.y + 5} r={Math.min(b.w, b.h) * 0.16} fill="none"
+              stroke="var(--accent-2)" strokeWidth="1.8" opacity=".75" />
+          )}
+          {(lit === 'logo' || lit === 'full') && (
+            <rect x={x0} y={b.y + 1} width={tw * towers + gap * (towers - 1)} height={3} rx={1.5}
+              fill="var(--accent-2)" opacity=".8" />
+          )}
+        </g>
+      )}
     </g>
   )
 }
@@ -473,6 +510,7 @@ const D_PSU = (b: Box, d: VisualDescriptor): ReactNode => {
 const D_CASE_FRONT = (b: Box, d: VisualDescriptor): ReactNode => {
   const surface = String(d.surface ?? 'solid')
   const cut = String(d.cut ?? 'none')
+  const lit = String(d.lighting ?? 'none')
   const fill = surface === 'glass' ? 'var(--panel)' : 'var(--panel2)'
   return (
     <g>
@@ -487,6 +525,18 @@ const D_CASE_FRONT = (b: Box, d: VisualDescriptor): ReactNode => {
       {cut === 'slit' && Array.from({ length: 6 }, (_, i) => (
         <rect key={i} x={b.x + 2} y={b.y + b.h * (0.12 + i * 0.13)} width={Math.max(0, b.w - 4)} height={2} rx={1} fill="var(--line)" opacity=".5" />
       ))}
+      {lit !== 'none' && (
+        <g filter="url(#mat-glow)" pointerEvents="none">
+          {lit === 'strip' && (
+            <rect x={b.x + b.w - 3.2} y={b.y + b.h * 0.08} width={2.4} height={b.h * 0.84} rx={1.2}
+              fill="var(--accent-2)" opacity=".8" />
+          )}
+          {lit === 'ring' && (
+            <circle cx={b.x + b.w / 2} cy={b.y + b.h * 0.5} r={Math.min(b.w, b.h) * 0.3} fill="none"
+              stroke="var(--accent-2)" strokeWidth="1.8" opacity=".75" />
+          )}
+        </g>
+      )}
     </g>
   )
 }

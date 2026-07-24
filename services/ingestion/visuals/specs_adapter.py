@@ -20,6 +20,25 @@ def _num(v) -> float:
         return 0.0
 
 
+#: onde a luz aparece, POR CATEGORIA, quando o fabricante a declara
+_LIT = {"gpu": "fans", "cooler": "ring", "ram": "diffuser", "case": "strip"}
+
+
+def _lighting(name: str, category: str) -> str:
+    """Iluminação só quando a FONTE declara — aqui, o nome do próprio produto.
+
+    "RGB"/"ARGB" no nome é declaração do FABRICANTE, não palpite nosso. Sem essa
+    marca devolve `none`: prefere-se não acender nada a inventar que a peça
+    acende. Hoje o catálogo semeado não tem um único nome com RGB, portanto isto
+    devolve `none` para tudo — resultado correcto, não bug. Quando o feed de
+    afiliado trouxer nomes reais, a luz aparece sozinha.
+    """
+    n = name.lower()
+    if "argb" in n or "rgb" in n:
+        return _LIT.get(category, "none")
+    return "none"
+
+
 class SpecsAdapter:
     """Deriva o descritor apenas dos specs do catálogo."""
 
@@ -67,6 +86,7 @@ class SpecsAdapter:
             "accent": "strip_bottom" if flagship else ("edge" if tdp >= 180 else "none"),
             "backplate": tdp >= 160 or slots >= 2.5,
             "power": power,
+            "lighting": _lighting(name, "gpu"),
             "confidence": 0.7,   # ficha só: bom piso, não é leitura da peça
         }
 
@@ -87,6 +107,7 @@ class SpecsAdapter:
             "fin_style": "dense" if kind == "tower" else "open",
             "top_plate": "brushed" if kind != "low_profile" else "none",
             "side_fan": kind == "tower",
+            "lighting": _lighting(name, "cooler"),
             "confidence": 0.75,
         }
 
@@ -105,6 +126,7 @@ class SpecsAdapter:
         return {
             "spreader": "tall_diffuser" if "DDR5" in ddr else "low",
             "sticks": 2,
+            "lighting": _lighting(name, "ram"),
             "confidence": 0.65,
         }
 
@@ -115,6 +137,7 @@ class SpecsAdapter:
             "surface": "mesh" if aclass == "high" else ("hybrid" if aclass == "medium" else "solid"),
             "cut": "side_intake" if aclass == "high" else "none",
             "dust_filter": True,
+            "lighting": _lighting(name, "case"),
             "confidence": 0.8,
         }
 

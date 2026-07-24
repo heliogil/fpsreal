@@ -190,3 +190,29 @@ h1, h2, h3, h4 { font-family: var(--font-syne), 'Syne', sans-serif; font-weight:
     margin-top: 0;
   }
 }
+
+/* ── Sequência de MONTAGEM (#9) ─────────────────────────────────────────────
+   As peças assentam na ORDEM DE INSTALAÇÃO — placa, M.2, memória, cooler,
+   fonte, GPU, ventoinhas, cabos. Comunica montabilidade: quem nunca montou vê
+   a ordem, e quem já montou reconhece-a. Só corre por CLIQUE (nunca no load,
+   para não atrapalhar quem só quer ler a cena). */
+@keyframes gvDrop {
+  from { opacity: 0; transform: translateY(-10px) scale(.985); }
+  to   { opacity: 1; transform: none; }
+}
+.gv-assembling [data-asm] {
+  animation: gvDrop .46s cubic-bezier(.22,.9,.3,1) both;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+.gv-assembling [data-asm="0"] { animation-delay: 0s }
+.gv-assembling [data-asm="1"] { animation-delay: .13s }
+.gv-assembling [data-asm="2"] { animation-delay: .26s }
+.gv-assembling [data-asm="3"] { animation-delay: .39s }
+.gv-assembling [data-asm="4"] { animation-delay: .52s }
+.gv-assembling [data-asm="5"] { animation-delay: .65s }
+.gv-assembling [data-asm="6"] { animation-delay: .78s }
+.gv-assembling [data-asm="7"] { animation-delay: .91s }
+@media (prefers-reduced-motion: reduce) {
+  .gv-assembling [data-asm] { animation: none; }
+}

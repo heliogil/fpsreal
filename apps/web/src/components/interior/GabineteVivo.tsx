@@ -69,6 +69,9 @@ export default function GabineteVivo({
   const [hovered, setHovered] = useState<string | null>(null)
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null)
   const [focused, setFocused] = useState<string | null>(null)
+  // sequência de montagem (#9): incrementar re-monta a cena e reinicia a
+  // animação; 0 = nunca corrida (a página não anima sozinha no load)
+  const [asmRun, setAsmRun] = useState(0)
   // Em toque não há hover — o tooltip pisca no tap. Detetamos ponteiro grosso
   // p/ suprimi-lo (o modo foco assume no telemóvel). SSR-safe: só no cliente.
   const [coarse, setCoarse] = useState(false)
@@ -102,6 +105,14 @@ export default function GabineteVivo({
         </span>
       )}
       {pending && <span className="mono" style={{ fontSize: 10, color: 'var(--dim2)' }}>recalculando…</span>}
+      {g && (
+        <button type="button" onClick={() => setAsmRun((n) => n + 1)} className="mono"
+          title="ver as peças assentarem na ordem de instalação"
+          style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--dim)', background: 'transparent',
+            border: '1px solid var(--line)', borderRadius: 99, padding: '3px 10px', cursor: 'pointer' }}>
+          montar
+        </button>
+      )}
       <span style={{ flex: 1 }} />
       <span className="mono" style={{ fontSize: 11, color: 'var(--dim2)' }}>fluxo</span>
       <span className="mono" style={{ fontSize: 18, fontWeight: 600, color: scoreTone }}>{score}</span>
@@ -538,7 +549,8 @@ export default function GabineteVivo({
 
           {/* tudo o que é CENA entra neste grupo: é ele que recebe o zoom do
               modo foco. Régua e rótulo ficam de fora (ver abaixo). */}
-          <g transform={focusTransform} style={{ transition: 'transform .38s cubic-bezier(.4,0,.2,1)' }}>
+          <g key={`asm${asmRun}`} className={asmRun > 0 ? 'gv-assembling' : undefined}
+            transform={focusTransform} style={{ transition: 'transform .38s cubic-bezier(.4,0,.2,1)' }}>
 
           {/* ── EXTERIOR: a casca que ENQUADRA o corte ───────────────────────
               O viewer mostra um corte do gabinete; sem casca, o corte flutua no
@@ -612,7 +624,7 @@ export default function GabineteVivo({
                 + `${chx.toFixed(1)},${(y + 48).toFixed(1)} ${(b.x - 7).toFixed(1)},${y.toFixed(1)}`
             }) : []
             return (
-              <g data-depth="tray" filter="url(#gv-far)" opacity={0.5} pointerEvents="none">
+              <g data-depth="tray" data-asm="0" filter="url(#gv-far)" opacity={0.5} pointerEvents="none">
                 <rect x={b.x - 11} y={b.y - 7} width={b.w + 19} height={b.h + 13} rx={4}
                   fill="var(--panel)" stroke="var(--line2)" strokeWidth="1" />
                 {/* CHICOTE atrás da bandeja: 24-pin, EPS e front-panel sobem
@@ -641,19 +653,19 @@ export default function GabineteVivo({
               peças do plano da placa: ficam ATRÁS do que se projeta ao vidro. */}
           <g data-depth="board">
             {mobo && (
-              <g data-part="motherboard" data-variant={vMb} filter="url(#gv-lift)" opacity={dimOf('mobo')}
+              <g data-part="motherboard" data-asm="0" data-variant={vMb} filter="url(#gv-lift)" opacity={dimOf('mobo')}
                 {...partProps('mobo', `placa-mãe ${vMb === 'mb-atx' ? 'ATX' : 'mATX'}`)}>
                 {renderPart('motherboard', vMb, box(mobo))}
               </g>
             )}
             {socket && (() => { const b = box(socket); return <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={2} fill="var(--panel2)" stroke="var(--line)" pointerEvents="none" /> })()}
             {m2 && (
-              <g data-part="storage" data-variant="ssd-m2" opacity={dimOf('m2')} {...partProps('m2', 'SSD M.2')}>
+              <g data-part="storage" data-asm="1" data-variant="ssd-m2" opacity={dimOf('m2')} {...partProps('m2', 'SSD M.2')}>
                 {renderPart('storage', 'ssd-m2', box(m2))}
               </g>
             )}
             {ram && (
-              <g data-part="ram" data-variant={vRam} opacity={dimOf('ram')}
+              <g data-part="ram" data-asm="2" data-variant={vRam} opacity={dimOf('ram')}
                 {...partProps('ram', `memória${vRam === 'ram-heatspreader' ? ' com dissipador' : ''}`)}>
                 {renderPart('ram', vRam, box(ram))}
               </g>
@@ -679,7 +691,7 @@ export default function GabineteVivo({
           <g data-depth="near">
           {/* fonte */}
           {psu && (
-            <g data-part="psu" data-variant={vPsu} data-src={drawSrc('psu')} filter="url(#gv-lift)" opacity={dimOf('psu')}
+            <g data-part="psu" data-asm="4" data-variant={vPsu} data-src={drawSrc('psu')} filter="url(#gv-lift)" opacity={dimOf('psu')}
               {...partProps('psu', `fonte ${vPsu === 'psu-modular' ? 'modular' : 'básica'}`)}>
               {drawPart('psu', vPsu, box(psu))}
             </g>
@@ -687,13 +699,13 @@ export default function GabineteVivo({
 
           {/* cooler a ar — altura de DESENHO (corpo). A folga de spec vive na vista superior. */}
           {airCooler && (
-            <g data-part="cooler" data-variant={vAir} data-src={drawSrc('cooler')} filter="url(#gv-lift)" opacity={dimOf('cooler')}
+            <g data-part="cooler" data-asm="3" data-variant={vAir} data-src={drawSrc('cooler')} filter="url(#gv-lift)" opacity={dimOf('cooler')}
               {...partProps('cooler', `cooler ${Math.round(coolerRealH)}mm de altura${coolerClr ? ` · folga ${Math.round(coolerClr.remaining_mm)}mm até a tampa` : ''}${compact ? '' : ' — ver corte superior'}`)}>
               {drawPart('cooler', vAir, box(airCooler))}
             </g>
           )}
           {pump && (
-            <g data-part="cooler" data-variant="cooler-aio-pump" filter="url(#gv-lift)" opacity={dimOf('pump')}
+            <g data-part="cooler" data-asm="3" data-variant="cooler-aio-pump" filter="url(#gv-lift)" opacity={dimOf('pump')}
               {...partProps('pump', 'bomba do AIO (water block sobre a CPU)')}>
               {renderPart('cooler', 'cooler-aio-pump', box(pump))}
             </g>
@@ -737,14 +749,14 @@ export default function GabineteVivo({
             const d = `M${x0.toFixed(1)},${y0.toFixed(1)} C${x0.toFixed(1)},${(shroudY - 6).toFixed(1)} `
               + `${(x1 - 26).toFixed(1)},${(y1 + 34).toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`
             return (
-              <g data-cable="pcie" fill="none" strokeLinecap="round" pointerEvents="none" opacity={dimOf('gpu')}>
+              <g data-cable="pcie" data-asm="7" fill="none" strokeLinecap="round" pointerEvents="none" opacity={dimOf('gpu')}>
                 <path d={d} stroke="var(--line)" strokeWidth="5.4" opacity=".55" />
                 <path d={d} stroke="var(--dim2)" strokeWidth="2.9" />
               </g>
             )
           })()}
           {gpu && (
-            <g data-part="gpu" data-variant={vGpu} data-src={drawSrc('gpu')} filter="url(#gv-lift)" opacity={dimOf('gpu')}
+            <g data-part="gpu" data-asm="5" data-variant={vGpu} data-src={drawSrc('gpu')} filter="url(#gv-lift)" opacity={dimOf('gpu')}
               {...partProps('gpu', `GPU ${Math.round(gpu.w)}mm${gpuClr ? ` · folga ${Math.round(gpuClr.remaining_mm)}mm até a frente` : ''}`)}>
               {drawPart('gpu', vGpu, box(gpu))}
             </g>
@@ -765,7 +777,7 @@ export default function GabineteVivo({
             })
             const r = Math.min((wide ? b.w / nf : b.h / nf) * 0.34, 5)
             return (
-              <g key={`cf${i}`} data-part="case_fan" opacity={dimOf(fid)}
+              <g key={`cf${i}`} data-part="case_fan" data-asm="6" opacity={dimOf(fid)}
                 {...hoverProps(fid, sim ? `${nf > 1 ? `${nf} ventoinhas` : 'ventoinha'} SIMULADA${nf > 1 ? 's' : ''} (what-if)` : 'ventoinha de fábrica')}>
                 <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={3}
                   fill={sim ? 'var(--accent-soft)' : 'var(--panel2)'}
@@ -784,7 +796,7 @@ export default function GabineteVivo({
           {rad && (() => {
             const b = box(rad)
             return (
-              <g data-part="cooler-radiator" filter="url(#gv-lift)" opacity={dimOf('rad')} {...partProps('rad', 'radiador do AIO')}>
+              <g data-part="cooler-radiator" data-asm="6" filter="url(#gv-lift)" opacity={dimOf('rad')} {...partProps('rad', 'radiador do AIO')}>
                 <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={3} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
                 <rect x={b.x + 4} y={b.y + 3} width={b.w - 8} height={Math.max(4, b.h - 6)} rx={2} fill="var(--line2)" />
                 <rect x={b.x + 4} y={b.y + 3} width={b.w - 8} height={Math.max(4, b.h - 6)} fill="url(#mat-fins-v)" />
