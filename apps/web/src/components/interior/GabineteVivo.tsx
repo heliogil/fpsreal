@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { GeoMount, GeoPlacement, LiveInterior, LiveProduct } from '@/lib/live-server'
 import { MaterialDefs, bevel, pickVariant, renderPart, renderFromDescriptor } from './PartMockups'
 import TopDownInset from './TopDownInset'
+import FrontalInset from './FrontalInset'
 import BottleneckNote from './BottleneckNote'
 
 /**
@@ -1013,6 +1014,15 @@ export default function GabineteVivo({
       {!compact && (
         <div style={{ borderTop: '1px solid var(--line2)' }}>
           <TopDownInset interior={interior} g={g} hovered={focused ?? hovered} onHover={setHovered} />
+        </div>
+      )}
+
+      {/* vista frontal — fecha as três ortográficas. É aqui que o cooler e a
+          espessura da GPU disputam o MESMO vão, com o foco sincronizado com a
+          lateral (o `hovered` é partilhado pelas três vistas). */}
+      {!compact && (
+        <div style={{ borderTop: '1px solid var(--line2)' }}>
+          <FrontalInset interior={interior} g={g} hovered={focused ?? hovered} onHover={setHovered} />
         </div>
       )}
 
