@@ -127,9 +127,14 @@ export default function GabineteVivo({
   /* ── mm → px ─────────────────────────────────────────────────────────── */
   const D = g.case.depth_mm
   const H = g.case.height_mm
-  const s = Math.min(596 / D, 372 / H)
-  const ox = 62 + (596 - D * s) / 2
-  const oy = 22 + (372 - H * s) / 2
+  // A cena reserva um anel para a CASCA do gabinete (moldura) e uma faixa para
+  // os pés. O interior — que é o que a régua mede — encolhe na mesma medida,
+  // por isso a escala mm→px continua honesta.
+  const FRAME = 9
+  const FEET = 8
+  const s = Math.min((596 - FRAME * 2) / D, (372 - FRAME * 2 - FEET) / H)
+  const ox = 62 + FRAME + (596 - FRAME * 2 - D * s) / 2
+  const oy = 22 + FRAME + (372 - FRAME * 2 - FEET - H * s) / 2
   const X = (x: number) => ox + x * s
   const Yc = (y: number) => oy + (H - y) * s
   const bottomY = oy + H * s
@@ -519,6 +524,10 @@ export default function GabineteVivo({
             <filter id="gv-lift" x="-20%" y="-20%" width="140%" height="150%">
               <feDropShadow dx="0" dy="2.2" stdDeviation="2.6" floodColor="#000" floodOpacity="0.34" />
             </filter>
+            {/* plano distante: desfoque leve — recua sem sumir */}
+            <filter id="gv-far" x="-8%" y="-8%" width="116%" height="116%">
+              <feGaussianBlur stdDeviation="0.9" />
+            </filter>
             {/* campo térmico: as células da grade fundem-se num gradiente
                 contínuo — é o borrão que transforma a grade em CAMPO */}
             <filter id="gv-thermal" x="-12%" y="-12%" width="124%" height="124%">
@@ -530,6 +539,35 @@ export default function GabineteVivo({
           {/* tudo o que é CENA entra neste grupo: é ele que recebe o zoom do
               modo foco. Régua e rótulo ficam de fora (ver abaixo). */}
           <g transform={focusTransform} style={{ transition: 'transform .38s cubic-bezier(.4,0,.2,1)' }}>
+
+          {/* ── EXTERIOR: a casca que ENQUADRA o corte ───────────────────────
+              O viewer mostra um corte do gabinete; sem casca, o corte flutua no
+              vazio. Moldura com espessura, veneziana no topo (por onde o ar
+              quente sai), pés e — no fim da cena — a aresta do vidro lateral.
+              É o suficiente para ler "gabinete" sem competir com o interior. */}
+          {(() => {
+            const sx = ox - FRAME, sy = oy - FRAME
+            const sw = D * s + FRAME * 2, sh = H * s + FRAME * 2
+            const nv = Math.max(4, Math.round(sw / 26))
+            const vw = (sw - 28) / nv
+            return (
+              <g data-depth="shell" pointerEvents="none">
+                <rect x={sx} y={sy} width={sw} height={sh} rx={9}
+                  fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+                {/* veneziana do topo */}
+                {Array.from({ length: nv }, (_, i) => (
+                  <rect key={`vt${i}`} x={sx + 14 + i * vw} y={sy + 2.6}
+                    width={Math.max(2, vw - 5)} height={3.2} rx={1.6}
+                    fill="var(--bg)" opacity={0.5} />
+                ))}
+                {/* pés */}
+                <rect x={sx + 14} y={sy + sh} width={26} height={FEET} rx={2.5}
+                  fill="var(--panel)" stroke="var(--line)" strokeWidth="0.9" />
+                <rect x={sx + sw - 40} y={sy + sh} width={26} height={FEET} rx={2.5}
+                  fill="var(--panel)" stroke="var(--line)" strokeWidth="0.9" />
+              </g>
+            )
+          })()}
 
           {/* chassi */}
           <rect x={ox} y={oy} width={D * s} height={H * s} rx={12} fill="url(#gv-back)" stroke="var(--line)" strokeWidth="1.4" vectorEffect={focused ? 'non-scaling-stroke' : undefined} />
@@ -558,13 +596,69 @@ export default function GabineteVivo({
             )
           })()}
 
-          {/* placa-mãe */}
-          {mobo && (
-            <g data-part="motherboard" data-variant={vMb} filter="url(#gv-lift)" opacity={dimOf('mobo')}
-              {...partProps('mobo', `placa-mãe ${vMb === 'mb-atx' ? 'ATX' : 'mATX'}`)}>
-              {renderPart('motherboard', vMb, box(mobo))}
-            </g>
-          )}
+          {/* ── PLANO DISTANTE: a bandeja da placa e o que corre ATRÁS dela ──
+              Camadas explícitas de profundidade. O plano distante leva desfoque
+              leve e menos opacidade — é o que faz o corte ler como VOLUME em vez
+              de decalque, e é o que dá aos cabos um "atrás" onde existir. */}
+          {mobo && (() => {
+            const b = box(mobo)
+            // EPS (topo) · 24-pin (meio) · front-panel (baixo)
+            const gy = [b.y + b.h * 0.18, b.y + b.h * 0.52, b.y + b.h * 0.84]
+            const pb = psu ? box(psu) : null
+            const chx = b.x - 19          // canaleta vertical atrás da bandeja
+            const runs = pb ? gy.map((y, i) => {
+              const x0 = pb.x + pb.w * (0.20 + i * 0.17)
+              return `M${x0.toFixed(1)},${pb.y.toFixed(1)} C${chx.toFixed(1)},${(pb.y - 26).toFixed(1)} `
+                + `${chx.toFixed(1)},${(y + 48).toFixed(1)} ${(b.x - 7).toFixed(1)},${y.toFixed(1)}`
+            }) : []
+            return (
+              <g data-depth="tray" filter="url(#gv-far)" opacity={0.5} pointerEvents="none">
+                <rect x={b.x - 11} y={b.y - 7} width={b.w + 19} height={b.h + 13} rx={4}
+                  fill="var(--panel)" stroke="var(--line2)" strokeWidth="1" />
+                {/* CHICOTE atrás da bandeja: 24-pin, EPS e front-panel sobem
+                    pela canaleta e saem nos passa-cabos. Vivem no plano
+                    DISTANTE — é exactamente por isto que o cabo dependia do
+                    z-order: sem um "atrás" onde correr, vira rabisco. */}
+                {runs.map((d, i) => (
+                  <g key={`cb${i}`} data-cable={['eps', 'atx24', 'front_panel'][i]}>
+                    <path d={d} fill="none" stroke="var(--line)" strokeWidth="4.2" opacity="0.55" strokeLinecap="round" />
+                    <path d={d} fill="none" stroke="var(--dim2)" strokeWidth="2.1" strokeLinecap="round" />
+                  </g>
+                ))}
+                {/* passa-cabos na borda frontal da bandeja (por cima da ponta
+                    do cabo, para o chicote parecer atravessar a chapa) */}
+                {gy.map((y, i) => (
+                  <rect key={`gr${i}`} x={b.x - 9} y={y - 6.5} width={7} height={13} rx={3.5}
+                    fill="var(--bg)" stroke="var(--line2)" strokeWidth="0.9" />
+                ))}
+              </g>
+            )
+          })()}
+
+          {/* ── PLANO DA PLACA: a placa e o que está montado NELA ────────────
+              O M.2 era desenhado depois da GPU (aparecia à frente dela) e a RAM
+              depois do cooler (a torre sumia por trás da memória). Ambos são
+              peças do plano da placa: ficam ATRÁS do que se projeta ao vidro. */}
+          <g data-depth="board">
+            {mobo && (
+              <g data-part="motherboard" data-variant={vMb} filter="url(#gv-lift)" opacity={dimOf('mobo')}
+                {...partProps('mobo', `placa-mãe ${vMb === 'mb-atx' ? 'ATX' : 'mATX'}`)}>
+                {renderPart('motherboard', vMb, box(mobo))}
+              </g>
+            )}
+            {socket && (() => { const b = box(socket); return <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={2} fill="var(--panel2)" stroke="var(--line)" pointerEvents="none" /> })()}
+            {m2 && (
+              <g data-part="storage" data-variant="ssd-m2" opacity={dimOf('m2')} {...partProps('m2', 'SSD M.2')}>
+                {renderPart('storage', 'ssd-m2', box(m2))}
+              </g>
+            )}
+            {ram && (
+              <g data-part="ram" data-variant={vRam} opacity={dimOf('ram')}
+                {...partProps('ram', `memória${vRam === 'ram-heatspreader' ? ' com dissipador' : ''}`)}>
+                {renderPart('ram', vRam, box(ram))}
+              </g>
+            )}
+          </g>
 
           {/* calor: CAMPO contínuo do solver; sem campo, os dois glows de antes */}
           {thermalCells ? (
@@ -581,6 +675,8 @@ export default function GabineteVivo({
             </>
           )}
 
+          {/* ── PLANO PRÓXIMO: o que se projeta na direção do vidro ────────── */}
+          <g data-depth="near">
           {/* fonte */}
           {psu && (
             <g data-part="psu" data-variant={vPsu} data-src={drawSrc('psu')} filter="url(#gv-lift)" opacity={dimOf('psu')}
@@ -588,7 +684,6 @@ export default function GabineteVivo({
               {drawPart('psu', vPsu, box(psu))}
             </g>
           )}
-          {socket && (() => { const b = box(socket); return <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={2} fill="var(--panel2)" stroke="var(--line)" pointerEvents="none" /> })()}
 
           {/* cooler a ar — altura de DESENHO (corpo). A folga de spec vive na vista superior. */}
           {airCooler && (
@@ -629,23 +724,32 @@ export default function GabineteVivo({
               </g>
             )
           })()}
-          {ram && (
-            <g data-part="ram" data-variant={vRam} opacity={dimOf('ram')}
-              {...partProps('ram', `memória${vRam === 'ram-heatspreader' ? ' com dissipador' : ''}`)}>
-              {renderPart('ram', vRam, box(ram))}
-            </g>
-          )}
+          {/* PCIe da fonte ao conector da GPU. Este é o ÚNICO cabo que se vê
+              inteiro, de propósito: sobe pela frente do shroud e encaixa no
+              conector que o renderer do descritor já desenha em cima da placa
+              (o descritor diz se é 8pin, 8x2 ou 12vhpwr). Os outros ficam
+              esmaecidos atrás da bandeja — é o que impede o rabisco. */}
+          {gpu && psu && (() => {
+            const gb = box(gpu), pb = box(psu)
+            const x0 = pb.x + pb.w * 0.30, y0 = pb.y
+            const x1 = gb.x + gb.w * 0.68, y1 = gb.y - 7
+            const shroudY = Yc(g.case.shroud_h_mm)
+            const d = `M${x0.toFixed(1)},${y0.toFixed(1)} C${x0.toFixed(1)},${(shroudY - 6).toFixed(1)} `
+              + `${(x1 - 26).toFixed(1)},${(y1 + 34).toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`
+            return (
+              <g data-cable="pcie" fill="none" strokeLinecap="round" pointerEvents="none" opacity={dimOf('gpu')}>
+                <path d={d} stroke="var(--line)" strokeWidth="5.4" opacity=".55" />
+                <path d={d} stroke="var(--dim2)" strokeWidth="2.9" />
+              </g>
+            )
+          })()}
           {gpu && (
             <g data-part="gpu" data-variant={vGpu} data-src={drawSrc('gpu')} filter="url(#gv-lift)" opacity={dimOf('gpu')}
               {...partProps('gpu', `GPU ${Math.round(gpu.w)}mm${gpuClr ? ` · folga ${Math.round(gpuClr.remaining_mm)}mm até a frente` : ''}`)}>
               {drawPart('gpu', vGpu, box(gpu))}
             </g>
           )}
-          {m2 && (
-            <g data-part="storage" data-variant="ssd-m2" opacity={dimOf('m2')} {...partProps('m2', 'SSD M.2')}>
-              {renderPart('storage', 'ssd-m2', box(m2))}
-            </g>
-          )}
+          </g>{/* ── fim do plano próximo ── */}
 
           {/* ventoinhas do gabinete (fábrica e simuladas) */}
           {caseFans.map((f, i) => {
@@ -799,12 +903,21 @@ export default function GabineteVivo({
               })
             })}
           </g>
+          {/* ARESTA DO VIDRO: o painel lateral que estamos a atravessar. Vai por
+              último porque é a camada mais PRÓXIMA — um brilho diagonal fraco e
+              a aresta interna bastam; qualquer coisa mais forte tapa a cena. */}
+          <g data-depth="glass" pointerEvents="none">
+            <path d={`M${(ox + D * s * 0.60).toFixed(1)},${oy} L${(ox + D * s).toFixed(1)},${(oy + H * s * 0.40).toFixed(1)} L${(ox + D * s).toFixed(1)},${oy} Z`}
+              fill="var(--strong)" opacity={0.035} />
+            <rect x={ox} y={oy} width={D * s} height={H * s} rx={12} fill="none"
+              stroke="var(--strong)" strokeWidth="1" opacity={0.1} />
+          </g>
           </g>{/* ── fim da cena com zoom ── */}
 
           {/* Régua ESCONDIDA no modo foco: com a cena ampliada a escala deixa
               de bater, e uma régua errada é pior do que régua nenhuma. */}
           {!focused && (() => {
-            const ry = bottomY + 12
+            const ry = bottomY + FRAME + FEET + 6   // abaixo da casca E dos pés
             const ticks: number[] = []
             for (let mm = 0; mm <= D + 1; mm += 50) ticks.push(mm)
             return (
@@ -823,7 +936,7 @@ export default function GabineteVivo({
               lateral, onde vivem as folgas de GPU e cooler. Some no telemóvel e
               no foco (escala deixa de bater). */}
           {!focused && (() => {
-            const rx = ox - 14
+            const rx = ox - FRAME - 8               // à esquerda da casca
             const ticks: number[] = []
             for (let mm = 0; mm <= H + 1; mm += 50) ticks.push(mm)
             return (
