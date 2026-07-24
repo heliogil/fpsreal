@@ -16,12 +16,13 @@ from __future__ import annotations
 import json
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from airflow_field import solve_flow_field
+from gltf_builder import build_gltf
 from deps import get_db
 from models import Product
 
@@ -584,3 +585,23 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         },
         "geometry": geometry,
     }
+
+
+@router.post("/model.gltf", response_model=None)
+async def model_gltf(body: InteriorRequest, db: AsyncSession = Depends(get_db)):
+    """O gabinete em glTF 2.0, gerado a partir DESTA mesma geometria.
+
+    Não há um segundo gerador de dimensão: a malha são as placements em mm que
+    desenham a vista 2D. Por isso o 3D não pode divergir do que o site afirma.
+    """
+    est = await estimate_interior(body, db)
+    try:
+        gltf = build_gltf(est)
+    except ValueError as e:
+        return Response(content=json.dumps({"detail": str(e)}), status_code=422,
+                        media_type="application/json")
+    return Response(
+        content=json.dumps(gltf, ensure_ascii=False),
+        media_type="model/gltf+json",
+        headers={"Content-Disposition": 'attachment; filename="gabinete.gltf"'},
+    )
