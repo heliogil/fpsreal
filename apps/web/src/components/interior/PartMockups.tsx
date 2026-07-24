@@ -338,6 +338,175 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
   },
 }
 
+/* ── RENDER POR DESCRITOR (ingestor de modelos) ────────────────────────────
+   O ingestor não gera desenho: gera um descritor de APARÊNCIA validado contra a
+   ficha técnica. Aqui ele vira peça — sempre DENTRO da caixa em mm que o motor
+   mandou, e sempre com tokens da marca. Sem descritor (ou categoria sem suporte)
+   devolve `null` e o chamador cai na variante de TIER: regressão zero.
+
+   Ver spec: 2026-07-23-viewer-2d-ingestor-de-modelos-design.md */
+
+export type VisualDescriptor = Record<string, string | number | boolean>
+
+const D_GPU = (b: Box, d: VisualDescriptor): ReactNode => {
+  const fans = Math.max(0, Math.min(4, Number(d.fans ?? 2)))
+  const style = String(d.fan_style ?? 'blade')
+  const shroud = String(d.shroud ?? 'flat')
+  const vent = String(d.vent_cut ?? 'none')
+  const accent = String(d.accent ?? 'none')
+  const backplate = d.backplate === true
+  const power = String(d.power ?? 'none')
+  const r = Math.min(b.h * 0.34, 15)
+  const cxs = Array.from({ length: fans }, (_, i) => b.x + b.w * ((i + 1) / (fans + 1)))
+  const pins = power === '12vhpwr' ? 4 : power === '8x2' ? 4 : power === '8pin' ? 3 : power === '6pin' ? 2 : 0
+  const pw = power === '12vhpwr' ? 16 : 12
+  const pcx = b.x + b.w * 0.68
+  return (
+    <g>
+      {backplate && <rect x={b.x - 1.5} y={b.y - 5} width={b.w + 3} height={5.5} rx={1.5} fill="var(--panel)" stroke="var(--line)" strokeWidth=".7" />}
+      <rect x={b.x} y={b.y - 4} width={b.w} height={4} rx={1} fill="var(--accent-dim)" />
+      {pins > 0 && (
+        <g>
+          <rect x={pcx} y={b.y - 9} width={pw} height={6} rx={1.4} fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
+          {Array.from({ length: pins }, (_, i) => (
+            <line key={i} x1={pcx + (pw / pins) * (i + 0.5)} y1={b.y - 8.2} x2={pcx + (pw / pins) * (i + 0.5)} y2={b.y - 3.8} stroke="var(--line)" strokeWidth="1" />
+          ))}
+        </g>
+      )}
+      {shroud === 'angular' ? (
+        <path d={`M${b.x},${b.y + 6} L${b.x + 10},${b.y} H${b.x + b.w - 10} L${b.x + b.w},${b.y + 6} V${b.y + b.h} H${b.x} Z`}
+          fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+      ) : (
+        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={shroud === 'industrial' ? 2 : 5}
+          fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+      )}
+      {shroud === 'dual_tone' && <rect x={b.x} y={b.y} width={b.w} height={b.h * 0.42} rx={5} fill="var(--panel)" opacity=".55" />}
+      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={5} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
+      {vent === 'diagonal' && Array.from({ length: 5 }, (_, i) => (
+        <line key={i} x1={b.x + 8 + i * 9} y1={b.y + b.h - 4} x2={b.x + 16 + i * 9} y2={b.y + 5} stroke="var(--line)" strokeWidth="1" opacity=".5" />
+      ))}
+      {vent === 'slot' && Array.from({ length: 3 }, (_, i) => (
+        <rect key={i} x={b.x + 7 + i * 7} y={b.y + 5} width={2.5} height={b.h - 10} rx={1} fill="var(--line)" opacity=".45" />
+      ))}
+      {vent === 'hex' && <rect x={b.x + 5} y={b.y + 4} width={Math.max(0, b.w - 10)} height={Math.max(0, b.h - 8)} fill="url(#mat-mesh)" opacity=".5" />}
+      {bevel(b, 3, shroud === 'industrial' ? 2 : 5)}
+      {accent === 'strip_bottom' && <rect x={b.x} y={b.y + b.h - 5} width={b.w} height={5} rx={2} fill="var(--accent)" opacity=".8" />}
+      {accent === 'edge' && <rect x={b.x + 4} y={b.y + b.h - 4} width={b.w * 0.35} height={2.5} rx={1} fill="var(--accent-dim)" />}
+      {accent === 'plate' && <rect x={b.x + b.w * 0.62} y={b.y + 4} width={b.w * 0.3} height={5} rx={2} fill="var(--accent-dim)" />}
+      {cxs.map((cx, i) => (
+        style === 'blower'
+          ? <g key={i}><circle cx={cx} cy={b.y + b.h / 2} r={r * 0.8} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" /><rect x={cx + r} y={b.y + b.h * 0.3} width={b.w * 0.25} height={b.h * 0.4} rx={2} fill="var(--panel)" stroke="var(--line)" strokeWidth=".8" /></g>
+          : <g key={i}>
+              <circle cx={cx} cy={b.y + b.h / 2} r={r} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
+              {style === 'ring' && <circle cx={cx} cy={b.y + b.h / 2} r={r * 0.78} fill="none" stroke="var(--accent-dim)" strokeWidth="1.4" />}
+              <circle cx={cx} cy={b.y + b.h / 2} r={r * 0.62} fill="none" stroke="var(--line)" strokeWidth="1" opacity=".6" />
+              <circle cx={cx} cy={b.y + b.h / 2} r={r * 0.2} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
+            </g>
+      ))}
+    </g>
+  )
+}
+
+const D_COOLER = (b: Box, d: VisualDescriptor): ReactNode => {
+  const kind = String(d.kind ?? 'tower')
+  const towers = Math.max(1, Math.min(2, Number(d.towers ?? 1)))
+  const fin = String(d.fin_style ?? 'dense')
+  const plate = String(d.top_plate ?? 'none')
+  const sideFan = d.side_fan === true
+  if (kind === 'aio') return PART_REGISTRY.cooler['cooler-aio-pump'](b)
+  if (kind === 'low_profile') {
+    const lp = { x: b.x + b.w * 0.2, y: b.y + b.h * 0.55, w: b.w * 0.6, h: b.h * 0.45 }
+    return (
+      <g>
+        <rect x={lp.x} y={lp.y} width={lp.w} height={lp.h} rx={3} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
+        <rect x={lp.x} y={lp.y} width={lp.w} height={lp.h} fill={fin === 'open' ? 'url(#mat-fins-v)' : 'url(#mat-fins-h)'} opacity=".9" />
+        {bevel(lp, 2, 3)}
+        <FanDisc cx={b.x + b.w / 2} cy={b.y + b.h * 0.32} r={Math.min(b.w, b.h) * 0.3} />
+      </g>
+    )
+  }
+  const tw = towers === 2 ? b.w * 0.3 : b.w * 0.5
+  const gap = towers === 2 ? b.w * 0.08 : 0
+  const x0 = b.x + (b.w - (tw * towers + gap * (towers - 1))) / 2
+  return (
+    <g>
+      {Array.from({ length: towers }, (_, i) => {
+        const tx = x0 + i * (tw + gap)
+        return (
+          <g key={i}>
+            <rect x={tx} y={b.y} width={tw} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+            <rect x={tx} y={b.y + 3} width={tw} height={b.h - 6} fill={fin === 'open' ? 'url(#mat-fins-v)' : 'url(#mat-fins-h)'} opacity=".9" />
+            {bevel({ x: tx, y: b.y, w: tw, h: b.h }, 3, 4)}
+          </g>
+        )
+      })}
+      {plate !== 'none' && <rect x={x0} y={b.y + 1} width={tw * towers + gap * (towers - 1)} height={4} rx={2} fill={plate === 'logo_plate' ? 'var(--accent-dim)' : 'var(--panel)'} stroke="var(--line)" strokeWidth=".8" />}
+      {sideFan && <FanDisc cx={b.x + b.w * 0.13} cy={b.y + b.h * 0.42} r={Math.min(b.w * 0.15, b.h * 0.28)} />}
+    </g>
+  )
+}
+
+const D_PSU = (b: Box, d: VisualDescriptor): ReactNode => {
+  const cabling = String(d.cabling ?? 'fixed')
+  const grill = String(d.grill ?? 'round')
+  const fanPos = String(d.fan_pos ?? 'bottom')
+  const fcx = fanPos === 'rear' ? b.x + b.w - b.h * 0.55 : b.x + b.h * 0.55
+  return (
+    <g>
+      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
+      {bevel(b, 3, 4)}
+      {grill === 'honeycomb'
+        ? <circle cx={fcx} cy={b.y + b.h / 2} r={b.h * 0.34} fill="url(#mat-mesh)" stroke="var(--line)" strokeWidth="1.2" />
+        : <circle cx={fcx} cy={b.y + b.h / 2} r={b.h * 0.32} fill="none" stroke="var(--line)" strokeWidth="1.2" />}
+      {grill === 'slot' && Array.from({ length: 4 }, (_, i) => (
+        <line key={i} x1={fcx - b.h * 0.3 + i * (b.h * 0.2)} y1={b.y + b.h * 0.2} x2={fcx - b.h * 0.3 + i * (b.h * 0.2)} y2={b.y + b.h * 0.8} stroke="var(--line)" strokeWidth="1" />
+      ))}
+      {cabling !== 'fixed' && Array.from({ length: cabling === 'modular' ? 4 : 2 }, (_, i) => (
+        <rect key={i} x={b.x + b.w - b.h * 0.9 + i * 7} y={b.y + b.h * 0.3} width={5} height={5} rx={1} fill="var(--accent-dim)" />
+      ))}
+      {cabling === 'modular' && <rect x={b.x + b.w - b.h * 0.9} y={b.y + b.h * 0.58} width={26} height={4} rx={2} fill="var(--accent)" opacity=".7" />}
+    </g>
+  )
+}
+
+const D_CASE_FRONT = (b: Box, d: VisualDescriptor): ReactNode => {
+  const surface = String(d.surface ?? 'solid')
+  const cut = String(d.cut ?? 'none')
+  const fill = surface === 'glass' ? 'var(--panel)' : 'var(--panel2)'
+  return (
+    <g>
+      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill={fill} stroke="var(--line)" strokeWidth="1" />
+      {(surface === 'mesh' || surface === 'hybrid') && (
+        <rect x={b.x} y={surface === 'hybrid' ? b.y + b.h * 0.45 : b.y} width={b.w}
+          height={surface === 'hybrid' ? b.h * 0.55 : b.h} rx={4} fill="url(#mat-mesh)" />
+      )}
+      {surface === 'glass' && <rect x={b.x + 1} y={b.y + 1} width={Math.max(0, b.w - 2)} height={Math.max(0, b.h - 2)} rx={3} fill="var(--strong)" opacity=".04" />}
+      {surface === 'solid' && <rect x={b.x + b.w * 0.35} y={b.y + 8} width={2} height={Math.max(0, b.h - 16)} rx={1} fill="var(--line)" />}
+      {cut === 'side_intake' && <rect x={b.x} y={b.y + b.h * 0.1} width={2.5} height={b.h * 0.8} rx={1} fill="var(--fresh)" opacity=".5" />}
+      {cut === 'slit' && Array.from({ length: 6 }, (_, i) => (
+        <rect key={i} x={b.x + 2} y={b.y + b.h * (0.12 + i * 0.13)} width={Math.max(0, b.w - 4)} height={2} rx={1} fill="var(--line)" opacity=".5" />
+      ))}
+    </g>
+  )
+}
+
+const DESCRIPTOR_RENDERERS: Record<string, (b: Box, d: VisualDescriptor) => ReactNode> = {
+  gpu: D_GPU, cooler: D_COOLER, psu: D_PSU, case_front: D_CASE_FRONT,
+}
+
+/** Desenha a peça a partir do descritor aprovado. `null` ⇒ cai no tier. */
+export function renderFromDescriptor(category: string, d: VisualDescriptor | undefined, box: Box): ReactNode | null {
+  if (!d) return null
+  const fn = DESCRIPTOR_RENDERERS[category]
+  if (!fn) return null
+  try {
+    return fn(box, d)
+  } catch {
+    return null // descritor estranho nunca derruba o viewer — cai no tier
+  }
+}
+
 /** Registra um modelo novo em runtime (ou basta editar o objeto acima). */
 export function registerPartVariant(category: string, variantId: string, renderer: MockupRenderer) {
   if (!PART_REGISTRY[category]) PART_REGISTRY[category] = {}

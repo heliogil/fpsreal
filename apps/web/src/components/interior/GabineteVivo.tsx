@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { GeoMount, GeoPlacement, LiveInterior, LiveProduct } from '@/lib/live-server'
-import { MaterialDefs, bevel, pickVariant, renderPart } from './PartMockups'
+import { MaterialDefs, bevel, pickVariant, renderPart, renderFromDescriptor } from './PartMockups'
 import TopDownInset from './TopDownInset'
 import BottleneckNote from './BottleneckNote'
 
@@ -174,6 +174,19 @@ export default function GabineteVivo({
   const vPsu = pickVariant('psu', { name: products.psu?.name, sku: products.psu?.sku })
   const vAir = airCooler ? pickVariant('cooler', { name: products.cooler?.name, sku: products.cooler?.sku, heightMm: coolerRealH }) : ''
   const vFront = pickVariant('case_front', { name: interior.case.name ?? undefined, airflowClass: interior.case.airflow_class ?? undefined })
+
+  // Passo 0 do ingestor: se há descritor APROVADO para a categoria, a peça é
+  // desenhada a partir DELE (aquela peça, não o tier). Sem descritor — ou se o
+  // renderer paramétrico devolver null — cai na variante de tier: regressão zero.
+  const visuals = interior.visuals ?? {}
+  const drawPart = (
+    category: string, tierVariant: string,
+    b: { x: number; y: number; w: number; h: number },
+    opts?: { spin?: boolean; heat?: number; label?: string },
+  ) => renderFromDescriptor(category, visuals[category]?.descriptor, b)
+    ?? renderPart(category, tierVariant, b, opts)
+  /** origem do desenho p/ o tooltip e verificação ('modelo'|'tier') */
+  const drawSrc = (category: string) => (visuals[category] ? 'modelo' : 'tier')
 
   const hasTop = g.flows.some((f) => f.to.side === 'top')
 
@@ -446,8 +459,8 @@ export default function GabineteVivo({
             const fb = box({ x: 0, y: 0, w: Math.min(14, D * 0.04), h: H })
             const t = vFront === 'front-mesh' ? 'painel frontal · mesh (fluxo livre)' : 'painel frontal · sólido (fluxo restrito)'
             return (
-              <g data-part="case_front" data-variant={vFront} opacity={0.9 * dimOf('front')} {...partProps('front', t)}>
-                {renderPart('case_front', vFront, fb)}
+              <g data-part="case_front" data-variant={vFront} data-src={drawSrc('case_front')} opacity={0.9 * dimOf('front')} {...partProps('front', t)}>
+                {drawPart('case_front', vFront, fb)}
               </g>
             )
           })()}
@@ -466,18 +479,18 @@ export default function GabineteVivo({
 
           {/* fonte */}
           {psu && (
-            <g data-part="psu" data-variant={vPsu} filter="url(#gv-lift)" opacity={dimOf('psu')}
+            <g data-part="psu" data-variant={vPsu} data-src={drawSrc('psu')} filter="url(#gv-lift)" opacity={dimOf('psu')}
               {...partProps('psu', `fonte ${vPsu === 'psu-modular' ? 'modular' : 'básica'}`)}>
-              {renderPart('psu', vPsu, box(psu))}
+              {drawPart('psu', vPsu, box(psu))}
             </g>
           )}
           {socket && (() => { const b = box(socket); return <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={2} fill="var(--panel2)" stroke="var(--line)" pointerEvents="none" /> })()}
 
           {/* cooler a ar — altura de DESENHO (corpo). A folga de spec vive na vista superior. */}
           {airCooler && (
-            <g data-part="cooler" data-variant={vAir} filter="url(#gv-lift)" opacity={dimOf('cooler')}
+            <g data-part="cooler" data-variant={vAir} data-src={drawSrc('cooler')} filter="url(#gv-lift)" opacity={dimOf('cooler')}
               {...partProps('cooler', `cooler ${Math.round(coolerRealH)}mm de altura${coolerClr ? ` · folga ${Math.round(coolerClr.remaining_mm)}mm até a tampa` : ''}${compact ? '' : ' — ver corte superior'}`)}>
-              {renderPart('cooler', vAir, box(airCooler))}
+              {drawPart('cooler', vAir, box(airCooler))}
             </g>
           )}
           {pump && (
@@ -519,9 +532,9 @@ export default function GabineteVivo({
             </g>
           )}
           {gpu && (
-            <g data-part="gpu" data-variant={vGpu} filter="url(#gv-lift)" opacity={dimOf('gpu')}
+            <g data-part="gpu" data-variant={vGpu} data-src={drawSrc('gpu')} filter="url(#gv-lift)" opacity={dimOf('gpu')}
               {...partProps('gpu', `GPU ${Math.round(gpu.w)}mm${gpuClr ? ` · folga ${Math.round(gpuClr.remaining_mm)}mm até a frente` : ''}`)}>
-              {renderPart('gpu', vGpu, box(gpu))}
+              {drawPart('gpu', vGpu, box(gpu))}
             </g>
           )}
           {m2 && (

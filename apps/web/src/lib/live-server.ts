@@ -300,6 +300,15 @@ export type InteriorDiagnosis = {
   gpu_slots?: number | null
 }
 
+/** Descritor de APARÊNCIA aprovado pelo ingestor de modelos, por categoria.
+ *  Só descreve aparência (a dimensão vem da geometria em mm). Ausente ⇒ o viewer
+ *  cai na variante de tier. `source`: 'ficha' (derivado dos specs) | 'visao' (foto). */
+export type InteriorVisual = {
+  descriptor: Record<string, string | number | boolean>
+  source: string
+  confidence: number
+}
+
 /** Eco da simulação "e se eu puser uma ventoinha aqui?" (motor no backend). */
 export type InteriorWhatIf = {
   fans: string[]
@@ -337,6 +346,8 @@ export type LiveInterior = {
   }
   what_if?: InteriorWhatIf
   diagnosis?: InteriorDiagnosis
+  /** descritores de aparência aprovados, por categoria ('gpu'|'cooler'|'psu'|'case_front'|…) */
+  visuals?: Record<string, InteriorVisual>
   geometry: InteriorGeometry | null
 }
 

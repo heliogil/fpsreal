@@ -13,11 +13,12 @@ INTEGRITY: airflow is an *estimate* ("estimativa de fluxo"), never a measurement
 """
 from __future__ import annotations
 
+import json
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from deps import get_db
@@ -95,6 +96,27 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         for key, v in body.components.items():
             if v and v in pid:
                 by_cat[key[:-3] if key.endswith("_id") else key] = pid[v]
+
+    # ---- aparência por peça (ingestor de modelos) ---------------------------
+    # SÓ descritores APROVADOS entram. Sem descritor, o campo não vem e o viewer
+    # desenha pela variante de TIER — regressão zero por construção.
+    visuals: Dict[str, dict] = {}
+    if ids:
+        _vr = (await db.execute(text(
+            "SELECT v.category, v.descriptor, v.source, v.confidence "
+            "FROM product_visuals v "
+            "WHERE v.product_id = ANY(:ids) AND v.reviewed_at IS NOT NULL"
+        ), {"ids": ids})).all()
+        for _cat, _desc, _src, _conf in _vr:
+            # JSONB via text() pode voltar como str (depende do codec asyncpg);
+            # normaliza para dict — o viewer espera um objeto, nunca uma string.
+            if isinstance(_desc, str):
+                try:
+                    _desc = json.loads(_desc)
+                except (ValueError, TypeError):
+                    continue
+            visuals[str(_cat)] = {"descriptor": _desc, "source": _src,
+                                  "confidence": float(_conf or 0)}
 
     cpu, gpu, case, cooler = (by_cat.get(k) for k in ("cpu", "gpu", "case", "cooler"))
     cs = (case.specs or {}) if case else {}
@@ -511,6 +533,7 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
                     "slots": gpu_slots or None, "thickness_mm": gpu_thick or None},
             "cooler": {"name": cooler.name if cooler else None, "height_mm": cooler_h},
         },
+        "visuals": visuals,
         "clearances": clearances,
         "airflow": {
             "score": score,

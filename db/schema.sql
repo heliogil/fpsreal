@@ -263,6 +263,26 @@ CREATE TABLE IF NOT EXISTS build_airflow_state (
 );
 
 -- ============================================================
+-- INGESTOR DE MODELOS — aparência aprovada por produto
+-- Descreve SÓ aparência (a dimensão vem do motor de geometria em mm).
+-- Nada chega ao viewer sem reviewed_at. Ver services/ingestion/visuals/.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS product_visuals (
+    product_id     INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
+    category       TEXT        NOT NULL,
+    descriptor     JSONB       NOT NULL,
+    schema_version INTEGER     NOT NULL DEFAULT 1,
+    source         TEXT        NOT NULL,          -- 'ficha' | 'visao'
+    photo_hash     TEXT,
+    confidence     REAL        NOT NULL DEFAULT 0,
+    notes          TEXT,
+    reviewed_at    TIMESTAMPTZ,                   -- portão: NULL = não vai ao viewer
+    reviewed_by    TEXT,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ============================================================
 -- SEED — lojas parceiras
 -- ============================================================
 
