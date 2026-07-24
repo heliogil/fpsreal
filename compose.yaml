@@ -55,6 +55,9 @@ services:
     environment:
       NEXT_PUBLIC_API_BASE: /api
       PCB_API_INTERNAL: http://pcb_api:8100
+      # segredo da folha de revisão do ingestor (/modelos). Vazio ⇒ página 404.
+      # Server-only (sem NEXT_PUBLIC_): nunca vai ao bundle do cliente.
+      VISUALS_REVIEW_TOKEN: ${VISUALS_REVIEW_TOKEN:-}
     networks:
       - pcb_net
     depends_on:

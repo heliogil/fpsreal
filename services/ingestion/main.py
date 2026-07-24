@@ -59,7 +59,7 @@ def create_app() -> FastAPI:
     # during app construction rather than at first request.
     from routers import (
         builds, compatibility, fps, go, health, interior, offers, products,
-        track, upgrade, vs, wizard,
+        track, upgrade, visuals, vs, wizard,
     )
 
     app.include_router(health.router)
@@ -74,6 +74,7 @@ def create_app() -> FastAPI:
     app.include_router(track.router, prefix="/track", tags=["tracking"])
     app.include_router(go.router, prefix="/go", tags=["redirect"])
     app.include_router(vs.router, prefix="/vs", tags=["vs"])
+    app.include_router(visuals.router, prefix="/visuals", tags=["visuals"])
 
     @app.get("/", tags=["meta"])
     async def root() -> dict:

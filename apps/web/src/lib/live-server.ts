@@ -381,6 +381,37 @@ export async function getLiveCases(): Promise<LiveCaseOption[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Revisão do ingestor de modelos (folha de contacto, gated por token)
+// ---------------------------------------------------------------------------
+
+export type VisualsReviewRow = {
+  product_id: number
+  sku: string
+  name: string
+  /** categoria canónica do descritor ('gpu'|'cooler'|'psu'|'case_front'|'ram'|'motherboard') */
+  category: string
+  /** categoria do catálogo ('case' etc.) */
+  catalog_category: string
+  descriptor: Record<string, string | number | boolean>
+  source: string
+  confidence: number
+  reviewed: boolean
+  specs: Record<string, unknown>
+}
+export type VisualsReview = {
+  total: number; approved: number; pending: number; rows: VisualsReviewRow[]
+}
+
+export async function getVisualsReview(token: string): Promise<VisualsReview | null> {
+  return getJson<VisualsReview>(`/visuals/review?token=${encodeURIComponent(token)}`)
+}
+export async function postVisualsAction(
+  token: string, action: 'approve' | 'revoke', skus: string[],
+): Promise<{ action: string; affected: number } | null> {
+  return postJson(`/visuals/review?token=${encodeURIComponent(token)}`, { action, skus })
+}
+
+// ---------------------------------------------------------------------------
 // GPU head-to-head comparison
 // ---------------------------------------------------------------------------
 
