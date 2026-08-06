@@ -1,21 +1,20 @@
 """LLMSpecAdapter — segunda fonte via extração de texto, para o que a tabela
-curada não cobre (chipset novo, modelo fora do CPU_SOCKET).
+curada / o catálogo semeado não confirmam sozinhos.
 
 Mesmo padrão de integridade do ``LLMVisionAdapter`` (services/ingestion/
-visuals/vision_adapter.py): decodificação restrita a um enum FECHADO (o
-modelo escolhe de uma lista, nunca escreve texto livre), confiança baixa
-descarta, e nunca é a única fonte que decide um atributo crítico sozinha —
-isso é o ``reconcile()`` que garante, não este adapter.
+visuals/vision_adapter.py): decodificação restrita (enum fechado para
+socket/ram_type; faixa numérica sã para dimensão), confiança baixa descarta,
+e nunca é a única fonte que decide um atributo crítico sozinha — isso é o
+``reconcile()`` que garante, não este adapter.
 
 BLOQUEADO POR DADOS, por enquanto (mesmo estado do LLMVisionAdapter): só
-funciona quando (a) o produto tem ``specs.source_url`` (página do fabricante
-ou datasheet — não existe hoje no catálogo, entra com o feed de afiliado) e
-(b) ``MINIMAX_API_KEY`` está no ambiente do pcb_api. Sem qualquer um dos
-dois, ``fetch()`` devolve lista vazia — nunca inventa.
+funciona quando (a) o produto tem ``specs.source_url`` + texto já buscado
+(``specs.source_text`` — não existe hoje no catálogo, entra com o feed de
+afiliado/scraper) e (b) ``MINIMAX_API_KEY`` está no ambiente do pcb_api. Sem
+qualquer um dos dois, ``fetch()`` devolve lista vazia — nunca inventa.
 
 Default MiniMax por decisão de custo do founder (mesma decisão do
-LLMVisionAdapter, ver visuals/backends.py) — texto é mais barato ainda que
-visão, mas a decisão de fornecedor é a mesma.
+LLMVisionAdapter, ver visuals/backends.py).
 """
 from __future__ import annotations
 
@@ -28,10 +27,19 @@ from .base import RawSpecObservation
 
 log = logging.getLogger("pcb.specs.llm")
 
-# enum fechado por atributo — o modelo escolhe daqui, nunca texto livre
+#: atributo categórico -> enum fechado
 _ENUMS: dict[str, tuple[str, ...]] = {
     "socket": ("AM4", "AM5", "LGA1200", "LGA1700", "LGA1851", "unknown"),
     "ram_type": ("DDR4", "DDR5", "unknown"),
+}
+
+#: atributo dimensional -> faixa sã em mm (fora disso é rejeitado como
+#: alucinação, não "confiança baixa" — dimensão de PC não sai desse universo)
+_NUMERIC_RANGES_MM: dict[str, tuple[float, float]] = {
+    "length_mm": (100.0, 450.0),
+    "height_mm": (25.0, 200.0),
+    "max_gpu_length_mm": (150.0, 500.0),
+    "max_cooler_height_mm": (100.0, 250.0),
 }
 
 MIN_CONFIDENCE = 0.6
@@ -47,20 +55,8 @@ def _strip_fences(text: str) -> str:
     return t[i:j + 1] if i >= 0 and j > i else t
 
 
-def _json_schema(attribute: str) -> dict:
-    return {
-        "type": "object",
-        "properties": {
-            "value": {"type": "string", "enum": list(_ENUMS[attribute])},
-            "confidence": {"type": "number"},
-        },
-        "required": ["value", "confidence"],
-        "additionalProperties": False,
-    }
-
-
 class LLMSpecAdapter:
-    """Extrai um atributo fechado a partir do texto de uma página/datasheet."""
+    """Extrai um atributo (categórico ou dimensional) do texto de uma página."""
 
     source_name = "llm_extraction"
 
@@ -82,25 +78,24 @@ class LLMSpecAdapter:
             return []  # sem página == sem o que ler, não inventa
 
         cat = str(product.get("category") or "")
-        attributes = ("socket",) if cat == "cpu" else ("socket", "ram_type") if cat == "motherboard" else ()
+        categorical = ("socket",) if cat == "cpu" else ("socket", "ram_type") if cat == "motherboard" else ()
+        numeric = {
+            "gpu": ("length_mm",), "case": ("max_gpu_length_mm", "max_cooler_height_mm"),
+            "cooler": ("height_mm",),
+        }.get(cat, ())
+
         out: list[RawSpecObservation] = []
-        for attr in attributes:
-            obs = self._extract_one(product, attr, source_url, page_text)
+        for attr in categorical:
+            obs = self._extract_categorical(product, attr, source_url, page_text)
+            if obs is not None:
+                out.append(obs)
+        for attr in numeric:
+            obs = self._extract_numeric(product, attr, source_url, page_text)
             if obs is not None:
                 out.append(obs)
         return out
 
-    def _extract_one(self, product: dict, attribute: str, source_url: str,
-                     page_text: str) -> Optional[RawSpecObservation]:
-        enum_values = ", ".join(_ENUMS[attribute])
-        prompt = (
-            f"Produto: {product.get('name')}\n\n"
-            f"Texto da página do fabricante:\n{page_text[:4000]}\n\n"
-            f"Qual é o valor de '{attribute}' deste produto? Responda só com um "
-            f"destes valores: {enum_values}. Se o texto não disser claramente, "
-            f"responda 'unknown'. Dê também 'confidence' entre 0 e 1 — quão "
-            f"claro o texto é sobre isso (ambíguo ou implícito = abaixo de 0.5)."
-        )
+    def _call(self, prompt: str) -> Optional[dict]:
         try:
             import httpx
             payload = {
@@ -118,18 +113,60 @@ class LLMSpecAdapter:
                                     "Content-Type": "application/json"})
             r.raise_for_status()
             text = r.json()["choices"][0]["message"]["content"]
-            data = json.loads(_strip_fences(text))
+            return json.loads(_strip_fences(text))
         except Exception as e:
             log.warning("specs/llm: %s", e)
             return None
 
+    def _extract_categorical(self, product: dict, attribute: str, source_url: str,
+                             page_text: str) -> Optional[RawSpecObservation]:
+        enum_values = ", ".join(_ENUMS[attribute])
+        prompt = (
+            f"Produto: {product.get('name')}\n\n"
+            f"Texto da página do fabricante:\n{page_text[:4000]}\n\n"
+            f"Qual é o valor de '{attribute}' deste produto? Responda só com um "
+            f"destes valores: {enum_values}. Se o texto não disser claramente, "
+            f"responda 'unknown'. Dê também 'confidence' entre 0 e 1 — quão "
+            f"claro o texto é sobre isso (ambíguo ou implícito = abaixo de 0.5)."
+        )
+        data = self._call(prompt)
+        if data is None:
+            return None
         value = data.get("value")
         confidence = float(data.get("confidence") or 0.0)
         if value not in _ENUMS[attribute] or value == "unknown" or confidence < MIN_CONFIDENCE:
-            return None  # abaixo da barra ou fora do enum — não promove, não inventa
-
+            return None
         return RawSpecObservation(
             product_sku=str(product["sku"]), attribute=attribute, value=value,
+            source_name=self.source_name, source_url=source_url, confidence=confidence,
+            notes="extraído por LLM (MiniMax) do texto da página do fabricante",
+        )
+
+    def _extract_numeric(self, product: dict, attribute: str, source_url: str,
+                         page_text: str) -> Optional[RawSpecObservation]:
+        lo, hi = _NUMERIC_RANGES_MM[attribute]
+        prompt = (
+            f"Produto: {product.get('name')}\n\n"
+            f"Texto da página do fabricante:\n{page_text[:4000]}\n\n"
+            f"Qual é o valor de '{attribute}' (em milímetros) deste produto? "
+            f"Responda um número entre {lo:g} e {hi:g}. Se o texto não disser "
+            f"claramente, use null. Dê também 'confidence' entre 0 e 1 — quão "
+            f"claro o texto é sobre isso (ambíguo/estimado = abaixo de 0.5)."
+        )
+        data = self._call(prompt)
+        if data is None:
+            return None
+        value = data.get("value")
+        confidence = float(data.get("confidence") or 0.0)
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return None
+        # faixa sã: fora disso é alucinação, não "baixa confiança" — rejeita sempre
+        if not (lo <= value <= hi) or confidence < MIN_CONFIDENCE:
+            return None
+        return RawSpecObservation(
+            product_sku=str(product["sku"]), attribute=attribute, value=f"{value:g}",
             source_name=self.source_name, source_url=source_url, confidence=confidence,
             notes="extraído por LLM (MiniMax) do texto da página do fabricante",
         )

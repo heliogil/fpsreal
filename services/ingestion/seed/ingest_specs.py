@@ -23,7 +23,12 @@ import sys
 
 import psycopg2
 
-from specs import LLMSpecAdapter, ReferenceAdapter, reconcile
+from specs import CatalogSeedAdapter, LLMSpecAdapter, ReferenceAdapter, reconcile
+
+#: categorias cobertas e por que: cpu/motherboard = socket+RAM (categórico,
+#: tabela oficial); gpu/case/cooler = dimensão física (comprimento/altura,
+#: tolerância em mm — ver specs.reconcile)
+_INGEST_CATEGORIES = ("cpu", "motherboard", "gpu", "case", "cooler")
 
 DDL = """
 CREATE TABLE IF NOT EXISTS spec_observations (
@@ -62,6 +67,17 @@ _VALID_VALUES = {
     "ram_type": {"DDR4", "DDR5"},
 }
 
+#: faixa sã (mm) pra --resolve de atributo dimensional — mesma faixa do
+#: LLMSpecAdapter (specs/llm_adapter.py), duplicada de propósito: são dois
+#: pontos de entrada diferentes (humano vs. IA), a checagem não deve
+#: depender de importar um módulo do outro
+_NUMERIC_RANGES_MM = {
+    "length_mm": (100.0, 450.0),
+    "height_mm": (25.0, 200.0),
+    "max_gpu_length_mm": (150.0, 500.0),
+    "max_cooler_height_mm": (100.0, 250.0),
+}
+
 
 def _connect():
     dsn = os.environ.get("DATABASE_URL")
@@ -73,7 +89,10 @@ def _connect():
 
 
 def _adapters() -> list:
-    out = [ReferenceAdapter()]
+    # ReferenceAdapter só responde por cpu/motherboard, CatalogSeedAdapter só
+    # por gpu/case/cooler — cada um devolve [] fora da sua categoria, por
+    # isso os dois entram sempre na lista, sem condicional por categoria aqui
+    out = [ReferenceAdapter(), CatalogSeedAdapter()]
     llm = LLMSpecAdapter()
     if llm.available():
         out.append(llm)
@@ -84,7 +103,8 @@ def ingest(cur) -> tuple[int, int, int]:
     adapters = _adapters()
     cur.execute(
         "SELECT id, sku, name, category, specs FROM products "
-        "WHERE is_active AND category IN ('cpu','motherboard')"
+        "WHERE is_active AND category IN %s",
+        (_INGEST_CATEGORIES,),
     )
     rows = cur.fetchall()
 
@@ -138,17 +158,36 @@ def ingest(cur) -> tuple[int, int, int]:
     return confirmed, conflict, insufficient
 
 
+#: atributos que este ingestor é responsável por confirmar, por categoria —
+#: usado só pro relatório de --status, não pela geração de observações
+_TRACKED_ATTRIBUTES = {
+    "cpu": ("socket",),
+    "motherboard": ("socket", "ram_type"),
+    "gpu": ("length_mm",),
+    "case": ("max_gpu_length_mm", "max_cooler_height_mm"),
+    "cooler": ("height_mm",),
+}
+
+
 def status(cur) -> None:
-    cur.execute("""
-        SELECT p.category, count(*) FILTER (WHERE p.specs ? 'socket') AS com_socket,
-               count(*) FILTER (WHERE p.category='motherboard' AND p.specs ? 'ram_type') AS com_ram,
-               count(*) AS total
-        FROM products p WHERE p.category IN ('cpu','motherboard') AND p.is_active
-        GROUP BY p.category ORDER BY p.category
-    """)
-    print("  categoria        c/ socket  c/ ram_type  total")
-    for cat, ws, wr, tot in cur.fetchall():
-        print(f"  {cat:16} {ws:>9}  {wr:>11}  {tot:>5}")
+    cur.execute(
+        "SELECT category, count(*) FROM products "
+        "WHERE category IN %s AND is_active GROUP BY category",
+        (_INGEST_CATEGORIES,),
+    )
+    totals = dict(cur.fetchall())
+
+    print("  categoria        atributo               confirmado  total")
+    for cat in _INGEST_CATEGORIES:
+        total = totals.get(cat, 0)
+        for attribute in _TRACKED_ATTRIBUTES[cat]:
+            cur.execute(
+                "SELECT count(*) FROM products WHERE category = %s AND is_active "
+                "AND specs ? %s",
+                (cat, attribute),
+            )
+            (confirmed,) = cur.fetchone()
+            print(f"  {cat:16} {attribute:22} {confirmed:>10}  {total:>5}")
 
     cur.execute("SELECT count(*) FROM spec_conflicts WHERE resolved_at IS NULL")
     (pending,) = cur.fetchone()
@@ -173,10 +212,25 @@ def list_conflicts(cur) -> None:
                  f"(confiança {cand['confidence']})")
 
 
-def resolve(cur, sku: str, attribute: str, value: str, by: str) -> bool:
+def _validate_resolve_value(attribute: str, value: str) -> None:
     valid = _VALID_VALUES.get(attribute)
-    if valid is not None and value not in valid:
-        sys.exit(f"valor inválido para {attribute}: {value!r} (aceites: {sorted(valid)})")
+    if valid is not None:
+        if value not in valid:
+            sys.exit(f"valor inválido para {attribute}: {value!r} (aceites: {sorted(valid)})")
+        return
+    num_range = _NUMERIC_RANGES_MM.get(attribute)
+    if num_range is not None:
+        try:
+            num = float(value)
+        except ValueError:
+            sys.exit(f"{attribute} precisa de um número (mm), recebi {value!r}")
+        lo, hi = num_range
+        if not (lo <= num <= hi):
+            sys.exit(f"{attribute}={num}mm fora da faixa sã {lo:g}-{hi:g}mm")
+
+
+def resolve(cur, sku: str, attribute: str, value: str, by: str) -> bool:
+    _validate_resolve_value(attribute, value)
     cur.execute("SELECT id, specs FROM products WHERE sku = %s", (sku,))
     row = cur.fetchone()
     if row is None:

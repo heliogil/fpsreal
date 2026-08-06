@@ -1,14 +1,27 @@
 """Reconciliação multi-fonte — decide o que vira ``products.specs`` e o que
 vira fila de conflito. Esta é a peça que a redundância existe para proteger.
 
-REGRA (para atributos CRÍTICOS — os que decidem se uma build liga):
-  - uma fonte só ISOLADA promove se tiver confiança >= ``AUTHORITATIVE`` (uma
-    fonte autoritativa e inequívoca, ex.: soquete de CPU);
-  - abaixo disso, precisa de DUAS fontes independentes concordando;
+DOIS TIPOS DE ATRIBUTO, DUAS REGRAS DE ACORDO:
+
+  - CATEGÓRICO (socket, ram_type) — fontes têm de bater o valor EXATO.
+  - DIMENSIONAL (length_mm, max_gpu_length_mm, ...) — é medida física, não
+    identidade; fontes que caem dentro de ``DIMENSIONAL_TOLERANCE_MM`` uma da
+    outra CONCORDAM, e o valor promovido é o mais CONSERVADOR (nunca o que
+    faria uma peça parecer caber quando pode não caber — ver
+    ``CONSERVATIVE_DIRECTION``).
+
+REGRA DE CONFIANÇA (igual para os dois tipos, em atributos CRÍTICOS — os que
+decidem se uma build liga):
+  - uma fonte só ISOLADA promove se tiver confiança >= ``AUTHORITATIVE`` (ex.:
+    tabela oficial de chipset — não existe equivalente pra dimensão física,
+    por isso nenhuma fonte de dimensão bate essa barra sozinha hoje);
+  - abaixo disso, precisa de DUAS fontes independentes concordando (exato ou
+    dentro da tolerância, conforme o tipo);
   - fontes concordam mas nenhuma bate a barra -> ``insufficient`` (fica sem
-    valor, nunca builda com incerteza silenciosa);
-  - fontes DIVERGEM em valor -> ``conflict`` (nunca resolve por maioria/voto;
-    fica para revisão humana).
+    valor, nunca builda com incerteza silenciosa — é o estado honesto de hoje
+    pra GPU/gabinete: só existe UMA fonte real, o catálogo semeado);
+  - fontes DIVERGEM (fora da tolerância, no caso dimensional) -> ``conflict``
+    (nunca resolve por maioria/voto; fica para revisão humana).
 
 Atributos fora de ``CRITICAL_ATTRIBUTES`` usam a barra mais baixa de sempre
 (uma fonte de confiança razoável basta) — a redundância pesada é só onde
@@ -24,7 +37,39 @@ from .base import RawSpecObservation
 Status = Literal["confirmed", "conflict", "insufficient"]
 
 #: atributos onde um valor errado recomenda uma build fisicamente incompatível
-CRITICAL_ATTRIBUTES = {"socket", "ram_type"}
+CRITICAL_ATTRIBUTES = {
+    "socket", "ram_type",
+    "length_mm", "height_mm", "max_gpu_length_mm", "max_cooler_height_mm",
+}
+
+#: tolerância (mm) para duas leituras de dimensão "concordarem" — fabricante
+#: arredonda, loja copia errado por 1-2mm, isso é normal e não é divergência
+DIMENSIONAL_TOLERANCE_MM: dict[str, float] = {
+    "length_mm": 5.0,
+    "height_mm": 5.0,
+    "max_gpu_length_mm": 5.0,
+    "max_cooler_height_mm": 5.0,
+}
+
+#: quando fontes concordam (dentro da tolerância), qual extremo promover.
+#: "size" = tamanho da PEÇA -> assume o MAIOR (pior caso: a peça é maior do
+#: que qualquer leitura individual disse, nunca menor).
+#: "capacity" = capacidade do GABINETE -> assume o MENOR (pior caso: o
+#: gabinete cabe MENOS do que qualquer leitura individual disse).
+_CONSERVATIVE_KIND: dict[str, str] = {
+    "length_mm": "size",
+    "height_mm": "size",
+    "max_gpu_length_mm": "capacity",
+    "max_cooler_height_mm": "capacity",
+}
+
+
+def _conservative_value(attribute: str, values: list[float]) -> float:
+    kind = _CONSERVATIVE_KIND.get(attribute)
+    if kind == "capacity":
+        return min(values)
+    return max(values)   # "size" e qualquer numérico sem regra definida: pior caso = maior
+
 
 #: confiança mínima para UMA fonte isolada promover um atributo crítico
 AUTHORITATIVE_CONFIDENCE = 0.95
@@ -57,6 +102,13 @@ def _candidate(o: RawSpecObservation) -> dict:
     }
 
 
+def _to_float(value: str) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def reconcile(observations: list[RawSpecObservation]) -> ReconcileResult:
     """``observations`` deve conter só um (product_sku, attribute) — o
     chamador agrupa antes de invocar isto (ver ``seed/ingest_specs.py``)."""
@@ -76,17 +128,23 @@ def reconcile(observations: list[RawSpecObservation]) -> ReconcileResult:
             "(ambiguidade documentada pela fonte, não erro de leitura)",
         )
 
-    distinct_values = {o.value for o in usable}
     is_critical = attribute in CRITICAL_ATTRIBUTES
     floor = AUTHORITATIVE_CONFIDENCE if is_critical else NON_CRITICAL_CONFIDENCE
+    tolerance = DIMENSIONAL_TOLERANCE_MM.get(attribute)
 
+    if tolerance is not None:
+        return _reconcile_dimensional(sku, attribute, usable, candidates, is_critical, floor, tolerance)
+    return _reconcile_categorical(sku, attribute, usable, candidates, is_critical, floor)
+
+
+def _reconcile_categorical(sku, attribute, usable, candidates, is_critical, floor) -> ReconcileResult:
+    distinct_values = {o.value for o in usable}
     if len(distinct_values) > 1:
         return ReconcileResult(
             sku, attribute, "conflict", None, 0.0, candidates,
             f"fontes divergem: {sorted(distinct_values)!r} — nunca resolvido por maioria",
         )
 
-    # todas as fontes usáveis concordam no mesmo valor
     value = next(iter(distinct_values))
     best_confidence = max(o.confidence for o in usable)
     independent_sources = {o.source_name for o in usable}
@@ -100,4 +158,40 @@ def reconcile(observations: list[RawSpecObservation]) -> ReconcileResult:
         sku, attribute, "insufficient", None, best_confidence, candidates,
         f"confiança {best_confidence:.2f} abaixo da barra {floor:.2f} para atributo "
         f"{'crítico' if is_critical else 'não-crítico'}, e só {len(independent_sources)} fonte(s)",
+    )
+
+
+def _reconcile_dimensional(sku, attribute, usable, candidates, is_critical, floor, tolerance) -> ReconcileResult:
+    numeric = [(o, _to_float(o.value)) for o in usable]
+    numeric = [(o, v) for o, v in numeric if v is not None]
+    if not numeric:
+        return ReconcileResult(sku, attribute, "conflict", None, 0.0, candidates,
+                               "nenhuma observação numérica válida (valor não parseável)")
+
+    values = [v for _, v in numeric]
+    if max(values) - min(values) > tolerance:
+        return ReconcileResult(
+            sku, attribute, "conflict", None, 0.0, candidates,
+            f"fontes divergem além da tolerância de {tolerance}mm: "
+            f"{sorted(set(values))!r} — nunca resolvido por maioria",
+        )
+
+    # dentro da tolerância: todas "concordam" — promove o extremo conservador,
+    # nunca uma média que possa mascarar um valor real maior/menor
+    resolved = _conservative_value(attribute, values)
+    best_confidence = max(o.confidence for o, _ in numeric)
+    independent_sources = {o.source_name for o, _ in numeric}
+
+    if best_confidence >= floor or (is_critical and len(independent_sources) >= 2):
+        return ReconcileResult(
+            sku, attribute, "confirmed", f"{resolved:g}", best_confidence, candidates,
+            ("fonte autoritativa" if best_confidence >= floor
+             else f"{len(independent_sources)} fontes independentes concordam (±{tolerance}mm)")
+            + " — valor conservador",
+        )
+
+    return ReconcileResult(
+        sku, attribute, "insufficient", None, best_confidence, candidates,
+        f"confiança {best_confidence:.2f} abaixo da barra {floor:.2f} para atributo crítico, "
+        f"e só {len(independent_sources)} fonte(s) — precisa de segunda fonte independente",
     )

@@ -85,6 +85,33 @@ _VALID_VALUES = {
     "ram_type": {"DDR4", "DDR5"},
 }
 
+#: mesma faixa sã do specs/llm_adapter.py e seed/ingest_specs.py — duplicada
+#: de propósito, ver nota em ingest_specs.py
+_NUMERIC_RANGES_MM = {
+    "length_mm": (100.0, 450.0),
+    "height_mm": (25.0, 200.0),
+    "max_gpu_length_mm": (150.0, 500.0),
+    "max_cooler_height_mm": (100.0, 250.0),
+}
+
+
+def _validate_resolve_value(attribute: str, value: str) -> None:
+    valid = _VALID_VALUES.get(attribute)
+    if valid is not None:
+        if value not in valid:
+            raise HTTPException(status_code=422, detail=f"valor inválido: {sorted(valid)}")
+        return
+    num_range = _NUMERIC_RANGES_MM.get(attribute)
+    if num_range is None:
+        raise HTTPException(status_code=422, detail=f"atributo desconhecido: {attribute!r}")
+    try:
+        num = float(value)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"{attribute} precisa de um número (mm)")
+    lo, hi = num_range
+    if not (lo <= num <= hi):
+        raise HTTPException(status_code=422, detail=f"{attribute}={num}mm fora da faixa sã {lo:g}-{hi:g}mm")
+
 
 @router.post("/resolve")
 async def resolve_conflict(
@@ -93,11 +120,7 @@ async def resolve_conflict(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     _check_token(token)
-    valid = _VALID_VALUES.get(body.attribute)
-    if valid is None:
-        raise HTTPException(status_code=422, detail=f"atributo desconhecido: {body.attribute!r}")
-    if body.value not in valid:
-        raise HTTPException(status_code=422, detail=f"valor inválido: {sorted(valid)}")
+    _validate_resolve_value(body.attribute, body.value)
 
     row = (await db.execute(
         text("SELECT id FROM products WHERE sku = :sku"), {"sku": body.sku}
