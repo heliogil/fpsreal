@@ -283,6 +283,45 @@ CREATE TABLE IF NOT EXISTS product_visuals (
 );
 
 -- ============================================================
+-- SPEC OBSERVATIONS — dependencia multi-fonte com reconciliacao
+-- Cada fonte grava sua alegacao sem sobrescrever as outras (append-only,
+-- como price_history). products.specs so recebe um valor quando a
+-- reconciliacao decide que esta confirmado -- nunca escreve direto.
+-- Ver services/ingestion/specs/.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS spec_observations (
+    id            SERIAL PRIMARY KEY,
+    product_id    INT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    attribute     VARCHAR(100) NOT NULL,
+    value         TEXT NOT NULL,
+    source_name   VARCHAR(100) NOT NULL,
+    source_url    TEXT,
+    source_date   DATE,
+    confidence    NUMERIC(3,2) NOT NULL DEFAULT 1.00 CHECK (confidence BETWEEN 0 AND 1),
+    notes         TEXT,
+    fetched_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_spec_observations_product_attr
+    ON spec_observations(product_id, attribute);
+
+-- Conflito nao resolvido entre fontes -- portao: resolved_at NULL = nunca
+-- promovido a products.specs, mesmo padrao de reviewed_at em product_visuals.
+CREATE TABLE IF NOT EXISTS spec_conflicts (
+    id             SERIAL PRIMARY KEY,
+    product_id     INT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    attribute      VARCHAR(100) NOT NULL,
+    candidates     JSONB NOT NULL,
+    reason         TEXT,
+    detected_at    TIMESTAMPTZ DEFAULT NOW(),
+    resolved_at    TIMESTAMPTZ,
+    resolved_value TEXT,
+    resolved_by    TEXT,
+    UNIQUE(product_id, attribute)
+);
+CREATE INDEX IF NOT EXISTS idx_spec_conflicts_open
+    ON spec_conflicts(product_id, attribute) WHERE resolved_at IS NULL;
+
+-- ============================================================
 -- SEED — lojas parceiras
 -- ============================================================
 
