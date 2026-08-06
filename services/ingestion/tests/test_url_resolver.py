@@ -118,6 +118,20 @@ def test_best_match_prefers_product_path_over_news_after_locale_collapse():
     assert result == "https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5090/"
 
 
+def test_best_match_ignores_product_hint_inside_news_slug():
+    # regressão real (2026-08-06): a notícia
+    # ".../news/win-rtx-4060-ti-graphics-cards/" contém a substring
+    # "graphics-cards" no PRÓPRIO SLUG do título — sem exigir barra dos dois
+    # lados, isso empatava com a página de produto de verdade e nada resolvia
+    urls = [
+        "https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4060-4060ti/",
+        "https://www.nvidia.com/en-us/geforce/news/win-rtx-4060-ti-graphics-cards/",
+        "https://www.nvidia.com/en-us/geforce/news/geforce-rtx-4060-game-ready-driver/",
+    ]
+    result = best_match_url(urls, "GeForce RTX 4060")
+    assert result == "https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4060-4060ti/"
+
+
 def test_best_match_still_refuses_when_multiple_product_pages_tie_after_locale_collapse():
     # se DEPOIS de colapsar idioma e preferir produto sobre notícia ainda
     # sobrar mais de uma página de produto DIFERENTE, continua sem escolher

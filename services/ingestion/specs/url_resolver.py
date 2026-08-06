@@ -101,8 +101,11 @@ _LOCALE_PREFIX_RE = re.compile(r"^(https?://[^/]+)/[a-z]{2}(-[a-z]{2,7})?/", re.
 #: sinal estrutural de página de PRODUTO vs. conteúdo editorial — não é
 #: palpite sobre o conteúdo, é o próprio site categorizando a página pelo
 #: path. Só desempata DENTRO do grupo de maior pontuação, nunca substitui o
-#: overlap de tokens.
-_PRODUCT_PATH_HINTS = ("graphics-cards", "/product/", "/products/", "/p/", "/item/")
+#: overlap de tokens. Achado real: "graphics-cards" como substring solta
+#: (sem barra) casava também com o SLUG de notícia
+#: ".../news/win-rtx-4060-ti-graphics-cards/" — o hint tem de vir cercado
+#: de barra (segmento de path de verdade), nunca substring livre.
+_PRODUCT_PATH_HINTS = ("/graphics-cards/", "/product/", "/products/", "/p/", "/item/")
 _EDITORIAL_PATH_HINTS = ("/news/", "/blog/", "/article/", "/press/", "/events/", "/promotions/")
 
 
