@@ -102,15 +102,24 @@ def _adapters() -> list:
 def ingest(cur) -> tuple[int, int, int]:
     adapters = _adapters()
     cur.execute(
-        "SELECT id, sku, name, category, specs FROM products "
-        "WHERE is_active AND category IN %s",
+        """SELECT p.id, p.sku, p.name, p.category, p.specs, u.url, u.fetched_text
+           FROM products p LEFT JOIN product_source_urls u ON u.product_id = p.id
+           WHERE p.is_active AND p.category IN %s""",
         (_INGEST_CATEGORIES,),
     )
     rows = cur.fetchall()
 
     confirmed = conflict = insufficient = 0
-    for pid, sku, name, category, specs in rows:
-        product = {"sku": sku, "name": name, "category": category, "specs": specs or {}}
+    for pid, sku, name, category, specs, source_url, source_text in rows:
+        # source_url/source_text nunca são persistidos em products.specs — só
+        # existem aqui, na memória, pro LLMSpecAdapter consumir nesta corrida.
+        # A tabela de origem é product_source_urls (seed/resolve_source_urls.py),
+        # que NÃO toca a rede de novo — só ele faz isso, e com teto/pausa.
+        product_specs = dict(specs or {})
+        if source_url and source_text:
+            product_specs["source_url"] = source_url
+            product_specs["source_text"] = source_text
+        product = {"sku": sku, "name": name, "category": category, "specs": product_specs}
 
         by_attribute: dict[str, list] = {}
         for adapter in adapters:

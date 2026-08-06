@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from typing import Optional
 
 from .base import RawSpecObservation
@@ -44,9 +45,27 @@ _NUMERIC_RANGES_MM: dict[str, tuple[float, float]] = {
 
 MIN_CONFIDENCE = 0.6
 
+#: achado real (2026-08-06): página de produto tem MUITO boilerplate de nav/
+#: menu antes da ficha técnica de verdade — "GPU LENGTH CLEARANCE 392mm" só
+#: aparecia depois do caractere 8000 numa página de ~9500. 4000 cortava antes
+#: da ficha chegar. strip_html não distingue conteúdo principal de boilerplate
+#: (ver notas do módulo url_resolver), então a defesa aqui é so mandar mais
+#: texto — mais barato que construir extração de "conteúdo principal".
+PAGE_TEXT_CHAR_LIMIT = 12000
+
+
+#: achado real (2026-08-06, rodada ao vivo): MiniMax-M3 é modelo de RACIOCÍNIO
+#: — a resposta vem com um bloco <think>...</think> antes do JSON, tudo no
+#: mesmo campo "content" (não é canal separado). Com max_tokens curto, o
+#: raciocínio consome o orçamento inteiro e a resposta trunca ANTES do JSON —
+#: dá erro "Expecting value" no json.loads. Remover o <think> explicitamente
+#: (não só cortar por ```/chaves) torna a extração imune a chaves/chaves que
+#: por acaso apareçam DENTRO do raciocínio.
+_THINK_RE = re.compile(r"(?is)^\s*<think>.*?</think>\s*")
+
 
 def _strip_fences(text: str) -> str:
-    t = text.strip()
+    t = _THINK_RE.sub("", text.strip()).strip()
     if t.startswith("```"):
         t = t.split("\n", 1)[-1] if "\n" in t else t
         if t.rstrip().endswith("```"):
@@ -105,15 +124,25 @@ class LLMSpecAdapter:
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.1,
-                "max_tokens": 200,
+                # generoso de propósito: MiniMax-M3 gasta uma fatia do orçamento
+                # "pensando" (bloco <think>, ver _strip_fences) antes do JSON —
+                # 200 truncava o raciocínio e nunca chegava na resposta
+                "max_tokens": 1500,
                 "response_format": {"type": "json_object"},
             }
-            r = httpx.post(f"{self.base}/chat/completions", json=payload, timeout=60.0,
+            r = httpx.post(f"{self.base}/chat/completions", json=payload, timeout=90.0,
                            headers={"Authorization": f"Bearer {self.key}",
                                     "Content-Type": "application/json"})
             r.raise_for_status()
             text = r.json()["choices"][0]["message"]["content"]
-            return json.loads(_strip_fences(text))
+            parsed = json.loads(_strip_fences(text))
+            # achado real: às vezes o modelo devolve só um número solto (JSON
+            # válido, mas não o objecto pedido) — "392" desparsa pra float,
+            # não pra dict, e quebraria .get() em quem chama isto
+            if not isinstance(parsed, dict):
+                log.warning("specs/llm: resposta não é um objeto JSON: %r", parsed)
+                return None
+            return parsed
         except Exception as e:
             log.warning("specs/llm: %s", e)
             return None
@@ -123,11 +152,13 @@ class LLMSpecAdapter:
         enum_values = ", ".join(_ENUMS[attribute])
         prompt = (
             f"Produto: {product.get('name')}\n\n"
-            f"Texto da página do fabricante:\n{page_text[:4000]}\n\n"
-            f"Qual é o valor de '{attribute}' deste produto? Responda só com um "
-            f"destes valores: {enum_values}. Se o texto não disser claramente, "
-            f"responda 'unknown'. Dê também 'confidence' entre 0 e 1 — quão "
-            f"claro o texto é sobre isso (ambíguo ou implícito = abaixo de 0.5)."
+            f"Texto da página do fabricante:\n{page_text[:PAGE_TEXT_CHAR_LIMIT]}\n\n"
+            f"Qual é o valor de '{attribute}' deste produto? Responda em JSON "
+            f"EXATAMENTE neste formato: {{\"value\": <um destes: {enum_values}>, "
+            f"\"confidence\": <número 0 a 1>}}. Se o texto não disser claramente, "
+            f"use \"value\": \"unknown\". 'confidence' é quão claro o texto é "
+            f"sobre isso (ambíguo ou implícito = abaixo de 0.5). Use a chave "
+            f"\"value\" — não o nome do atributo."
         )
         data = self._call(prompt)
         if data is None:
@@ -147,11 +178,13 @@ class LLMSpecAdapter:
         lo, hi = _NUMERIC_RANGES_MM[attribute]
         prompt = (
             f"Produto: {product.get('name')}\n\n"
-            f"Texto da página do fabricante:\n{page_text[:4000]}\n\n"
+            f"Texto da página do fabricante:\n{page_text[:PAGE_TEXT_CHAR_LIMIT]}\n\n"
             f"Qual é o valor de '{attribute}' (em milímetros) deste produto? "
-            f"Responda um número entre {lo:g} e {hi:g}. Se o texto não disser "
-            f"claramente, use null. Dê também 'confidence' entre 0 e 1 — quão "
-            f"claro o texto é sobre isso (ambíguo/estimado = abaixo de 0.5)."
+            f"Responda em JSON EXATAMENTE neste formato: "
+            f"{{\"value\": <número entre {lo:g} e {hi:g}>, \"confidence\": <número 0 a 1>}}. "
+            f"Se o texto não disser claramente, use \"value\": null. 'confidence' é "
+            f"quão claro o texto é sobre isso (ambíguo/estimado = abaixo de 0.5). "
+            f"Use a chave \"value\" — não o nome do atributo."
         )
         data = self._call(prompt)
         if data is None:
