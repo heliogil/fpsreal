@@ -88,6 +88,48 @@ def test_best_match_picks_correctly_when_distinguishing_token_present():
     assert best_match_url(urls, "NZXT H5 Flow") == "https://nzxt.com/en-intl/products/h5-flow"
 
 
+def test_best_match_collapses_locale_duplicates_of_the_same_page():
+    # regressão real (2026-08-06): nvidia.com publica a MESMA página de
+    # produto em 8+ variantes de idioma — sem colapsar isso, elas empatam
+    # entre si pra sempre e NADA resolve, mesmo sem ambiguidade nenhuma
+    urls = [
+        "https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5090/",
+        "https://www.nvidia.com/en-gb/geforce/graphics-cards/50-series/rtx-5090/",
+        "https://www.nvidia.com/en-au/geforce/graphics-cards/50-series/rtx-5090/",
+        "https://www.nvidia.com/en-in/geforce/graphics-cards/50-series/rtx-5090/",
+    ]
+    result = best_match_url(urls, "GeForce RTX 5090")
+    # colapsou pra um grupo só -> escolhe alguma variante (de preferência en-us)
+    assert result == "https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5090/"
+
+
+def test_best_match_prefers_product_path_over_news_after_locale_collapse():
+    # regressão real: entre a página de produto (em N idiomas) e várias
+    # notícias de lançamento (também em N idiomas), a de produto tem de
+    # vencer — é sinal de estrutura do próprio site, não palpite de conteúdo
+    urls = [
+        "https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5090/",
+        "https://www.nvidia.com/en-gb/geforce/graphics-cards/50-series/rtx-5090/",
+        "https://www.nvidia.com/en-us/geforce/news/rtx-5090-5080-out-now/",
+        "https://www.nvidia.com/en-gb/geforce/news/rtx-5090-5080-out-now/",
+        "https://www.nvidia.com/en-us/geforce/news/win-superman-geforce-rtx-5090/",
+    ]
+    result = best_match_url(urls, "GeForce RTX 5090")
+    assert result == "https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5090/"
+
+
+def test_best_match_still_refuses_when_multiple_product_pages_tie_after_locale_collapse():
+    # se DEPOIS de colapsar idioma e preferir produto sobre notícia ainda
+    # sobrar mais de uma página de produto DIFERENTE, continua sem escolher
+    urls = [
+        "https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5090/",
+        "https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5090-laptop/",
+    ]
+    # "5090" está nas duas (desktop e laptop) — token-código sozinho não
+    # desambigua, e "laptop" não está no nome do produto pra desempatar
+    assert best_match_url(urls, "GeForce RTX 5090") is None
+
+
 # ── text_confirms — camada 2, a URL pode bater e a página ainda ser errada ──
 
 def test_text_confirms_requires_minimum_token_overlap():

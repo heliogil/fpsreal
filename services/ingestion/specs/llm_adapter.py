@@ -45,13 +45,17 @@ _NUMERIC_RANGES_MM: dict[str, tuple[float, float]] = {
 
 MIN_CONFIDENCE = 0.6
 
-#: achado real (2026-08-06): página de produto tem MUITO boilerplate de nav/
-#: menu antes da ficha técnica de verdade — "GPU LENGTH CLEARANCE 392mm" só
-#: aparecia depois do caractere 8000 numa página de ~9500. 4000 cortava antes
-#: da ficha chegar. strip_html não distingue conteúdo principal de boilerplate
-#: (ver notas do módulo url_resolver), então a defesa aqui é so mandar mais
-#: texto — mais barato que construir extração de "conteúdo principal".
-PAGE_TEXT_CHAR_LIMIT = 12000
+#: achado real (2026-08-06), duas vezes: "GPU LENGTH CLEARANCE 392mm" só
+#: aparecia depois do caractere 8000 numa página de ~9500 (Lian Li); "Länge
+#: 304 mm" só aparecia depois do 37000 numa página de ~40600 (NVIDIA, secção
+#: de specs técnicas fica DEPOIS de todo o conteúdo de marketing). strip_html
+#: não distingue conteúdo principal de boilerplate (ver notas do módulo
+#: url_resolver) — qualquer corte fixo vai cortar a ficha de alguma página
+#: mais cedo ou mais tarde. A defesa certa: MiniMax aqui é taxa FIXA, não
+#: cobra por token (decisão do founder, ver venture-studio/CLAUDE.md) — não
+#: tem custo real em mandar a página inteira, só cortar por segurança contra
+#: algo verdadeiramente descomunal.
+PAGE_TEXT_CHAR_LIMIT = 60000
 
 
 #: achado real (2026-08-06, rodada ao vivo): MiniMax-M3 é modelo de RACIOCÍNIO

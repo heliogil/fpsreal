@@ -91,16 +91,51 @@ def _is_model_code(token: str) -> bool:
     return any(ch.isdigit() for ch in token)
 
 
+#: prefixo de locale no início do path (ex. /en-us/, /pt-br/, /en-intl/,
+#: /de/) — achado real: sites grandes (NVIDIA) publicam a MESMA página de
+#: produto em 8+ variantes de idioma no sitemap. Sem normalizar isso, elas
+#: competem entre si e nunca uma vence — mas não são ambiguidade de verdade,
+#: é o MESMO conteúdo. Ver test_best_match_collapses_locale_duplicates.
+_LOCALE_PREFIX_RE = re.compile(r"^(https?://[^/]+)/[a-z]{2}(-[a-z]{2,7})?/", re.IGNORECASE)
+
+#: sinal estrutural de página de PRODUTO vs. conteúdo editorial — não é
+#: palpite sobre o conteúdo, é o próprio site categorizando a página pelo
+#: path. Só desempata DENTRO do grupo de maior pontuação, nunca substitui o
+#: overlap de tokens.
+_PRODUCT_PATH_HINTS = ("graphics-cards", "/product/", "/products/", "/p/", "/item/")
+_EDITORIAL_PATH_HINTS = ("/news/", "/blog/", "/article/", "/press/", "/events/", "/promotions/")
+
+
+def _normalize_locale(url: str) -> str:
+    return _LOCALE_PREFIX_RE.sub(r"\1/", url)
+
+
+def _path_quality(url: str) -> int:
+    low = url.lower()
+    if any(h in low for h in _PRODUCT_PATH_HINTS):
+        return 1
+    if any(h in low for h in _EDITORIAL_PATH_HINTS):
+        return -1
+    return 0
+
+
 def best_match_url(urls: list[str], product_name: str) -> Optional[str]:
     """Só aceita uma URL se ela contiver TODOS os tokens-código de modelo do
     nome (ver docstring do módulo). Entre as que passam, escolhe a de maior
     overlap total — MAS só se essa vencedora tiver uma margem clara sobre a
-    segunda colocada. Empate (ou quase) nunca é resolvido no palpite: dois
-    modelos da mesma linha (ex. "H5 Flow" vs "H5 Elite") costumam empatar no
-    único token-código que os dois compartilham, e escolher um dos dois seria
-    inventar qual produto é — mesmo princípio do reconcile() pra fontes que
-    divergem. Sem tokens-código no nome, exige TODOS os tokens restantes
-    (mais rígido, porque não há um identificador forte pra ancorar)."""
+    segunda colocada, com DOIS desempates seguros antes de desistir:
+
+      1. Locale: candidatos empatados que são a MESMA página em idiomas
+         diferentes colapsam num só (não é ambiguidade, é duplicata).
+      2. Estrutura: entre grupos ainda empatados, uma página de PRODUTO
+         (``/graphics-cards/``, ``/product/``...) vence uma editorial
+         (``/news/``, ``/blog/``...) — sinal do próprio site, não palpite.
+
+    Só depois desses dois, um empate real (ex. "H5 Flow" vs "H5 Elite" — são
+    produtos DIFERENTES da mesma linha, não duplicata) continua sem escolha
+    — inventar qual produto é seria o mesmo erro que o reconcile() nunca
+    comete pra fontes que divergem. Sem tokens-código no nome, exige TODOS
+    os tokens restantes (mais rígido, sem identificador forte pra ancorar)."""
     tokens = tokenize(product_name)
     model_codes = [t for t in tokens if _is_model_code(t)]
     required = model_codes if model_codes else tokens
@@ -117,11 +152,37 @@ def best_match_url(urls: list[str], product_name: str) -> Optional[str]:
     if not scored:
         return None
 
-    scored.sort(key=lambda pair: pair[0], reverse=True)
-    best_score, best_url = scored[0]
-    if len(scored) > 1 and scored[1][0] >= best_score:
-        return None   # empate real (ou quase) entre candidatos válidos — não escolhe
-    return best_url
+    top_score = max(s for s, _ in scored)
+    top = [u for s, u in scored if s == top_score]
+
+    # desempate 1: colapsa duplicatas de locale dentro do grupo de topo
+    by_normalized: dict[str, list[str]] = {}
+    for u in top:
+        by_normalized.setdefault(_normalize_locale(u), []).append(u)
+
+    if len(by_normalized) == 1:
+        group = next(iter(by_normalized.values()))
+        return _pick_canonical_locale(group)
+
+    # desempate 2: estrutura de path — produto vence editorial
+    groups = list(by_normalized.items())
+    qualities = [max(_path_quality(u) for u in variants) for _, variants in groups]
+    best_q = max(qualities)
+    winners = [g for g, q in zip(groups, qualities) if q == best_q]
+    if len(winners) == 1:
+        return _pick_canonical_locale(winners[0][1])
+
+    return None   # ambiguidade real entre produtos DIFERENTES — não escolhe
+
+
+def _pick_canonical_locale(urls: list[str]) -> str:
+    """Dentro de um grupo que já sabemos ser a MESMA página (só idioma
+    diferente), escolhe uma representante de forma determinística —
+    preferindo en-us/en quando existe, senão a primeira em ordem alfabética."""
+    for u in sorted(urls):
+        if re.search(r"//[^/]+/en(-us)?/", u, re.IGNORECASE):
+            return u
+    return sorted(urls)[0]
 
 
 def text_confirms(page_text: str, product_name: str,
