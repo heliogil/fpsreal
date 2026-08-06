@@ -15,6 +15,7 @@ from specs.url_resolver import (
     strip_html,
     text_confirms,
     tokenize,
+    _prioritize_nested,
 )
 
 
@@ -45,6 +46,18 @@ def test_best_match_requires_model_code_token_in_slug():
     ]
     match = best_match_url(urls, "GeForce RTX 5090")
     assert match == "https://www.example.com/graphics-cards/rtx-5090/"
+
+
+def test_best_match_does_not_require_vram_capacity_in_slug():
+    # regressão real (2026-08-06): "12GB" tem dígito e virava token-código
+    # OBRIGATÓRIO — a maioria das montadoras não bota capacidade no slug
+    # quando só existe uma variante, e nada resolvia
+    urls = [
+        "https://www.example.com/graphics-cards/rtx-3060/",
+        "https://www.example.com/news/rtx-3060-review/",
+    ]
+    match = best_match_url(urls, "GeForce RTX 3060 12GB")
+    assert match == "https://www.example.com/graphics-cards/rtx-3060/"
 
 
 def test_best_match_returns_none_when_no_url_has_model_code():
@@ -179,6 +192,33 @@ def test_parse_sitemap_xml_urlset():
     pages, nested = parse_sitemap_xml(xml)
     assert pages == ["https://example.com/a", "https://example.com/b"]
     assert nested == []
+
+
+def test_prioritize_nested_puts_preferred_region_first():
+    # regressão real (2026-08-06): ASUS lista 83 códigos de região em ordem
+    # alfabética começando por "africa-fr" — sem reconhecer "us" como região
+    # preferida, o orçamento de sub-sitemaps esgotava antes de chegar lá e
+    # ZERO produtos eram encontrados, pra qualquer GPU
+    nested = [
+        "https://www.asus.com/africa-fr/sitemap/africa-fr1.xml",
+        "https://www.asus.com/africa-fr/sitemap/africa-fr2.xml",
+        "https://www.asus.com/ar/sitemap/ar1.xml",
+        "https://www.asus.com/us/sitemap/us1.xml",
+        "https://www.asus.com/au/sitemap/au1.xml",
+    ]
+    ordered = _prioritize_nested(nested)
+    assert ordered[0] == "https://www.asus.com/us/sitemap/us1.xml"
+
+
+def test_prioritize_nested_falls_back_to_content_hints_without_region():
+    # sites sem prefixo de região (NZXT: sitemap_products_1.xml direto) —
+    # continua funcionando pelo sinal de conteúdo de sempre
+    nested = [
+        "https://nzxt.com/sitemap_blogs_1.xml",
+        "https://nzxt.com/sitemap_products_1.xml",
+    ]
+    ordered = _prioritize_nested(nested)
+    assert ordered[0] == "https://nzxt.com/sitemap_products_1.xml"
 
 
 def test_parse_sitemap_xml_index():

@@ -1,14 +1,23 @@
 """Reconciliação multi-fonte — decide o que vira ``products.specs`` e o que
 vira fila de conflito. Esta é a peça que a redundância existe para proteger.
 
-DOIS TIPOS DE ATRIBUTO, DUAS REGRAS DE ACORDO:
+TRÊS TIPOS DE ATRIBUTO, TRÊS REGRAS DE ACORDO:
 
   - CATEGÓRICO (socket, ram_type) — fontes têm de bater o valor EXATO.
-  - DIMENSIONAL (length_mm, max_gpu_length_mm, ...) — é medida física, não
-    identidade; fontes que caem dentro de ``DIMENSIONAL_TOLERANCE_MM`` uma da
-    outra CONCORDAM, e o valor promovido é o mais CONSERVADOR (nunca o que
-    faria uma peça parecer caber quando pode não caber — ver
-    ``CONSERVATIVE_DIRECTION``).
+  - DIMENSIONAL (max_gpu_length_mm, height_mm, ...) — é medida física de UMA
+    peça específica, não identidade; fontes que caem dentro de
+    ``DIMENSIONAL_TOLERANCE_MM`` uma da outra CONCORDAM, e o valor promovido
+    é o mais CONSERVADOR (nunca o que faria uma peça parecer caber quando
+    pode não caber — ver ``CONSERVATIVE_DIRECTION``).
+  - FAIXA DE MERCADO (``length_mm`` de GPU) — achado do founder (2026-08-06):
+    o comprimento de uma GPU é definido pela MONTADORA (ASUS/ASRock/
+    Sapphire/...), não pelo chip (NVIDIA/AMD) — a mesma RTX 5070 sai em
+    cards de ~200mm a ~330mm dependendo do modelo. Aqui DIVERGÊNCIA entre
+    fontes é o ESPERADO (fontes reais e independentes, cada uma um card
+    diferente de verdade) — não é erro pra rejeitar, é o mercado. Promove o
+    MAIOR valor visto, mas só com >= 2 montadoras reais e DIFERENTES (nunca
+    confia numa fabricante sozinha, mesmo com confiança alta) — ver
+    ``specs/aib_adapter.py``.
 
 REGRA DE CONFIANÇA (igual para os dois tipos, em atributos CRÍTICOS — os que
 decidem se uma build liga):
@@ -43,9 +52,10 @@ CRITICAL_ATTRIBUTES = {
 }
 
 #: tolerância (mm) para duas leituras de dimensão "concordarem" — fabricante
-#: arredonda, loja copia errado por 1-2mm, isso é normal e não é divergência
+#: arredonda, loja copia errado por 1-2mm, isso é normal e não é divergência.
+#: NÃO inclui length_mm de GPU — esse vai por MARKET_RANGE_ATTRIBUTES abaixo,
+#: porque ali divergência é o mercado, não erro de leitura.
 DIMENSIONAL_TOLERANCE_MM: dict[str, float] = {
-    "length_mm": 5.0,
     "height_mm": 5.0,
     "max_gpu_length_mm": 5.0,
     "max_cooler_height_mm": 5.0,
@@ -57,11 +67,17 @@ DIMENSIONAL_TOLERANCE_MM: dict[str, float] = {
 #: "capacity" = capacidade do GABINETE -> assume o MENOR (pior caso: o
 #: gabinete cabe MENOS do que qualquer leitura individual disse).
 _CONSERVATIVE_KIND: dict[str, str] = {
-    "length_mm": "size",
     "height_mm": "size",
     "max_gpu_length_mm": "capacity",
     "max_cooler_height_mm": "capacity",
 }
+
+#: atributos onde a fonte de verdade é o MERCADO (várias peças reais
+#: diferentes), não um fato único — ver docstring do módulo. Promove o
+#: MAIOR valor visto, exige montadoras DIFERENTES (nunca um número mínimo
+#: de observações da MESMA fonte).
+MARKET_RANGE_ATTRIBUTES = {"length_mm"}
+MIN_INDEPENDENT_MARKET_SOURCES = 2
 
 
 def _conservative_value(attribute: str, values: list[float]) -> float:
@@ -130,8 +146,11 @@ def reconcile(observations: list[RawSpecObservation]) -> ReconcileResult:
 
     is_critical = attribute in CRITICAL_ATTRIBUTES
     floor = AUTHORITATIVE_CONFIDENCE if is_critical else NON_CRITICAL_CONFIDENCE
-    tolerance = DIMENSIONAL_TOLERANCE_MM.get(attribute)
 
+    if attribute in MARKET_RANGE_ATTRIBUTES:
+        return _reconcile_market_range(sku, attribute, usable, candidates)
+
+    tolerance = DIMENSIONAL_TOLERANCE_MM.get(attribute)
     if tolerance is not None:
         return _reconcile_dimensional(sku, attribute, usable, candidates, is_critical, floor, tolerance)
     return _reconcile_categorical(sku, attribute, usable, candidates, is_critical, floor)
@@ -194,4 +213,34 @@ def _reconcile_dimensional(sku, attribute, usable, candidates, is_critical, floo
         sku, attribute, "insufficient", None, best_confidence, candidates,
         f"confiança {best_confidence:.2f} abaixo da barra {floor:.2f} para atributo crítico, "
         f"e só {len(independent_sources)} fonte(s) — precisa de segunda fonte independente",
+    )
+
+
+def _reconcile_market_range(sku, attribute, usable, candidates) -> ReconcileResult:
+    """Promove o MAIOR valor visto entre montadoras REAIS e DIFERENTES —
+    nunca a média (mascararia o pior caso) e nunca por confiança alta de
+    uma fonte só (uma montadora sozinha não fala pelo mercado inteiro,
+    mesmo que tenha certeza absoluta do próprio produto)."""
+    numeric = [(o, _to_float(o.value)) for o in usable]
+    numeric = [(o, v) for o, v in numeric if v is not None]
+    if not numeric:
+        return ReconcileResult(sku, attribute, "conflict", None, 0.0, candidates,
+                               "nenhuma observação numérica válida (valor não parseável)")
+
+    independent_sources = {o.source_name for o, _ in numeric}
+    if len(independent_sources) < MIN_INDEPENDENT_MARKET_SOURCES:
+        return ReconcileResult(
+            sku, attribute, "insufficient", None, 0.0, candidates,
+            f"só {len(independent_sources)} montadora(s) real(is) — precisa de pelo menos "
+            f"{MIN_INDEPENDENT_MARKET_SOURCES} fontes independentes de mercado, nunca confia "
+            f"numa fabricante sozinha",
+        )
+
+    max_value = max(v for _, v in numeric)
+    best_confidence = max(o.confidence for o, _ in numeric)
+    return ReconcileResult(
+        sku, attribute, "confirmed", f"{max_value:g}", best_confidence, candidates,
+        f"maior valor entre {len(independent_sources)} montadoras reais "
+        f"({', '.join(sorted(s.split(':')[-1] for s in independent_sources))}) — "
+        f"varia por fabricante, valor conservador (pior caso de tamanho)",
     )

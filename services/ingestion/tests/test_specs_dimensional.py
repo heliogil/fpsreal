@@ -1,10 +1,17 @@
-"""Testes unitários da reconciliação DIMENSIONAL (GPU/gabinete/cooler) e do
+"""Testes unitários da reconciliação DIMENSIONAL (gabinete/cooler) e do
 CatalogSeedAdapter — sem DB, sem HTTP.
 
 Cobre o que é diferente do caso categórico (CPU/placa): tolerância em mm em
 vez de igualdade exata, e a direção conservadora (gabinete = pega o "cabe
 até" menor; peça = assume o tamanho maior) — errar essa direção é o tipo de
-bug que faz o comparador recomendar uma GPU que não cabe.
+bug que faz o comparador recomendar uma peça que não cabe.
+
+``length_mm`` de GPU NÃO está aqui — desde a descoberta do founder de que o
+comprimento é definido pela montadora (ASUS/ASRock/Sapphire), não pelo chip
+(NVIDIA/AMD), esse atributo foi pra reconciliação "faixa de mercado" (ver
+test_specs_market_range.py), onde divergência entre fontes é esperada, não
+erro. CatalogSeedAdapter também não cobre mais gpu.length_mm — o valor
+"representativo por tier" do catálogo não é uma leitura de montadora real.
 """
 from __future__ import annotations
 
@@ -13,7 +20,7 @@ from specs.catalog_seed_adapter import CatalogSeedAdapter
 from specs.reconcile import reconcile
 
 
-def _obs(attribute, value, source="catalog_seed", confidence=0.6, sku="gpu-x"):
+def _obs(attribute, value, source="catalog_seed", confidence=0.6, sku="case-x"):
     return RawSpecObservation(
         product_sku=sku, attribute=attribute, value=str(value),
         source_name=source, confidence=confidence,
@@ -22,16 +29,13 @@ def _obs(attribute, value, source="catalog_seed", confidence=0.6, sku="gpu-x"):
 
 # ── CatalogSeedAdapter ──────────────────────────────────────────────────────
 
-def test_catalog_seed_adapter_reads_gpu_length():
+def test_catalog_seed_adapter_no_longer_covers_gpu_length():
+    # gpu.length_mm saiu do CatalogSeedAdapter — "representativo por tier" não
+    # é leitura de montadora real, não deve competir com specs/aib_adapter.py
     adapter = CatalogSeedAdapter()
     product = {"sku": "gpu-rtx-5090", "name": "GeForce RTX 5090", "category": "gpu",
                "specs": {"length_mm": 304, "tdp_w": 575}}
-    obs = adapter.fetch(product)
-    assert len(obs) == 1
-    assert obs[0].attribute == "length_mm"
-    assert obs[0].value == "304"
-    assert obs[0].source_name == "catalog_seed"
-    assert obs[0].confidence < 0.95   # nunca autoritativo sozinho
+    assert adapter.fetch(product) == []
 
 
 def test_catalog_seed_adapter_reads_case_capacity_both_attributes():
@@ -59,7 +63,7 @@ def test_catalog_seed_adapter_irrelevant_category_returns_nothing():
 
 def test_dimensional_single_catalog_seed_source_is_insufficient():
     # é o estado HONESTO de hoje: só existe o catálogo semeado, sem 2ª fonte
-    result = reconcile([_obs("length_mm", 304)])
+    result = reconcile([_obs("max_gpu_length_mm", 392)])
     assert result.status == "insufficient"
     assert result.value is None
 
@@ -68,18 +72,18 @@ def test_dimensional_single_catalog_seed_source_is_insufficient():
 
 def test_dimensional_two_sources_within_tolerance_confirm():
     result = reconcile([
-        _obs("length_mm", 304, source="catalog_seed", confidence=0.6),
-        _obs("length_mm", 301, source="llm_extraction", confidence=0.7),
+        _obs("max_cooler_height_mm", 180, source="catalog_seed", confidence=0.6),
+        _obs("max_cooler_height_mm", 178, source="llm_extraction", confidence=0.7),
     ])
     assert result.status == "confirmed"
-    # "size": conservador = MAIOR das duas leituras que concordam
-    assert float(result.value) == 304.0
+    # "capacity": conservador = MENOR das duas leituras que concordam
+    assert float(result.value) == 178.0
 
 
 def test_dimensional_two_sources_beyond_tolerance_conflict():
     result = reconcile([
-        _obs("length_mm", 304, source="catalog_seed", confidence=0.6),
-        _obs("length_mm", 260, source="llm_extraction", confidence=0.7),
+        _obs("max_gpu_length_mm", 392, source="catalog_seed", confidence=0.6),
+        _obs("max_gpu_length_mm", 340, source="llm_extraction", confidence=0.7),
     ])
     assert result.status == "conflict"
     assert result.value is None
@@ -99,18 +103,19 @@ def test_case_capacity_conservative_direction_is_minimum():
     assert float(result.value) == 388.0
 
 
-def test_gpu_size_conservative_direction_is_maximum():
-    # peça: duas fontes concordam em 300 e 304mm de comprimento da PLACA — o
-    # conservador é o MAIOR (pior caso: a placa é maior do que a leitura menor)
+def test_cooler_height_conservative_direction_is_maximum():
+    # peça (cooler): duas fontes concordam em 155 e 157mm de altura — o
+    # conservador é o MAIOR (pior caso: o cooler é mais alto do que a
+    # leitura menor disse, pode não caber no gabinete)
     result = reconcile([
-        _obs("length_mm", 300, source="catalog_seed", confidence=0.6, sku="gpu-x"),
-        _obs("length_mm", 304, source="llm_extraction", confidence=0.7, sku="gpu-x"),
+        _obs("height_mm", 155, source="catalog_seed", confidence=0.6, sku="cooler-x"),
+        _obs("height_mm", 157, source="llm_extraction", confidence=0.7, sku="cooler-x"),
     ])
     assert result.status == "confirmed"
-    assert float(result.value) == 304.0
+    assert float(result.value) == 157.0
 
 
 def test_dimensional_unparseable_value_is_excluded_not_crashing():
-    result = reconcile([_obs("length_mm", "unknown", confidence=0.9)])
+    result = reconcile([_obs("max_gpu_length_mm", "unknown", confidence=0.9)])
     assert result.status == "conflict"
     assert result.value is None

@@ -3,6 +3,7 @@ from .catalog_seed_adapter import CatalogSeedAdapter
 from .reconcile import ReconcileResult, reconcile
 from .reference_adapter import ReferenceAdapter
 from .llm_adapter import LLMSpecAdapter
+from .aib_adapter import AibDimensionAdapter
 
 __all__ = [
     "RawSpecObservation",
@@ -12,4 +13,5 @@ __all__ = [
     "ReferenceAdapter",
     "LLMSpecAdapter",
     "CatalogSeedAdapter",
+    "AibDimensionAdapter",
 ]

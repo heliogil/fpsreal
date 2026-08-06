@@ -102,8 +102,13 @@ class LLMSpecAdapter:
 
         cat = str(product.get("category") or "")
         categorical = ("socket",) if cat == "cpu" else ("socket", "ram_type") if cat == "motherboard" else ()
+        # gpu.length_mm NÃO passa por aqui — esse atributo virou "faixa de
+        # mercado" (specs/aib_adapter.py, que já faz sua própria extração
+        # por LLM, com source_name por montadora) desde a descoberta de que
+        # o comprimento é definido pela placa (ASUS/ASRock/...), não pelo
+        # chip. Ver specs/reconcile.py (MARKET_RANGE_ATTRIBUTES).
         numeric = {
-            "gpu": ("length_mm",), "case": ("max_gpu_length_mm", "max_cooler_height_mm"),
+            "case": ("max_gpu_length_mm", "max_cooler_height_mm"),
             "cooler": ("height_mm",),
         }.get(cat, ())
 
@@ -178,7 +183,12 @@ class LLMSpecAdapter:
         )
 
     def _extract_numeric(self, product: dict, attribute: str, source_url: str,
-                         page_text: str) -> Optional[RawSpecObservation]:
+                         page_text: str, source_name: Optional[str] = None) -> Optional[RawSpecObservation]:
+        """``source_name`` override: usado por ``specs/aib_adapter.py`` pra
+        marcar cada extração com a montadora de origem (``aib_market:asus``,
+        etc.) — sem isso, duas montadoras diferentes apareceriam com o mesmo
+        ``source_name="llm_extraction"`` e o reconcile() nunca as contaria
+        como fontes independentes."""
         lo, hi = _NUMERIC_RANGES_MM[attribute]
         prompt = (
             f"Produto: {product.get('name')}\n\n"
@@ -204,6 +214,6 @@ class LLMSpecAdapter:
             return None
         return RawSpecObservation(
             product_sku=str(product["sku"]), attribute=attribute, value=f"{value:g}",
-            source_name=self.source_name, source_url=source_url, confidence=confidence,
+            source_name=source_name or self.source_name, source_url=source_url, confidence=confidence,
             notes="extraído por LLM (MiniMax) do texto da página do fabricante",
         )

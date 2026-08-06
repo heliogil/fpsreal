@@ -71,7 +71,10 @@ _STOPWORDS = {
     "case", "cooler", "cpu", "gpu", "psu", "kit",
 }
 
-MAX_NESTED_SITEMAPS = 8
+#: subiu de 8: sites com dezenas de países (ASUS = 83) têm vários
+#: sub-sitemaps NUMERADOS por região só (us1.xml, us2.xml, ...) — 8 mal dava
+#: pra uma região só depois da priorização por _PREFERRED_REGIONS
+MAX_NESTED_SITEMAPS = 20
 MAX_URLS_COLLECTED = 20000
 MIN_TEXT_TOKEN_MATCHES = 2
 
@@ -87,7 +90,17 @@ def tokenize(name: str) -> list[str]:
     return [t for t in raw if t not in _STOPWORDS and len(t) > 1]
 
 
+#: achado real (2026-08-06): "12gb" (capacidade de VRAM, não parte do
+#: modelo) tem dígito e virava token-código OBRIGATÓRIO — "GeForce RTX 3060
+#: 12GB" exigia "3060" E "12gb" juntos na URL, e a maioria das montadoras
+#: nem bota capacidade no slug quando só existe uma variante. Zero
+#: candidatos passavam. Sufixo de capacidade (gb/mb/tb/g) nunca é obrigatório.
+_CAPACITY_SUFFIX_RE = re.compile(r"^\d+(gb|mb|tb|g)$")
+
+
 def _is_model_code(token: str) -> bool:
+    if _CAPACITY_SUFFIX_RE.match(token):
+        return False
     return any(ch.isdigit() for ch in token)
 
 
@@ -234,13 +247,35 @@ def parse_robots_sitemaps(robots_text: str, domain: str) -> list[str]:
 
 _RELEVANT_HINTS = ("product", "catalog", "shop", "en", "en-us", "global")
 
+#: achado real (2026-08-06): a ASUS organiza o sitemap por 83 CÓDIGOS DE
+#: REGIÃO como primeiro segmento do path (ex. "us", "uk", "au", "africa-fr"),
+#: listados em ordem que começa alfabeticamente por "africa-fr" — sem
+#: reconhecer "us" como segmento de região preferido, o teto de sub-sitemaps
+#: (8) esgotava inteiro em regiões irrelevantes antes de chegar em "us", e
+#: zero candidatos apareciam pra QUALQUER produto. Cobre os padrões mais
+#: comuns vistos (ASUS: us/uk; NZXT: en-intl) — não exaustivo, só evita
+#: desperdiçar o orçamento numa região aleatória primeiro.
+_PREFERRED_REGIONS = {"us", "en-us", "en-intl", "en-gb", "uk", "en", "global", "en-au", "ca-en", "au"}
+
+_REGION_SEGMENT_RE = re.compile(r"^https?://[^/]+/([^/]+)/", re.IGNORECASE)
+
+
+def _region_segment(url: str) -> Optional[str]:
+    m = _REGION_SEGMENT_RE.match(url)
+    return m.group(1).lower() if m else None
+
 
 def _prioritize_nested(nested: list[str]) -> list[str]:
     """Sitemap-índice de site grande tem dezenas de sub-sitemaps (blog,
-    suporte, fórum, idiomas...); prioriza os que parecem ter produto."""
-    def score(url: str) -> int:
+    suporte, fórum, idiomas, dezenas de países...); prioriza primeiro por
+    região preferida (segmento de path de verdade, não substring solta),
+    depois pelos hints de conteúdo de sempre."""
+    def score(url: str) -> tuple[int, int]:
+        region = _region_segment(url)
+        region_score = 2 if region in _PREFERRED_REGIONS else 0
         low = url.lower()
-        return sum(1 for hint in _RELEVANT_HINTS if hint in low)
+        hint_score = sum(1 for hint in _RELEVANT_HINTS if hint in low)
+        return (region_score, hint_score)
     return sorted(nested, key=score, reverse=True)
 
 
