@@ -154,22 +154,23 @@ function shroudPath(b: Box, cut: 'flat' | 'dual_tone' | 'angular' | 'industrial'
 /**
  * armorPath — silhueta da carcaça (shroud) que PROTEGE o radiador exposto
  * (o miolo de aletas é o dissipador de calor, não decoração). Anatomia:
- * as EXTREMIDADES são sólidas e fecham em pico alto — como os cantos
- * reforçados de uma capinha de celular, a peça é mais protegida onde toma
- * impacto/manuseio — com um pico central (mais raso) sustentando o meio.
- * Entre eles, janelas recortadas deixam o radiador respirar. Não são
- * triângulos soltos flutuando no meio do shroud — a borda começa E
- * termina no pico, nunca cai pra um vale nas pontas.
+ * a peça inteira é ANCORADA na base (nunca "flutua" sem apoio — bug da
+ * v. anterior: o path fechava direto entre os dois picos, sem nunca
+ * tocar o fundo da caixa). Das quinas inferiores, sobe em cunha até um
+ * pico alto e sólido em cada EXTREMIDADE — como os cantos reforçados de
+ * uma capinha de celular — com um pico central (mais raso) sustentando
+ * o meio. Entre os picos, janelas recortadas deixam o radiador respirar,
+ * mas a base inteira continua uma massa sólida e contínua.
  * Pontos vêm de extração automática (Sobel + Otsu + morfologia +
- * approxPolyDP) sobre foto real, refinados pra fechar nas extremidades —
- * ver scripts/design-tools/extract_shroud_silhouette.py. Fica sempre
- * dentro da caixa em mm.
+ * approxPolyDP) sobre foto real, refinados pra ancorar na base — ver
+ * scripts/design-tools/extract_shroud_silhouette.py. Fica sempre dentro
+ * da caixa em mm.
  */
 function armorPath(b: Box): string {
   const { x, y, w, h } = b
   const pts: [number, number][] = [
-    [0, 0.22], [0.16, 0.76], [0.4, 0.72],
-    [0.5, 0.46], [0.6, 0.72], [0.84, 0.76], [1, 0.22],
+    [0, 1], [0.08, 0.2], [0.18, 0.6], [0.4, 0.55],
+    [0.5, 0.4], [0.6, 0.55], [0.82, 0.6], [0.92, 0.2], [1, 1],
   ]
   return `M ${pts.map(([fx, fy]) => `${x + w * fx} ${y + h * fy}`).join(' L ')} Z`
 }
