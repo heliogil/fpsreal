@@ -151,30 +151,6 @@ function shroudPath(b: Box, cut: 'flat' | 'dual_tone' | 'angular' | 'industrial'
   ].filter(Boolean).join(' ')
 }
 
-/**
- * armorPath — silhueta da carcaça (shroud) que PROTEGE o radiador exposto
- * (o miolo de aletas é o dissipador de calor, não decoração). Anatomia:
- * a peça inteira é ANCORADA na base (nunca "flutua" sem apoio — bug da
- * v. anterior: o path fechava direto entre os dois picos, sem nunca
- * tocar o fundo da caixa). Das quinas inferiores, sobe em cunha até um
- * pico alto e sólido em cada EXTREMIDADE — como os cantos reforçados de
- * uma capinha de celular — com um pico central (mais raso) sustentando
- * o meio. Entre os picos, janelas recortadas deixam o radiador respirar,
- * mas a base inteira continua uma massa sólida e contínua.
- * Pontos vêm de extração automática (Sobel + Otsu + morfologia +
- * approxPolyDP) sobre foto real, refinados pra ancorar na base — ver
- * scripts/design-tools/extract_shroud_silhouette.py. Fica sempre dentro
- * da caixa em mm.
- */
-function armorPath(b: Box): string {
-  const { x, y, w, h } = b
-  const pts: [number, number][] = [
-    [0, 1], [0.08, 0.2], [0.18, 0.6], [0.4, 0.55],
-    [0.5, 0.4], [0.6, 0.55], [0.82, 0.6], [0.92, 0.2], [1, 1],
-  ]
-  return `M ${pts.map(([fx, fy]) => `${x + w * fx} ${y + h * fy}`).join(' L ')} Z`
-}
-
 /* `finLines` foi removido: as aletas passaram a ser o padrão `mat-fins-*`,
    que é mais nítido e troca dezenas de <line> por um único fill. */
 
@@ -200,12 +176,9 @@ const gpuBody = (b: Box, fans: number, thick: boolean, flagship: boolean, spin?:
       <path d={shroudPath(b, flagship ? 'angular' : 'flat')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
       <path d={shroudPath(b, flagship ? 'angular' : 'flat')} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
       {bevel(b, 3, 5)}
-      {/* aletas do dissipador — o miolo exposto do shroud (conferido contra
-          foto real da base do shroud) */}
-      <rect x={b.x + b.w * 0.1} y={b.y + b.h * 0.18} width={b.w * 0.72} height={b.h * 0.64} fill="url(#mat-fins-v)" opacity=".85" />
-      {/* armadura preta sólida em volta do miolo — silhueta única (pico em
-          cada ponta + pico central), não deixa o miolo "flutuando" solto */}
-      <path d={armorPath(b)} fill="var(--panel)" />
+      {/* sem descritor real pra essa peça, não fingimos saber a forma do
+          recorte de ventilação — o shroud fica liso, só o corte de canto
+          (shroudPath) e a marca de acabamento existem sem precisar de dado */}
       {flagship && <rect x={b.x} y={b.y + b.h - 5} width={b.w} height={5} rx={2} fill="var(--accent)" opacity=".8" />}
       {!flagship && <rect x={b.x + 4} y={b.y + b.h - 4} width={b.w * 0.35} height={2.5} rx={1} fill="var(--accent-dim)" />}
       {/* bracket traseiro (I/O) com fendas de ventilação — única quebra real
@@ -468,13 +441,10 @@ const D_GPU = (b: Box, d: VisualDescriptor): ReactNode => {
         <rect key={i} x={b.x + 7 + i * 7} y={b.y + 5} width={2.5} height={b.h - 10} rx={1} fill="var(--line)" opacity=".45" />
       ))}
       {vent === 'hex' && <rect x={b.x + 5} y={b.y + 4} width={Math.max(0, b.w - 10)} height={Math.max(0, b.h - 8)} fill="url(#mat-mesh)" opacity=".5" />}
-      {/* aletas do dissipador — conferido contra foto real da base do shroud;
-          o bracket traseiro com fendas é a única quebra de perfil que a
-          peça tem de verdade nesta vista */}
-      <rect x={b.x + b.w * 0.1} y={b.y + b.h * 0.18} width={b.w * 0.72} height={b.h * 0.64} fill="url(#mat-fins-v)" opacity=".85" />
-      {/* armadura preta sólida em volta do miolo — silhueta única (pico em
-          cada ponta + pico central), conferido contra foto real */}
-      <path d={armorPath(b)} fill="var(--panel)" />
+      {/* recorte de ventilação: só desenha se a ficha técnica REAL da peça
+          declarar um (vent_cut acima) — sem descritor, o shroud fica liso.
+          Bracket traseiro com fendas é universal (toda GPU tem um), esse
+          sim desenha sempre. */}
       <rect x={b.x + b.w - 10} y={b.y + 2} width={9} height={b.h - 4} rx={1} fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
       {Array.from({ length: 4 }, (_, i) => (
         <rect key={i} x={b.x + b.w - 8} y={b.y + 6 + i * ((b.h - 12) / 4)} width={5} height={(b.h - 12) / 4 - 2.5} rx={0.8} fill="var(--line)" opacity=".5" />
