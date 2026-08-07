@@ -36,6 +36,14 @@ type Products = Partial<Record<'gpu' | 'cooler' | 'ram' | 'psu' | 'storage' | 'm
 const ZONE_LABEL: Record<string, string> = {
   intake_front: 'entrada', cpu_zone: 'CPU', gpu_zone: 'GPU', exhaust_rear: 'saída', exhaust_top: 'topo',
 }
+// Fase 4 (2026-08-07): id de mount é nome interno de geometry_data.py
+// (front_bottom, top_bay...) — usuário final via cru com underscore. Cobre
+// os 5 ids que existem hoje no catálogo de gabinetes.
+const MOUNT_LABEL: Record<string, string> = {
+  front_bottom: 'frontal inferior', front_top: 'frontal superior', front_mid: 'frontal meio',
+  rear: 'traseira', top_bay: 'baía superior',
+}
+const mountLabel = (id: string) => MOUNT_LABEL[id] ?? id.replace(/_/g, ' ')
 const STATUS_PT: Record<string, { label: string; color: string; border: string }> = {
   ok: { label: 'ok', color: 'var(--fresh)', border: 'var(--fresh-b)' },
   tight: { label: 'apertado', color: 'var(--warn)', border: 'var(--warn-b)' },
@@ -304,8 +312,8 @@ export default function GabineteVivo({
     const isSim = m.occupied_by === 'what_if_fan'
     const isTop = m.y > H * 0.8 && m.w > m.h
     const color = isSim ? 'var(--accent)' : m.orient === 'intake' ? 'var(--fresh)' : 'var(--warn)'
-    const label = `${m.id.replace(/_/g, ' ')} · ${m.orient === 'intake' ? 'entrada' : 'saída'} · ${
-      occupied ? `${Math.round(m.cfm)} CFM${isSim ? ' (simulado)' : ''}` : 'previsão livre — clique p/ simular ventoinha'
+    const label = `${mountLabel(m.id)} · ${m.orient === 'intake' ? 'entrada' : 'saída'} · ${
+      occupied ? `${Math.round(m.cfm)} CFM${isSim ? ' (simulado)' : ''}` : 'espaço livre — clique pra simular uma ventoinha aqui'
     }`
     const clickable = !occupied && !!onToggleFan
     const common = {
@@ -1084,7 +1092,7 @@ export default function GabineteVivo({
               color: isSim ? 'var(--accent)' : 'var(--dim)',
               background: isSim ? 'var(--accent-soft)' : 'transparent',
             }}>
-              {m.id.replace(/_/g, ' ')}: {m.orient === 'intake' ? '+' : '−'}{Math.round(m.cfm)} CFM
+              {mountLabel(m.id)}: {m.orient === 'intake' ? 'entrada' : 'saída'} {Math.round(m.cfm)} CFM
               {isSim && ` · ${cnt}×${stepper ? '' : ' simulado'}`}
               {stepper && (
                 <>
@@ -1107,7 +1115,7 @@ export default function GabineteVivo({
               color: 'var(--dim2)', background: 'transparent',
               cursor: onToggleFan ? 'pointer' : 'default',
             }}>
-            {m.id.replace(/_/g, ' ')}: + simular ventoinha
+            + ventoinha na {mountLabel(m.id)}
           </button>
         ))}
         {whatIfFans.length > 0 && onClearWhatIf && (
