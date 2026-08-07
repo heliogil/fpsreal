@@ -44,6 +44,38 @@ function FanDisc({ cx, cy, r, spin: _spin, dur: _dur }: { cx: number; cy: number
 }
 
 /**
+ * fanBlades — pá de ventoinha real, não só o aro+cubo do FanDisc.
+ * Uma pá é um path assimétrico (tipo foice) desenhado uma vez e repetido
+ * `bladeCount` vezes por rotação ao redor do centro. Referência: fotos reais
+ * de ventoinha de GPU/cooler (blade count típico 9-11, mais fino que largo).
+ * Fica DENTRO do raio `r` — nunca ultrapassa (mesma regra do bevel: a
+ * silhueta nunca infla pra além da dimensão real da peça).
+ */
+function fanBlades(cx: number, cy: number, r: number, bladeCount: number, opts?: { hubR?: number; ring?: boolean }) {
+  const hubR = opts?.hubR ?? r * 0.2
+  const bladeOuterR = r * 0.92
+  const bladeInnerR = hubR * 1.15
+  // uma pá: do cubo até quase a borda, curvada (foice) — ponto de controle
+  // deslocado lateralmente pra dar a curva assimétrica de uma pá real
+  const bladePath = `M ${bladeInnerR} 0 Q ${bladeOuterR * 0.55} ${-bladeOuterR * 0.38} ${bladeOuterR} ${-bladeOuterR * 0.12} Q ${bladeOuterR * 0.5} ${bladeOuterR * 0.22} ${bladeInnerR} 0 Z`
+  const blades = Array.from({ length: bladeCount }, (_, i) => {
+    const angle = (360 / bladeCount) * i
+    return (
+      <path key={i} d={bladePath} fill="var(--line)" opacity=".55"
+        transform={`translate(${cx} ${cy}) rotate(${angle})`} />
+    )
+  })
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={r} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
+      {opts?.ring && <circle cx={cx} cy={cy} r={r * 0.86} fill="none" stroke="var(--accent-dim)" strokeWidth="1.2" />}
+      {blades}
+      <circle cx={cx} cy={cy} r={hubR} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
+    </g>
+  )
+}
+
+/**
  * MaterialDefs — texturas partilhadas, declaradas UMA vez no <defs> do SVG.
  *
  * Servem dois fins: (1) diferenciar materiais (aletas, malha, PCB, chapa
