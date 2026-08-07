@@ -464,7 +464,13 @@ export default function GabineteVivo({
   /** Rampa quente em TOKENS da marca (GUIA §2) — nada de rgb() fixo: assim o
       campo acompanha o tema claro/escuro. Duas bandas bastam: depois do borrão
       gaussiano elas fundem-se e leem como gradiente contínuo. */
-  const heatFill = (t: number) => (t < 0.42 ? 'var(--warn)' : 'var(--danger)')
+  // Fase 3 (2026-08-07): limiar de 'var(--danger)' (vermelho) subiu de 0.42
+  // para 0.6 — o vermelho estava disparando cedo demais e, somado ao blur
+  // que difunde células vizinhas, a zona quente virava uma mancha vermelha
+  // dominando boa parte da cena (lia como erro, não como "aqui esquenta").
+  // Agora a maior parte do campo fica em 'var(--warn)' (âmbar), reservando
+  // vermelho pra obstrução de verdade severa.
+  const heatFill = (t: number) => (t < 0.6 ? 'var(--warn)' : 'var(--danger)')
 
   /* obstrução por peça (somada em todos os fluxos) — vinda do motor */
   const obstrByPart: Record<string, number> = {}
@@ -682,9 +688,15 @@ export default function GabineteVivo({
           {/* calor: CAMPO contínuo do solver; sem campo, os dois glows de antes */}
           {thermalCells ? (
             <g data-thermal="field" filter="url(#gv-thermal)" pointerEvents="none">
+              {/* Fase 3 (2026-08-07): teto de opacidade por célula desceu de
+                  0.4 para 0.22. Células vizinhas quentes se difundem pelo
+                  blur gaussiano (filter="url(#gv-thermal)") e se acumulam
+                  visualmente mesmo lado a lado sem sobrepor geometricamente
+                  — o teto antigo permitia que a região quente inteira lesse
+                  como um bloco sólido em vez de gradiente sutil. */}
               {thermalCells.cells.map((c, i) => (
                 <rect key={`th${i}`} x={c.x} y={c.y} width={thermalCells.w} height={thermalCells.h}
-                  fill={heatFill(c.t)} opacity={Math.min(0.4, 0.04 + c.t * 0.4)} />
+                  fill={heatFill(c.t)} opacity={Math.min(0.22, 0.03 + c.t * 0.22)} />
               ))}
             </g>
           ) : (
