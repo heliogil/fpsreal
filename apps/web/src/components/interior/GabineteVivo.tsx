@@ -779,6 +779,15 @@ export default function GabineteVivo({
               <g data-cable="pcie" data-asm="7" fill="none" strokeLinecap="round" pointerEvents="none" opacity={dimOf('gpu')}>
                 <path d={d} stroke="var(--line)" strokeWidth="5.4" opacity=".55" />
                 <path d={d} stroke="var(--dim2)" strokeWidth="2.9" />
+                {/* plugue modular na fonte — conector é um bloco retangular
+                    com grade de guia de pino, não a linha terminando no
+                    vazio (conferido contra foto real de cabo PCIe/EPS) */}
+                <g fill="var(--panel)" stroke="var(--line)" strokeWidth="1">
+                  <rect x={x0 - 4.5} y={y0 - 1} width="9" height="6" rx="1" />
+                  {[-2.4, -0.8, 0.8, 2.4].map((dx) => (
+                    <line key={dx} x1={x0 + dx} y1={y0 - 1} x2={x0 + dx} y2={y0 - 3.2} stroke="var(--dim2)" strokeWidth="1" />
+                  ))}
+                </g>
               </g>
             )
           })()}
