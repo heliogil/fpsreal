@@ -1,128 +1,179 @@
-# Especificação gráfica por componente + pipeline de extração automática
+# Especificação gráfica por componente + extração automática do visual-base
 
-**Data:** 2026-08-07
-**Motivação:** esta sessão gastou 4+ rodadas adivinhando a forma da GPU e mais 3 nos cabos, cada correção quebrando outra coisa. A causa não era ajuste fino — era **desenhar de cabeça, sem base real, e forçar um padrão decorativo específico como se fosse universal**. Este documento troca "adivinha e mostra pro founder" por: (1) uma spec do que cada peça REALMENTE mostra no corte, ancorada em foto e em número; (2) um pipeline que extrai esse visual-base de uma foto de produto automaticamente, sem marcação manual.
-
-## Princípios (herdados do projeto, não negociáveis)
-
-1. **Nada de feature inventada.** Se a ficha técnica (descritor) não declara, não desenha. O que se desenha "sempre" tem que ser universal de verdade (existe em 100% das peças daquela categoria), não um estilo de um fabricante.
-2. **Dimensão é sagrada.** A caixa em mm vem da geometria do backend. O visual preenche a caixa, nunca a infla. (Regra do `bevel`/`shroudPath`.)
-3. **Foto real antes de path.** Nenhuma coordenada de forma entra no código sem ter sido conferida contra ≥2 fotos reais do tipo de peça — de preferência extraída automaticamente, não estimada no olho.
-4. **Corte é vista lateral (perfil).** O viewer é um corte do gabinete visto de lado: x→profundidade (traseira à direita), y→altura. Toda spec abaixo é "o que essa peça mostra DESSE ângulo" — não a cara frontal de marketing.
+**Data:** 2026-08-07 (v2 — corrige a v1 do mesmo dia)
+**Componentes:** `apps/web/src/components/interior/{GabineteVivo,PartMockups}.tsx` · `services/ingestion/visuals/*` · `services/ingestion/seed/ingest_visuals.py`
 
 ---
 
-## Vocabulário de vista
+## 0. Correção de premissa (leia isto primeiro)
 
-Cada componente tem **uma face dominante** nesse corte. Errar isso foi metade do problema da GPU (desenhei a face do rotor, que nessa vista não aparece).
+A v1 deste documento propunha **construir um pipeline de visão computacional (OpenCV) pra extrair o visual de cada peça**. Essa premissa estava errada, e teria produzido um segundo caminho redundante e pior.
 
-| Peça | Face que o corte lateral mostra | O que NÃO aparece |
+**O pipeline de extração automática já existe, está bem desenhado, e está dormente por falta de INPUT.**
+
+`services/ingestion/visuals/vision_adapter.py` (`LLMVisionAdapter`) já faz exatamente o que foi pedido: lê a foto do produto e devolve um descritor de aparência no schema fechado. E foi construído com as defesas certas — as mesmas que faltaram a mim durante esta sessão:
+
+- prompt gerado do próprio schema, com cada valor explicado em linguagem visual (`prompt_spec`);
+- enums fechados + **validação cruzada com a ficha técnica** dentro do adapter — contradição física é rejeitada, nunca corrigida em silêncio;
+- uma tentativa de reparação com o erro exato devolvido ao modelo;
+- confiança abaixo de `VISUALS_MIN_CONFIDENCE` (0.5) ⇒ cai no tier em vez de chutar;
+- cache por `photo_hash` (sha256) — foto igual, zero chamadas, custo previsível;
+- **nunca cor, nunca logótipo, nunca dimensão** — proibidos no prompt e ausentes do schema.
+
+O driver existe: `python ingest_visuals.py --visao`. O portão humano existe: `product_visuals.reviewed_at`, revisado em folha de contato via `/modelos`.
+
+**Portanto este documento deixa de ser "como construir a extração" e passa a ser "por que a extração que existe nunca rodou, e o que falta pra ela produzir um desenho bom".**
+
+---
+
+## 1. Diagnóstico medido (banco de produção, 2026-08-07)
+
+| Medida | Valor | Consequência |
 |---|---|---|
-| GPU | Perfil do cartão (comprimento × espessura) — lateral do shroud + backplate | A face das ventoinhas (aponta pra baixo/pro lado) |
-| Cooler torre | Perfil da torre de aletas (largura × altura) | — (torre é ~simétrica) |
-| Cooler low-profile | Perfil baixo e largo | — |
-| AIO (bomba) | Topo do water-block sobre a CPU | — |
-| AIO (radiador) | Perfil fino no teto/frente | — |
-| PSU | Lateral da caixa (a face com o adesivo fica pro lado) | Ventoinha (aponta pra baixo, pro basement) |
-| Placa-mãe | A PCB de chapa (backdrop de tudo) | — |
-| RAM | Lâmina fina de perfil | — |
-| SSD M.2 | Palito fino deitado na placa | — |
-| Painel frontal | Faixa vertical fina na frente | — |
-| Cabo | Feixe cilíndrico correndo entre pontos | Vias individuais (só sugestão, ver abaixo) |
+| Produtos ativos no catálogo | 51 | — |
+| Produtos com URL de foto (`specs.image_url`/`photo_url`/`image`) | **0** | `LLMVisionAdapter` **nunca executou** |
+| Descritores existentes | 38 | todos `source='ficha'` |
+| Descritores `source='visao'` | **0** | nenhum visual foi lido de foto |
+| Confiança média (GPU, via ficha) | 0.70 | inferência, não observação |
+| Aprovados (`reviewed_at`) | 38/38 | o portão não é o gargalo |
+| Colunas de imagem no banco inteiro | só `product_visuals.photo_hash` | não há onde guardar/achar foto |
+
+**Leitura:** todos os 38 descritores são derivados da **ficha técnica** pelo `SpecsAdapter` — que só consegue inferir coisas do tipo "nº de ventoinhas a partir do comprimento" e "conector a partir do TDP". Nenhum descreve o que a peça **realmente parece**, porque nenhuma peça tem foto.
+
+Isto explica a crítica do founder ("genérico demais", "está um lixo") de forma estrutural, e não como falha de renderização: **o viewer está desenhando fielmente descritores que são palpites**. Nenhum ajuste de path no `.tsx` poderia ter consertado isso — foi por isso que 4+ rodadas de ajuste manual não convergiram.
+
+**Origem do gargalo:** o catálogo é semeado sem foto porque as fotos chegam junto com os feeds oficiais de afiliado (KaBuM/Mercado Livre), que é o mesmo passo humano que bloqueia o lado de preços do projeto (ver README). As 48 ofertas atuais apontam para URLs de amostra (`reidofps.com.br/amostra/...`), não para páginas reais de loja — não há nem imagem para raspar hoje.
 
 ---
 
-## Especificação por componente
+## 2. O segundo gargalo: descasamento de projeção
 
-Formato de cada uma: **caixa real** (mm, do backend) · **anatomia visível** (o que o olho reconhece) · **universal vs. data-driven** (o que desenha sempre × o que só com descritor) · **estado atual** · **referência a extrair**.
+Mesmo com 100% de cobertura de foto, o desenho **ainda** não ficaria certo, por uma razão independente que só apareceu ao ler o schema com atenção:
 
-### 1. GPU  `[caixa: comprimento_real × gpu_thick_real mm]`
-- **Caixa:** `w = length_mm` (240–360), `h = gpu_thick` (2-slot ≈41mm até 4-slot ≈81mm). **Já corrigido no backend** (`65bbacf`, pendente deploy) — antes era 55mm fixo, achatava tudo.
-- **Anatomia visível (perfil):** backplate (chapa fina no topo, atrás da PCB) · PCB fina · conector de força no topo perto da traseira · shroud (carcaça) com corte de canto · **radiador de aletas exposto** por janelas recortadas na carcaça · bracket de I/O com fendas na ponta traseira (encosta no painel do gabinete).
-- **Universal (desenha sempre):** silhueta da caixa · backplate · bracket traseiro com fendas (toda GPU add-in tem) · corte de canto sutil do shroud.
-- **Data-driven (só com descritor):** nº de janelas/recortes e o padrão delas (`vent_cut`: none/diagonal/slot/hex) · conector (`power`: 8pin/8x2/12vhpwr) · faixa de acento (`accent`) · iluminação (`lighting`). **Sem descritor: shroud liso, sem inventar recorte** (estado atual pós-`fb7e20d`).
-- **Estado:** simplificado, honesto, mas "genérico demais" na opinião do founder quando não há descritor. **Não reabrir com ajuste de path** (ver postmortem).
-- **Extrair:** silhueta da carcaça + posição/formato das janelas do radiador, de fotos de perfil (base do shroud) de 3–4 modelos de fabricantes diferentes. A janela do radiador é o dado que falta — hoje é chutado.
+> `FIELD_HELP["gpu"]["fans"]` = *"nº de ventoinhas visíveis **na face da placa**"*
 
-### 2. Cooler torre  `[caixa: body_w × body_h, ~90 × 110–150 mm]`
-- **Caixa:** `w = body_w_mm ou 90`, `h = max(110, min(body_w*1.15, 150))`. Deliberadamente quase-quadrada (comentário no backend: "torre ≈ tão alta quanto profunda").
-- **Anatomia:** pilha de aletas horizontais densas · top-plate (tampa no topo) · heatpipes saindo por cima · ventoinha frontal (essa SIM aparece de perfil, é a face lateral do fan).
-- **Universal:** silhueta · aletas (toda torre tem pilha de aletas — `mat-fins-*`).
-- **Data-driven:** `fin_style` (densidade) · `top_plate` · `side_fan` (ventoinha extra) · `lighting`.
-- **Estado:** já usa `fanBlades`/`shroudPath`/`mat-fins-v` (fases 1b). Não teve crítica do founder — provavelmente o mais próximo de aceitável.
-- **Extrair:** densidade e direção das aletas + contorno do top-plate, de foto de perfil de torre.
+O descritor descreve a **face** do produto (a foto de marketing). O viewer desenha o **corte lateral** — o perfil. São projeções diferentes, e o vocabulário atual quase não descreve o perfil:
 
-### 3. Cooler low-profile  `[caixa: body_w × 55 mm]`
-- Igual à torre mas achatado (h fixo 55 quando `cooler_h < 100`). Aletas horizontais, sem torre alta.
+- `fans` (0–4) → a face que o corte lateral **não mostra** (foi exatamente o erro que cometi ao desenhar pá de ventoinha na GPU, e que você corrigiu);
+- `vent_cut` (`none`/`diagonal`/`hex`/`slot`) → não consegue expressar a anatomia que você apontou: **carcaça sólida fechando as pontas + janelas recortadas + radiador de aletas exposto**. Não existe valor no enum que signifique isso;
+- `shroud` (`flat`/`dual_tone`/`angular`/`industrial`) → descreve acabamento, não a silhueta de perfil.
 
-### 4. AIO — bomba  `[caixa: 60 × 60 mm]` + radiador `[rad_len × rad_th]`
-- **Bomba:** bloco quadrado sobre o socket, topo com logo/círculo. **Radiador:** barra fina no teto ou frente, com fila de aletas verticais + ventoinhas anexas. Tubos saem por UMA porta numa ponta (já modelado corretamente).
-- **Universal:** bloco da bomba · barra do radiador · 2 tubos.
-- **Extrair:** proporção do water-block e padrão de aleta do radiador.
-
-### 5. PSU  `[caixa: 150 × 86 mm]`
-- **Anatomia (lateral):** caixa retangular sólida · grade/honeycomb numa face · o adesivo de specs (fica pro lado, some no corte) · cabos saindo de uma ponta (modular) ou fixos (não-modular).
-- **Universal:** caixa · uma aresta chanfrada.
-- **Data-driven:** `cabling` (modular = conectores visíveis numa ponta) · `grill` (honeycomb/slot) · `fan_pos`.
-- **Extrair:** o padrão da grade e a posição dos conectores modulares.
-
-### 6. Placa-mãe  `[caixa: 244 × 305 (ATX) / 244 × 244 (mATX)]`
-- Backdrop de tudo. Já tem detalhe adequado (I/O shield, VRM, socket, slot PCIe, chipset, trilhas de PCB via `mat-pcb`). **Não precisa de extração** — é esquemático por natureza e já funciona. Problema dela era visibilidade (resolvido na fase 2), não forma.
-
-### 7. RAM  `[caixa: 8 × 45 mm por pente, 2 pentes]`
-- Lâmina fina vertical. `ram-bare` (PCB nua) vs `ram-heatspreader` (dissipador). Fina demais pra ter shroud. Baixa prioridade.
-
-### 8. SSD M.2  `[caixa: 80 × 9 mm]`
-- Palito fino deitado. Já OK como está.
-
-### 9. Painel frontal  `[caixa: ~14 × H mm]`
-- Faixa fina. `front-mesh` (textura de malha) vs `front-solid`. Já OK.
-
-### 10. Cabos  `[não têm caixa — path entre 2 pontos]`
-- **Anatomia real (conferido nesta sessão contra foto Corsair sleeved):** feixe cilíndrico de vias individualmente encapadas · conector retangular com grade de guia de pino nas pontas.
-- **Universal:** o feixe (tubo com espessura calibrada por tipo) · conector discreto na ponta livre.
-- **Larguras reais (px em s≈1,38px/mm):** 24-pin ~13–16mm (mais grosso) · EPS ~9–10mm · PCIe ~8–9mm · front-panel ~6–8mm. **Já calibrado** (`c158b34`).
-- **LIÇÃO desta sessão:** a tentativa de "listrado do trançado" (traço tracejado por cima) foi rejeitada — inventar textura fake repete o erro da GPU. Cabo fica **tubo limpo com espessura real** (`2357e3a`). Se um dia quiser sugerir as vias, tem que vir de textura real conferida em foto, não de um dasharray chutado.
-- **Extrair:** N/A pra forma (é um path), mas o conector pode ser extraído de foto de plugue.
+**Por isso inventei o `armorPath`:** o schema não tinha como dizer aquilo, então eu codifiquei um padrão fixo. A correção certa não era ajustar o path — era **estender o vocabulário** para que a foto pudesse informar o perfil.
 
 ---
 
-## Pipeline de extração automática — generalização do que já existe
+## 3. Contrato de projeção (a especificação gráfica, por componente)
 
-Já existe `scripts/design-tools/extract_shroud_silhouette.py` (Sobel + Otsu + morfologia + approxPolyDP), que funciona pra separar "material texturizado" (aletas) de "material liso" (carcaça) numa foto e devolver pontos normalizados. O plano é **generalizar isso num pipeline de 4 estágios reutilizável por qualquer componente**, resolvendo as limitações que apareceram nesta sessão.
+Regra estrutural, para nunca mais desenhar a face errada. O corte é **lateral**: `x` → profundidade (traseira à direita), `y` → altura. Cada categoria declara qual face aparece e quais campos essa vista consegue usar.
 
-### Estágio 0 — aquisição de referência (resolvido)
-- Fotos de produto vêm da galeria da Newegg via httpx (padrão de URL `neweggimages.com/productimage/nb640/<sku>-NN.jpg`), 3–4 modelos de fabricantes diferentes por categoria pra não fixar num estilo só.
-- **MiniMax `image_generation` NÃO serve** (só aceita `subject_reference` de retrato humano, confirmado na doc). Geração por IA está descartada pra referência de produto.
+| Peça | Caixa real (mm, do backend) | Face no corte lateral | Campos que ESTA vista usa | Campos que esta vista NÃO mostra |
+|---|---|---|---|---|
+| **GPU** | `length_mm` × `gpu_thick` (41–81) | perfil do cartão | `shroud`, `vent_cut`, `accent`, `power`, `backplate` | `fans`, `fan_style` (face do rotor), `lighting: fans` |
+| **Cooler torre** | `body_w` × `max(110, min(body_w·1.15, 150))` | perfil da torre | `fin_style`, `top_plate`, `towers`, `side_fan` | — (torre é ~simétrica) |
+| **Cooler low-profile** | `body_w` × 55 | perfil baixo | `fin_style`, `top_plate` | — |
+| **AIO bomba** | 60 × 60 | topo do water-block | `kind`, `lighting` | — |
+| **AIO radiador** | `rad_len` × `rad_th` | perfil fino | `fin_style` | — |
+| **PSU** | 150 × 86 | lateral da caixa | `cabling`, `shroud_window` | `grill`, `fan_pos` (ventoinha aponta pro basement) |
+| **Placa-mãe** | 244 × 305 (ATX) / 244 × 244 | a PCB inteira (backdrop) | `vrm_heatsink`, `io_cover`, `m2_shields` | — |
+| **RAM** | 8 × 45 por pente | lâmina de perfil | `spreader`, `sticks` | `lighting: diffuser` (difusor é no topo) |
+| **SSD M.2** | 80 × 9 | palito deitado | — | — |
+| **Painel frontal** | ~14 × `H` | faixa vertical fina | `surface`, `cut`, `dust_filter` | — |
+| **Cabos** | sem caixa (path) | feixe cilíndrico | — (largura por tipo, tabela abaixo) | vias individuais |
 
-### Estágio 1 — segmentar peça do fundo (limitação encontrada, precisa entrar no script)
-- **Problema achado nesta sessão:** o extrator confundia fundo branco de estúdio com plástico liso da carcaça (ambos sem textura). 
-- **Solução:** threshold de luminância pra isolar a silhueta da peça ANTES de medir textura, e mascarar tudo fora dela. (Já prototipado em `extract_v2` no scratchpad; falta portar pro script versionado.)
+**Larguras de cabo** (calibradas contra a escala real `s ≈ 1,38 px/mm`, commit `c158b34`): 24-pin ATX 13–16mm · EPS 9–10mm · PCIe 8–9mm · front-panel 6–8mm. Cabo é **tubo limpo** — a tentativa de "listrado do trançado" foi revertida (`2357e3a`): textura inventada repete o erro do `armorPath`.
 
-### Estágio 2 — classificar sub-materiais dentro da peça
-- Energia de textura (gradiente Sobel acumulado) + Otsu separa: **aletas/grade** (alta energia, bordas repetidas) de **carcaça/plástico** (baixa energia). 
-- **Limitação conhecida:** materiais muito diferentes dentro do recorte (bracket metálico ao lado de plástico) confundem o classificador — resolver com `--crop` por região OU classificação multi-classe (k-means em 3 níveis de energia em vez de Otsu binário).
+**Como usar esta tabela:** ao desenhar qualquer categoria, só é legítimo consumir campos da coluna "usa". Consumir um campo da coluna "não mostra" é, por construção, desenhar uma face que o corte não tem.
 
-### Estágio 3 — vetorizar cada região
-- Contorno da peça → silhueta externa (a caixa é validada contra a geometria mm; se divergir muito, a foto está enviesada por perspectiva e é descartada).
-- Regiões de textura → posição/tamanho das janelas do radiador (GPU), direção/densidade das aletas (cooler), padrão da grade (PSU).
-- `approxPolyDP` simplifica cada contorno pra poucos vértices → vira o array de pontos do path SVG.
-- **Sempre gera uma imagem de conferência** (contorno sobreposto na foto) antes de qualquer ponto virar código. Isso já existe e é o que substitui pedir marcação manual ao founder.
+---
 
-### Estágio 4 — emitir descritor, não geometria hard-coded
-- **Mudança de arquitetura importante:** a saída do pipeline NÃO deve ser um path fixo colado no `.tsx` (foi isso que travou a GPU — um padrão fixo aplicado a todos). Deve ser **um descritor por produto** no mesmo schema que já existe (`visuals/schema.py`): a extração preenche `vent_cut`, `fin_style`, `grill`, etc. pra AQUELE SKU, e o renderer (`D_GPU`/`D_COOLER`/`D_PSU`) desenha a partir do descritor.
-- Assim: peça com foto extraída → descritor rico → desenho fiel. Peça sem foto → cai na variante de tier genérica (shroud liso honesto). Nunca um estilo de um fabricante forçado em todos.
-- O portão de aprovação humana (`product_visuals.reviewed_at`) continua: a extração propõe, o humano aprova a folha de contato em `/modelos`.
+## 4. Delta de schema v3 — vocabulário para o perfil
 
-## Ordem de execução proposta (plano)
+O que falta para a foto poder informar o desenho lateral. Campos novos, todos enums fechados, todos preenchíveis por observação direta da foto (é isso que os torna extraíveis):
 
-1. **Portar as correções de pipeline pro script versionado** (estágio 1 segmentação de fundo + estágio 2 multi-classe). Hoje só existe a versão binária + protótipos no scratchpad.
-2. **Rodar o pipeline em lote** nas categorias com descritor pobre, gerando descritores propostos + folha de contato de conferência.
-3. **Founder aprova a folha** (não peça por peça — a folha inteira de uma vez, como o fluxo `/modelos` já faz).
-4. **Renderers passam a consumir os campos novos** do descritor (a maioria já consome; ver o que falta por categoria acima).
-5. **Só então** revisitar a forma da GPU — com descritor real extraído, não com path chutado.
+```python
+# gpu — descreve o PERFIL, não a face
+"shroud_profile": ("flat", "stepped", "armored", "finned_open"),
+#   flat         carcaça lisa e contínua de ponta a ponta
+#   stepped      carcaça com degraus/níveis, sem expor o dissipador
+#   armored      pontas sólidas reforçadas + janelas recortadas no meio
+#   finned_open  dissipador amplamente exposto, carcaça só como moldura
+"fin_exposure": ("none", "partial", "wide"),
+#   quanto do radiador (pilha de aletas) aparece pela lateral
+"bracket_slots": (1, 4),   # INT_RANGES — nº de fendas no bracket de I/O
+```
 
-## Fora de escopo
-- Modelos 3D/glTF (decisão separada, coluna existe mas está vazia).
-- Trocar o schema do descritor (só preencher os campos que já existem).
-- A forma da GPU por ajuste manual de coordenadas (postmortem explícito: não reabrir assim).
+Notas de desenho deste delta:
+1. `shroud_profile` é a resposta certa para o que o `armorPath` tentava resolver à força — mas **por produto**, vindo da foto, em vez de um padrão de um fabricante aplicado a todo o catálogo.
+2. `fin_exposure` separa "vejo o radiador" de "vejo carcaça" — a distinção que o `extract_shroud_silhouette.py` já sabe medir (energia de textura: aletas ≠ plástico liso).
+3. Continua sem cor, sem logo, sem dimensão. `bracket_slots` é contagem, não medida.
+4. `FIELD_HELP` tem de descrever cada valor em linguagem visual — é o que sustenta a qualidade com modelo mais barato (o próprio módulo documenta isso).
+
+**Regra de compatibilidade:** `SCHEMA_VERSION` 2 → 3, campos novos **opcionais**. Descritor v2 continua válido e cai no comportamento atual; só descritor v3 desbloqueia o desenho de perfil rico. Sem migração destrutiva.
+
+---
+
+## 5. Onde o OpenCV entra de verdade: harness de aceitação
+
+O `scripts/design-tools/extract_shroud_silhouette.py` (commit `44de0e4`) **não deve ser o extrator primário** — o `LLMVisionAdapter` é. Mas ele resolve o problema que esta sessão inteira expôs:
+
+> *"eu não posso ficar aqui marcando dezenas de vezes para você"*
+
+Não havia **critério objetivo** para "está bom". Toda avaliação era você olhando e dizendo. O uso certo da ferramenta de CV é fechar esse loop:
+
+**Teste de aceitação automático** — para um produto com foto:
+1. renderiza o SVG do descritor proposto, na caixa em mm real;
+2. extrai a silhueta da foto (Sobel+Otsu+morfologia, que já funciona);
+3. compara silhueta renderizada × silhueta da foto por **IoU** (intersection-over-union), mais a fração de área classificada como "texturizada" (proxy do radiador exposto);
+4. **reprova** abaixo do limiar → descritor volta para revisão em vez de ir pro ar.
+
+Isso transforma "acho que ficou feio" em um número, e é o que permite rodar em lote sem você no meio de cada peça.
+
+**Limitações medidas desta sessão, a corrigir antes de confiar no número:**
+- fundo branco de estúdio é classificado como "liso" igual ao plástico da carcaça → **segmentar peça do fundo antes** de medir textura (prototipado nesta sessão, falta portar pro script versionado);
+- materiais distintos no mesmo recorte (bracket metálico ao lado de plástico) confundem o Otsu binário → multi-classe (k-means em 3 níveis) ou `--crop` por região;
+- foto em ângulo/perspectiva distorce a silhueta → rejeitar quando a razão de aspecto extraída divergir da razão em mm do catálogo além de uma tolerância. **A geometria em mm é a verdade; a foto é que é conferida contra ela**, nunca o contrário.
+
+**Não usar geração por IA como referência:** o MiniMax `image_generation` foi testado nesta sessão — `subject_reference` só aceita retrato humano (confirmado na doc oficial), e a geração livre produz um design plausível mas sem relação com o produto real. Descartado.
+
+---
+
+## 6. Plano, em ordem de dependência
+
+Cada fase é bloqueada pela anterior. A ordem importa: as fases 2 e 3 sem a 1 não têm efeito nenhum (é o estado de hoje).
+
+**Fase 1 — INPUT: dar foto ao catálogo** *(desbloqueia tudo; sem isto o resto é inerte)*
+- Adicionar `image_url` ao `specs` dos produtos. Duas fontes possíveis, decisão sua:
+  - **(a) esperar os feeds de afiliado** — feeds oficiais (KaBuM, Mercado Livre) trazem `image_url` por produto; é o caminho limpo e alinhado com a política de "zero scraping" do projeto, mas fica bloqueado no mesmo passo humano que já bloqueia os preços;
+  - **(b) semear manualmente os ~51 SKUs** — uma URL de foto por produto no seed. É finito (uma tarde), destrava a visão hoje, e é substituído automaticamente quando o feed chegar.
+- Verificação: `SELECT count(*) FILTER (WHERE specs ? 'image_url') FROM products` > 0.
+
+**Fase 2 — SCHEMA: v3 com vocabulário de perfil**
+- Implementar o delta da secção 4 (`shroud_profile`, `fin_exposure`, `bracket_slots`) + `FIELD_HELP` de cada valor + validação cruzada (ex.: `fin_exposure: wide` contradiz `shroud: industrial`? decidir e codificar).
+- O prompt de visão é **gerado do schema**, então esta fase sozinha já ensina o modelo a olhar para o perfil.
+
+**Fase 3 — RODAR a extração que já existe**
+- `python ingest_visuals.py --visao` em lote. Custo previsível: cache por `photo_hash`, 1 reparo por peça, ~51 peças.
+- Saída: descritores `source='visao'` com confiança real, aguardando `reviewed_at`.
+
+**Fase 4 — PORTÃO: revisar a folha de contato**
+- `/modelos` já existe. Você aprova a folha **inteira de uma vez**, não peça por peça — este era o pedido explícito de não ficar no meio de cada iteração.
+
+**Fase 5 — RENDERERS consomem o vocabulário novo**
+- `D_GPU` passa a desenhar a partir de `shroud_profile`/`fin_exposure` em vez de não desenhar nada (estado atual pós-`fb7e20d`).
+- **Só aqui** a forma da GPU é reaberta — com dado por produto, nunca com coordenada chutada. O postmortem da v1 continua valendo: não reabrir por ajuste manual de path.
+
+**Fase 6 — HARNESS de aceitação (secção 5)**
+- Portar segmentação de fundo + multi-classe; implementar IoU render×foto; ligar como reprovação automática antes da revisão humana.
+
+---
+
+## 7. Pendências herdadas
+
+- **`gpu_thick` real, pendente de deploy** (commit `65bbacf`): a altura de desenho da GPU usa a espessura real dos slots em vez de 55mm fixo. Testado sem colisão em cases H=350/395/450 numa instância isolada (porta 8101). O container `pcb_api` roda de imagem Docker sem bind-mount — **exige rebuild+redeploy deliberado**, decisão não tomada nesta sessão.
+- **`apps/web/.env.local` do worktree** aponta para o backend de teste (`127.0.0.1:8101`). Resetar para `8100` ao voltar a testar contra produção.
+
+## 8. Fora de escopo
+
+- Modelos 3D/glTF (`component_footprints.model_gltf_path`, 0% populada) — decisão separada.
+- Campo de cor ou de marca gráfica no descritor — proibido por desenho, não é omissão.
+- Reabrir a forma da GPU por ajuste manual de coordenadas — ver postmortem em `2026-08-07-viewer-2d-camadas-design.md`.
