@@ -30,19 +30,6 @@ export type MockupRenderer = (box: Box, opts?: MockupOpts) => ReactNode
 
 /* ── primitivas compartilhadas ─────────────────────────────────────────── */
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function FanDisc({ cx, cy, r, spin: _spin, dur: _dur }: { cx: number; cy: number; r: number; spin?: boolean; dur?: number }) {
-  // Anel + cubo, estático — sem elemento giratório (decisão do founder:
-  // pás animadas viravam ruído). A vida da cena é o fluxo de ar, não o rotor.
-  return (
-    <g>
-      <circle cx={cx} cy={cy} r={r} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
-      <circle cx={cx} cy={cy} r={r * 0.62} fill="none" stroke="var(--line)" strokeWidth="1" opacity=".6" />
-      <circle cx={cx} cy={cy} r={r * 0.2} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
-    </g>
-  )
-}
-
 /**
  * fanBlades — pá de ventoinha real, não só o aro+cubo do FanDisc.
  * Uma pá é um path assimétrico (tipo foice) desenhado uma vez e repetido
@@ -385,10 +372,10 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
   },
 
   fan: {
-    'fan-120': (b, o) => <FanDisc cx={b.x + b.w / 2} cy={b.y + b.h / 2} r={Math.min(b.w, b.h) / 2 - 1} spin={o?.spin} dur={2.4} />,
-    'fan-slim': (b, o) => (
+    'fan-120': (b) => fanBlades(b.x + b.w / 2, b.y + b.h / 2, Math.min(b.w, b.h) / 2 - 1, 9),
+    'fan-slim': (b) => (
       <g opacity=".92">
-        <FanDisc cx={b.x + b.w / 2} cy={b.y + b.h / 2} r={Math.min(b.w, b.h) / 2 - 3} spin={o?.spin} dur={2.1} />
+        {fanBlades(b.x + b.w / 2, b.y + b.h / 2, Math.min(b.w, b.h) / 2 - 3, 7)}
       </g>
     ),
   },
