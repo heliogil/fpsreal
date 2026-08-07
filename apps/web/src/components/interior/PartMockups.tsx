@@ -153,16 +153,17 @@ function shroudPath(b: Box, cut: 'flat' | 'dual_tone' | 'angular' | 'industrial'
 
 /**
  * armorPath — silhueta da armadura preta que emoldura o miolo de aletas
- * exposto do shroud: pico alto em cada ponta + pico central menor, tudo
- * numa borda só (não são triângulos soltos + retângulo). Conferido contra
- * foto real (ASUS TUF RTX 4080, base do shroud) e a marcação do founder
- * em cima dela. Fica sempre dentro da caixa em mm.
+ * exposto do shroud: pico alto em cada ponta + pico central menor (mais
+ * raso), tudo numa borda só (não são triângulos soltos + retângulo).
+ * Pontos vêm de extração automática (Sobel + Otsu + morfologia +
+ * approxPolyDP) sobre foto real da base do shroud — ver
+ * scripts/extract_shroud_silhouette.py. Fica sempre dentro da caixa em mm.
  */
 function armorPath(b: Box): string {
   const { x, y, w, h } = b
   const pts: [number, number][] = [
-    [0, 0.9], [0.11, 0.2], [0.26, 0.78], [0.4, 0.78],
-    [0.5, 0.5], [0.6, 0.78], [0.74, 0.78], [0.89, 0.2], [1, 0.9],
+    [0, 0.92], [0.11, 0.32], [0.24, 0.76], [0.4, 0.72],
+    [0.5, 0.46], [0.6, 0.72], [0.76, 0.76], [0.89, 0.32], [1, 0.92],
   ]
   return `M ${pts.map(([fx, fy]) => `${x + w * fx} ${y + h * fy}`).join(' L ')} Z`
 }
