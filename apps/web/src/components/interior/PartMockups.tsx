@@ -17,7 +17,6 @@
  *   psu:          psu-basic · psu-modular
  *   storage:      ssd-m2 · ssd-sata
  *   motherboard:  mb-matx · mb-atx
- *   fan:          fan-120 · fan-slim
  *   case_front:   front-mesh · front-solid
  *
  * Todos os desenhos usam SÓ tokens da marca (var(--…)) — GUIA §2.
@@ -388,15 +387,6 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
     'mb-atx': (b) => moboBoard(b, 1, 1),
   },
 
-  fan: {
-    'fan-120': (b) => fanBlades(b.x + b.w / 2, b.y + b.h / 2, Math.min(b.w, b.h) / 2 - 1, 9),
-    'fan-slim': (b) => (
-      <g opacity=".92">
-        {fanBlades(b.x + b.w / 2, b.y + b.h / 2, Math.min(b.w, b.h) / 2 - 3, 7)}
-      </g>
-    ),
-  },
-
   case_front: {
     'front-mesh': (b) => (
       <g>
@@ -660,8 +650,6 @@ export function pickVariant(category: string, h: VariantHints = {}): string {
       return /nv|m\.?2|990|sn7|nvme/.test(name + sku) ? 'ssd-m2' : 'ssd-sata'
     case 'motherboard':
       return /matx|m-atx|micro/.test(name + sku + (h.formFactor ?? '').toLowerCase()) ? 'mb-matx' : 'mb-atx'
-    case 'fan':
-      return 'fan-120'
     case 'case_front':
       return (h.airflowClass ?? '') === 'high' || /mesh|airflow|torrent|216/.test(name + sku) ? 'front-mesh' : 'front-solid'
     default:
