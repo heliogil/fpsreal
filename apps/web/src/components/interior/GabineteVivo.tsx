@@ -651,19 +651,32 @@ export default function GabineteVivo({
                 {/* CHICOTE atrás da bandeja: 24-pin, EPS e front-panel sobem
                     pela canaleta e saem nos passa-cabos. Vivem no plano
                     DISTANTE — é exactamente por isto que o cabo dependia do
-                    z-order: sem um "atrás" onde correr, vira rabisco. */}
-                {runs.map((d, i) => (
-                  <g key={`cb${i}`} data-cable={['eps', 'atx24', 'front_panel'][i]}>
-                    <path d={d} fill="none" stroke="var(--line)" strokeWidth="4.2" opacity="0.7" strokeLinecap="round" />
-                    <path d={d} fill="none" stroke="var(--dim2)" strokeWidth="2.1" strokeLinecap="round" />
-                  </g>
-                ))}
+                    z-order: sem um "atrás" onde correr, vira rabisco.
+                    Larguras calibradas pra escala real (s≈1,38px/mm num
+                    case típico): 24-pin é o chicote mais grosso do PC
+                    (~13-16mm reais), EPS ~9-10mm, front-panel (fios finos,
+                    menos compactados) ~6-8mm — antes os 3 usavam a mesma
+                    largura fina (~3mm equivalente), lia como barbante. */}
+                {runs.map((d, i) => {
+                  const outerW = [8, 11, 6][i]
+                  const innerW = [5, 7, 3.5][i]
+                  return (
+                    <g key={`cb${i}`} data-cable={['eps', 'atx24', 'front_panel'][i]}>
+                      <path d={d} fill="none" stroke="var(--line)" strokeWidth={outerW} opacity="0.7" strokeLinecap="round" />
+                      <path d={d} fill="none" stroke="var(--dim2)" strokeWidth={innerW} strokeLinecap="round" />
+                    </g>
+                  )
+                })}
                 {/* passa-cabos na borda frontal da bandeja (por cima da ponta
-                    do cabo, para o chicote parecer atravessar a chapa) */}
-                {gy.map((y, i) => (
-                  <rect key={`gr${i}`} x={b.x - 9} y={y - 6.5} width={7} height={13} rx={3.5}
-                    fill="var(--bg)" stroke="var(--line2)" strokeWidth="0.9" />
-                ))}
+                    do cabo, para o chicote parecer atravessar a chapa) —
+                    largura acompanha o cabo que passa por cada um */}
+                {gy.map((y, i) => {
+                  const grW = [11, 14, 9][i]
+                  return (
+                    <rect key={`gr${i}`} x={b.x - grW - 2} y={y - 6.5} width={grW} height={13} rx={3.5}
+                      fill="var(--bg)" stroke="var(--line2)" strokeWidth="0.9" />
+                  )
+                })}
               </g>
             )
           })()}
@@ -777,15 +790,18 @@ export default function GabineteVivo({
               + `${(x1 - 26).toFixed(1)},${(y1 + 34).toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`
             return (
               <g data-cable="pcie" data-asm="7" fill="none" strokeLinecap="round" pointerEvents="none" opacity={dimOf('gpu')}>
-                <path d={d} stroke="var(--line)" strokeWidth="5.4" opacity=".55" />
-                <path d={d} stroke="var(--dim2)" strokeWidth="2.9" />
+                {/* largura calibrada pra escala real: PCIe 8-pin tem uns
+                    8-9mm de diametro (~11-12px em s≈1,38px/mm) — o valor
+                    antigo (5.4/2.9) equivalia a ~4mm, lia como barbante */}
+                <path d={d} stroke="var(--line)" strokeWidth="9" opacity=".55" />
+                <path d={d} stroke="var(--dim2)" strokeWidth="5.5" />
                 {/* plugue modular na fonte — conector é um bloco retangular
                     com grade de guia de pino, não a linha terminando no
                     vazio (conferido contra foto real de cabo PCIe/EPS) */}
                 <g fill="var(--panel)" stroke="var(--line)" strokeWidth="1">
-                  <rect x={x0 - 4.5} y={y0 - 1} width="9" height="6" rx="1" />
-                  {[-2.4, -0.8, 0.8, 2.4].map((dx) => (
-                    <line key={dx} x1={x0 + dx} y1={y0 - 1} x2={x0 + dx} y2={y0 - 3.2} stroke="var(--dim2)" strokeWidth="1" />
+                  <rect x={x0 - 5.5} y={y0 - 1} width="11" height="7" rx="1" />
+                  {[-3, -1, 1, 3].map((dx) => (
+                    <line key={dx} x1={x0 + dx} y1={y0 - 1} x2={x0 + dx} y2={y0 - 3.6} stroke="var(--dim2)" strokeWidth="1" />
                   ))}
                 </g>
               </g>
