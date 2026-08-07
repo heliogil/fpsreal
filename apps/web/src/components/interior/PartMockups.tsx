@@ -136,6 +136,35 @@ export function bevel(b: Box, d = 3, r = 2) {
   )
 }
 
+/**
+ * shroudPath — contorno do corpo da peça (GPU/cooler/PSU) com corte
+ * diagonal nos cantos e crista elevada no topo, em vez do <rect> chapado
+ * atual. Intensidade do corte varia por `cut` (mapeia o enum `shroud` do
+ * descritor). Referência: foto real de GPU (ASUS RTX 3070 KO, Newegg
+ * 14-126-466), que mostra corte diagonal nos 4 cantos + crista central.
+ * Corte SEMPRE pra dentro da caixa — nunca ultrapassa b.w/b.h (mesma regra
+ * do bevel: a caixa em mm nunca é inflada).
+ */
+function shroudPath(b: Box, cut: 'flat' | 'dual_tone' | 'angular' | 'industrial'): string {
+  const notch = cut === 'industrial' ? b.h * 0.28 : cut === 'angular' ? b.h * 0.2 : b.h * 0.1
+  const ridgeH = cut === 'flat' ? 0 : Math.min(3, b.h * 0.06)
+  const { x, y, w, h } = b
+  // 8 pontos: canto sup-esq cortado, crista, canto sup-dir cortado, desce,
+  // canto inf-dir cortado, crista inferior reta, canto inf-esq cortado, fecha
+  return [
+    `M ${x} ${y + notch}`,
+    `L ${x + notch} ${y}`,
+    `L ${x + w - notch} ${y}`,
+    `L ${x + w} ${y + notch}`,
+    ridgeH > 0 ? `L ${x + w} ${y + notch + ridgeH}` : '',
+    `L ${x + w} ${y + h - notch}`,
+    `L ${x + w - notch} ${y + h}`,
+    `L ${x + notch} ${y + h}`,
+    `L ${x} ${y + h - notch}`,
+    'Z',
+  ].filter(Boolean).join(' ')
+}
+
 /* `finLines` foi removido: as aletas passaram a ser o padrão `mat-fins-*`,
    que é mais nítido e troca dezenas de <line> por um único fill. */
 
