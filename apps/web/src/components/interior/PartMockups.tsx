@@ -63,6 +63,23 @@ function fanBlades(cx: number, cy: number, r: number, bladeCount: number, opts?:
 }
 
 /**
+ * fanVent — abertura ventilada SEM pá, pra peças cuja face do rotor não fica
+ * de frente pro corte lateral (a GPU fica de perfil nesta vista: o que se vê
+ * do shroud é a lateral do cartão, não a face onde o fan gira — mostrar pá
+ * ali afirmaria um ângulo que essa peça não tem). Reaproveita a textura
+ * mat-mesh já usada no grill da PSU/painel frontal — malha, não rotor.
+ */
+function fanVent(cx: number, cy: number, r: number, opts?: { ring?: boolean }) {
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={r} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
+      <circle cx={cx} cy={cy} r={r * 0.86} fill="url(#mat-mesh)" opacity=".55" />
+      {opts?.ring && <circle cx={cx} cy={cy} r={r * 0.86} fill="none" stroke="var(--accent-dim)" strokeWidth="1.2" />}
+    </g>
+  )
+}
+
+/**
  * MaterialDefs — texturas partilhadas, declaradas UMA vez no <defs> do SVG.
  *
  * Servem dois fins: (1) diferenciar materiais (aletas, malha, PCB, chapa
@@ -180,7 +197,7 @@ const gpuBody = (b: Box, fans: number, thick: boolean, flagship: boolean, spin?:
       {bevel(b, 3, 5)}
       {flagship && <rect x={b.x} y={b.y + b.h - 5} width={b.w} height={5} rx={2} fill="var(--accent)" opacity=".8" />}
       {!flagship && <rect x={b.x + 4} y={b.y + b.h - 4} width={b.w * 0.35} height={2.5} rx={1} fill="var(--accent-dim)" />}
-      {cxs.map((cx, i) => <g key={i}>{fanBlades(cx, b.y + b.h / 2, r, 10)}</g>)}
+      {cxs.map((cx, i) => <g key={i}>{fanVent(cx, b.y + b.h / 2, r)}</g>)}
       {thick && <rect x={b.x} y={b.y - 8} width={b.w} height={4} rx={1} fill="var(--panel)" stroke="var(--line)" strokeWidth=".8" />}
     </g>
   )
@@ -467,7 +484,7 @@ const D_GPU = (b: Box, d: VisualDescriptor): ReactNode => {
       {cxs.map((cx, i) => (
         style === 'blower'
           ? <g key={i}><circle cx={cx} cy={b.y + b.h / 2} r={r * 0.8} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" /><rect x={cx + r} y={b.y + b.h * 0.3} width={b.w * 0.25} height={b.h * 0.4} rx={2} fill="var(--panel)" stroke="var(--line)" strokeWidth=".8" /></g>
-          : <g key={i}>{fanBlades(cx, b.y + b.h / 2, r, 10, { ring: style === 'ring' })}</g>
+          : <g key={i}>{fanVent(cx, b.y + b.h / 2, r, { ring: style === 'ring' })}</g>
       ))}
     </g>
   )
