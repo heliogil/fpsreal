@@ -249,23 +249,29 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
   },
 
   cooler: {
-    'cooler-lowprofile': (b) => (
-      <g>
-        <rect x={b.x + b.w * 0.2} y={b.y + b.h * 0.55} width={b.w * 0.6} height={b.h * 0.45} rx={3} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
-        <rect x={b.x + b.w * 0.2} y={b.y + b.h * 0.55} width={b.w * 0.6} height={b.h * 0.45} fill="url(#mat-fins-v)" opacity=".9" />
-        {bevel({ x: b.x + b.w * 0.2, y: b.y + b.h * 0.55, w: b.w * 0.6, h: b.h * 0.45 }, 2, 3)}
-        <FanDisc cx={b.x + b.w / 2} cy={b.y + b.h * 0.34} r={Math.min(b.w, b.h) * 0.3} />
-      </g>
-    ),
-    'cooler-tower': (b, o) => (
-      <g>
-        <rect x={b.x + b.w * 0.28} y={b.y} width={b.w * 0.5} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-        <rect x={b.x + b.w * 0.28} y={b.y + 3} width={b.w * 0.5} height={b.h - 6} fill="url(#mat-fins-h)" opacity=".9" />
-        {bevel({ x: b.x + b.w * 0.28, y: b.y, w: b.w * 0.5, h: b.h }, 3, 4)}
-        <rect x={b.x + b.w * 0.3} y={b.y + 2} width={b.w * 0.46} height={3} rx={1.5} fill="var(--accent-dim)" />
-        <FanDisc cx={b.x + b.w * 0.14} cy={b.y + b.h * 0.42} r={Math.min(b.w * 0.16, b.h * 0.3)} spin={o?.spin} dur={2.6} />
-      </g>
-    ),
+    'cooler-lowprofile': (b) => {
+      const lp = { x: b.x + b.w * 0.2, y: b.y + b.h * 0.55, w: b.w * 0.6, h: b.h * 0.45 }
+      return (
+        <g>
+          <path d={shroudPath(lp, 'flat')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
+          <rect x={lp.x} y={lp.y} width={lp.w} height={lp.h} fill="url(#mat-fins-v)" opacity=".9" />
+          {bevel(lp, 2, 3)}
+          {fanBlades(b.x + b.w / 2, b.y + b.h * 0.34, Math.min(b.w, b.h) * 0.3, 9)}
+        </g>
+      )
+    },
+    'cooler-tower': (b) => {
+      const tw = { x: b.x + b.w * 0.28, y: b.y, w: b.w * 0.5, h: b.h }
+      return (
+        <g>
+          <path d={shroudPath(tw, 'angular')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+          <rect x={tw.x} y={tw.y + 3} width={tw.w} height={tw.h - 6} fill="url(#mat-fins-h)" opacity=".9" />
+          {bevel(tw, 3, 4)}
+          <rect x={b.x + b.w * 0.3} y={b.y + 2} width={b.w * 0.46} height={3} rx={1.5} fill="var(--accent-dim)" />
+          {fanBlades(b.x + b.w * 0.14, b.y + b.h * 0.42, Math.min(b.w * 0.16, b.h * 0.3), 9)}
+        </g>
+      )
+    },
     'cooler-aio-pump': (b) => {
       /* water block sobre a CPU — corpo + bracket de montagem + cap com anel
          + barbs (entradas dos tubos) no topo. Os tubos até o radiador são
@@ -335,21 +341,18 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
   psu: {
     'psu-basic': (b) => (
       <g>
-        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
+        <path d={shroudPath(b, 'flat')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+        <path d={shroudPath(b, 'flat')} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
         {bevel(b, 3, 4)}
-        <circle cx={b.x + b.h * 0.55} cy={b.y + b.h / 2} r={b.h * 0.32} fill="none" stroke="var(--line)" strokeWidth="1.2" />
-        {[0, 60, 120].map((a) => (
-          <line key={a} x1={b.x + b.h * 0.55 - b.h * 0.3 * Math.cos((a * Math.PI) / 180)} y1={b.y + b.h / 2 - b.h * 0.3 * Math.sin((a * Math.PI) / 180)} x2={b.x + b.h * 0.55 + b.h * 0.3 * Math.cos((a * Math.PI) / 180)} y2={b.y + b.h / 2 + b.h * 0.3 * Math.sin((a * Math.PI) / 180)} stroke="var(--line)" strokeWidth="1" />
-        ))}
+        {fanBlades(b.x + b.h * 0.55, b.y + b.h / 2, b.h * 0.32, 7)}
       </g>
     ),
     'psu-modular': (b) => (
       <g>
-        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
+        <path d={shroudPath(b, 'industrial')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+        <path d={shroudPath(b, 'industrial')} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
         {bevel(b, 3, 4)}
-        <circle cx={b.x + b.h * 0.55} cy={b.y + b.h / 2} r={b.h * 0.32} fill="none" stroke="var(--line)" strokeWidth="1.2" />
+        {fanBlades(b.x + b.h * 0.55, b.y + b.h / 2, b.h * 0.32, 7)}
         {[0, 1, 2, 3].map((i) => (
           <rect key={i} x={b.x + b.w - b.h * 0.9 + i * 7} y={b.y + b.h * 0.3} width={5} height={5} rx={1} fill="var(--accent-dim)" />
         ))}
@@ -495,10 +498,10 @@ const D_COOLER = (b: Box, d: VisualDescriptor): ReactNode => {
     const lp = { x: b.x + b.w * 0.2, y: b.y + b.h * 0.55, w: b.w * 0.6, h: b.h * 0.45 }
     return (
       <g>
-        <rect x={lp.x} y={lp.y} width={lp.w} height={lp.h} rx={3} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
+        <path d={shroudPath(lp, 'flat')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
         <rect x={lp.x} y={lp.y} width={lp.w} height={lp.h} fill={fin === 'open' ? 'url(#mat-fins-v)' : 'url(#mat-fins-h)'} opacity=".9" />
         {bevel(lp, 2, 3)}
-        <FanDisc cx={b.x + b.w / 2} cy={b.y + b.h * 0.32} r={Math.min(b.w, b.h) * 0.3} />
+        {fanBlades(b.x + b.w / 2, b.y + b.h * 0.32, Math.min(b.w, b.h) * 0.3, 9)}
       </g>
     )
   }
@@ -511,14 +514,14 @@ const D_COOLER = (b: Box, d: VisualDescriptor): ReactNode => {
         const tx = x0 + i * (tw + gap)
         return (
           <g key={i}>
-            <rect x={tx} y={b.y} width={tw} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+            <path d={shroudPath({ x: tx, y: b.y, w: tw, h: b.h }, 'angular')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
             <rect x={tx} y={b.y + 3} width={tw} height={b.h - 6} fill={fin === 'open' ? 'url(#mat-fins-v)' : 'url(#mat-fins-h)'} opacity=".9" />
             {bevel({ x: tx, y: b.y, w: tw, h: b.h }, 3, 4)}
           </g>
         )
       })}
       {plate !== 'none' && <rect x={x0} y={b.y + 1} width={tw * towers + gap * (towers - 1)} height={4} rx={2} fill={plate === 'logo_plate' ? 'var(--accent-dim)' : 'var(--panel)'} stroke="var(--line)" strokeWidth=".8" />}
-      {sideFan && <FanDisc cx={b.x + b.w * 0.13} cy={b.y + b.h * 0.42} r={Math.min(b.w * 0.15, b.h * 0.28)} />}
+      {sideFan && fanBlades(b.x + b.w * 0.13, b.y + b.h * 0.42, Math.min(b.w * 0.15, b.h * 0.28), 9)}
       {lit !== 'none' && (
         <g filter="url(#mat-glow)" pointerEvents="none">
           {(lit === 'ring' || lit === 'full') && (
@@ -542,14 +545,15 @@ const D_PSU = (b: Box, d: VisualDescriptor): ReactNode => {
   const fcx = fanPos === 'rear' ? b.x + b.w - b.h * 0.55 : b.x + b.h * 0.55
   return (
     <g>
-      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
+      <path d={shroudPath(b, 'flat')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+      <path d={shroudPath(b, 'flat')} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
       {bevel(b, 3, 4)}
-      {grill === 'honeycomb'
-        ? <circle cx={fcx} cy={b.y + b.h / 2} r={b.h * 0.34} fill="url(#mat-mesh)" stroke="var(--line)" strokeWidth="1.2" />
-        : <circle cx={fcx} cy={b.y + b.h / 2} r={b.h * 0.32} fill="none" stroke="var(--line)" strokeWidth="1.2" />}
+      {fanBlades(fcx, b.y + b.h / 2, b.h * 0.32, 7)}
+      {grill === 'honeycomb' && (
+        <circle cx={fcx} cy={b.y + b.h / 2} r={b.h * 0.34} fill="url(#mat-mesh)" opacity=".35" stroke="var(--line)" strokeWidth="1.2" />
+      )}
       {grill === 'slot' && Array.from({ length: 4 }, (_, i) => (
-        <line key={i} x1={fcx - b.h * 0.3 + i * (b.h * 0.2)} y1={b.y + b.h * 0.2} x2={fcx - b.h * 0.3 + i * (b.h * 0.2)} y2={b.y + b.h * 0.8} stroke="var(--line)" strokeWidth="1" />
+        <line key={i} x1={fcx - b.h * 0.3 + i * (b.h * 0.2)} y1={b.y + b.h * 0.2} x2={fcx - b.h * 0.3 + i * (b.h * 0.2)} y2={b.y + b.h * 0.8} stroke="var(--line)" strokeWidth="1" opacity=".6" />
       ))}
       {cabling !== 'fixed' && Array.from({ length: cabling === 'modular' ? 4 : 2 }, (_, i) => (
         <rect key={i} x={b.x + b.w - b.h * 0.9 + i * 7} y={b.y + b.h * 0.3} width={5} height={5} rx={1} fill="var(--accent-dim)" />
