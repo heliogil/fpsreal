@@ -664,12 +664,6 @@ export default function GabineteVivo({
                     <g key={`cb${i}`} data-cable={['eps', 'atx24', 'front_panel'][i]}>
                       <path d={d} fill="none" stroke="var(--line)" strokeWidth={outerW} opacity="0.7" strokeLinecap="round" />
                       <path d={d} fill="none" stroke="var(--dim2)" strokeWidth={innerW} strokeLinecap="round" />
-                      {/* listrado do trançado — o cabo é um FEIXE de vias
-                          individualmente encapadas, não um tubo liso; um
-                          traço claro tracejado por cima sugere as vias
-                          paralelas sem desenhar cada uma (conferido contra
-                          foto real de cabo sleeved) */}
-                      <path d={d} fill="none" stroke="var(--strong)" strokeWidth={innerW * 0.5} strokeDasharray="1.5 2.8" opacity=".14" strokeLinecap="round" />
                     </g>
                   )
                 })}
@@ -801,8 +795,6 @@ export default function GabineteVivo({
                     antigo (5.4/2.9) equivalia a ~4mm, lia como barbante */}
                 <path d={d} stroke="var(--line)" strokeWidth="9" opacity=".55" />
                 <path d={d} stroke="var(--dim2)" strokeWidth="5.5" />
-                {/* listrado do trançado — feixe de vias, não tubo liso */}
-                <path d={d} stroke="var(--strong)" strokeWidth="2.75" strokeDasharray="1.5 2.8" opacity=".14" />
                 {/* plugue discreto na fonte — só a base do conector, sem
                     grade de pino em destaque (o founder achou o plugue
                     chamativo demais; o que precisa aparecer é o feixe) */}
