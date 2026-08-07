@@ -178,10 +178,14 @@ const gpuBody = (b: Box, fans: number, thick: boolean, flagship: boolean, spin?:
       {bevel(b, 3, 5)}
       {flagship && <rect x={b.x} y={b.y + b.h - 5} width={b.w} height={5} rx={2} fill="var(--accent)" opacity=".8" />}
       {!flagship && <rect x={b.x + 4} y={b.y + b.h - 4} width={b.w * 0.35} height={2.5} rx={1} fill="var(--accent-dim)" />}
-      {/* textura de ventilação no shroud — nunca um círculo: essa vista é o
-          perfil do cartão, a face onde o fan gira não fica voltada pro corte */}
-      {Array.from({ length: 5 }, (_, i) => (
-        <line key={i} x1={b.x + b.w * 0.34 + i * 9} y1={b.y + b.h - 6} x2={b.x + b.w * 0.34 + i * 9 + 8} y2={b.y + 6} stroke="var(--line)" strokeWidth="1" opacity=".4" />
+      {/* aletas do dissipador — o que se vê de verdade nesta vista (conferido
+          contra foto real da base do shroud, não é pá nem textura inventada) */}
+      <rect x={b.x + b.w * 0.1} y={b.y + b.h * 0.18} width={b.w * 0.72} height={b.h * 0.64} fill="url(#mat-fins-v)" opacity=".85" />
+      {/* bracket traseiro (I/O) com fendas de ventilação — única quebra real
+          de perfil numa GPU, sempre na ponta que encosta no painel do gabinete */}
+      <rect x={b.x + b.w - 10} y={b.y + 2} width={9} height={b.h - 4} rx={1} fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
+      {Array.from({ length: 4 }, (_, i) => (
+        <rect key={i} x={b.x + b.w - 8} y={b.y + 6 + i * ((b.h - 12) / 4)} width={5} height={(b.h - 12) / 4 - 2.5} rx={0.8} fill="var(--line)" opacity=".5" />
       ))}
       {thick && <rect x={b.x} y={b.y - 8} width={b.w} height={4} rx={1} fill="var(--panel)" stroke="var(--line)" strokeWidth=".8" />}
     </g>
@@ -437,6 +441,14 @@ const D_GPU = (b: Box, d: VisualDescriptor): ReactNode => {
         <rect key={i} x={b.x + 7 + i * 7} y={b.y + 5} width={2.5} height={b.h - 10} rx={1} fill="var(--line)" opacity=".45" />
       ))}
       {vent === 'hex' && <rect x={b.x + 5} y={b.y + 4} width={Math.max(0, b.w - 10)} height={Math.max(0, b.h - 8)} fill="url(#mat-mesh)" opacity=".5" />}
+      {/* aletas do dissipador — conferido contra foto real da base do shroud;
+          o bracket traseiro com fendas é a única quebra de perfil que a
+          peça tem de verdade nesta vista */}
+      <rect x={b.x + b.w * 0.1} y={b.y + b.h * 0.18} width={b.w * 0.72} height={b.h * 0.64} fill="url(#mat-fins-v)" opacity=".85" />
+      <rect x={b.x + b.w - 10} y={b.y + 2} width={9} height={b.h - 4} rx={1} fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
+      {Array.from({ length: 4 }, (_, i) => (
+        <rect key={i} x={b.x + b.w - 8} y={b.y + 6 + i * ((b.h - 12) / 4)} width={5} height={(b.h - 12) / 4 - 2.5} rx={0.8} fill="var(--line)" opacity=".5" />
+      ))}
       {bevel(b, 3, shroud === 'industrial' ? 2 : 5)}
       {accent === 'strip_bottom' && <rect x={b.x} y={b.y + b.h - 5} width={b.w} height={5} rx={2} fill="var(--accent)" opacity=".8" />}
       {accent === 'edge' && <rect x={b.x + 4} y={b.y + b.h - 4} width={b.w * 0.35} height={2.5} rx={1} fill="var(--accent-dim)" />}
