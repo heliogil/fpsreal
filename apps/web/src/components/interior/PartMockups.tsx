@@ -176,11 +176,17 @@ const gpuBody = (b: Box, fans: number, thick: boolean, flagship: boolean, spin?:
       <path d={shroudPath(b, flagship ? 'angular' : 'flat')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
       <path d={shroudPath(b, flagship ? 'angular' : 'flat')} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
       {bevel(b, 3, 5)}
+      {/* aletas do dissipador — o miolo exposto do shroud (conferido contra
+          foto real da base do shroud) */}
+      <rect x={b.x + b.w * 0.1} y={b.y + b.h * 0.18} width={b.w * 0.72} height={b.h * 0.64} fill="url(#mat-fins-v)" opacity=".85" />
+      {/* armadura preta sólida em volta do miolo: cunhas triangulares nas
+          pontas + faixa inferior — é isso que emoldura as aletas na foto
+          real, não deixa o miolo "flutuando" solto no meio do shroud */}
+      <path d={`M ${b.x} ${b.y + b.h * 0.76} L ${b.x + b.w * 0.16} ${b.y + b.h * 0.76} L ${b.x + b.w * 0.05} ${b.y + b.h * 0.22} Z`} fill="var(--panel)" />
+      <path d={`M ${b.x + b.w * 0.82} ${b.y + b.h * 0.76} L ${b.x + b.w * 0.95} ${b.y + b.h * 0.76} L ${b.x + b.w * 0.93} ${b.y + b.h * 0.22} Z`} fill="var(--panel)" />
+      <rect x={b.x} y={b.y + b.h * 0.76} width={b.w * 0.97} height={b.h * 0.24} fill="var(--panel)" />
       {flagship && <rect x={b.x} y={b.y + b.h - 5} width={b.w} height={5} rx={2} fill="var(--accent)" opacity=".8" />}
       {!flagship && <rect x={b.x + 4} y={b.y + b.h - 4} width={b.w * 0.35} height={2.5} rx={1} fill="var(--accent-dim)" />}
-      {/* aletas do dissipador — o que se vê de verdade nesta vista (conferido
-          contra foto real da base do shroud, não é pá nem textura inventada) */}
-      <rect x={b.x + b.w * 0.1} y={b.y + b.h * 0.18} width={b.w * 0.72} height={b.h * 0.64} fill="url(#mat-fins-v)" opacity=".85" />
       {/* bracket traseiro (I/O) com fendas de ventilação — única quebra real
           de perfil numa GPU, sempre na ponta que encosta no painel do gabinete */}
       <rect x={b.x + b.w - 10} y={b.y + 2} width={9} height={b.h - 4} rx={1} fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
@@ -445,6 +451,12 @@ const D_GPU = (b: Box, d: VisualDescriptor): ReactNode => {
           o bracket traseiro com fendas é a única quebra de perfil que a
           peça tem de verdade nesta vista */}
       <rect x={b.x + b.w * 0.1} y={b.y + b.h * 0.18} width={b.w * 0.72} height={b.h * 0.64} fill="url(#mat-fins-v)" opacity=".85" />
+      {/* armadura preta sólida em volta do miolo: cunhas triangulares nas
+          pontas + faixa inferior — emoldura as aletas em vez de deixá-las
+          soltas no meio do shroud (conferido contra foto real) */}
+      <path d={`M ${b.x} ${b.y + b.h * 0.76} L ${b.x + b.w * 0.16} ${b.y + b.h * 0.76} L ${b.x + b.w * 0.05} ${b.y + b.h * 0.22} Z`} fill="var(--panel)" />
+      <path d={`M ${b.x + b.w * 0.82} ${b.y + b.h * 0.76} L ${b.x + b.w * 0.95} ${b.y + b.h * 0.76} L ${b.x + b.w * 0.93} ${b.y + b.h * 0.22} Z`} fill="var(--panel)" />
+      <rect x={b.x} y={b.y + b.h * 0.76} width={b.w * 0.97} height={b.h * 0.24} fill="var(--panel)" />
       <rect x={b.x + b.w - 10} y={b.y + 2} width={9} height={b.h - 4} rx={1} fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
       {Array.from({ length: 4 }, (_, i) => (
         <rect key={i} x={b.x + b.w - 8} y={b.y + 6 + i * ((b.h - 12) / 4)} width={5} height={(b.h - 12) / 4 - 2.5} rx={0.8} fill="var(--line)" opacity=".5" />
