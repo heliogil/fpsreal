@@ -188,12 +188,12 @@ const gpuBody = (b: Box, fans: number, thick: boolean, flagship: boolean, spin?:
         <line key={i} x1={pcx + (pw / (flagship ? 4 : 3)) * (i + 0.5)} y1={b.y - 8.2} x2={pcx + (pw / (flagship ? 4 : 3)) * (i + 0.5)} y2={b.y - 3.8} stroke="var(--line)" strokeWidth="1" />
       ))}
       {/* shroud */}
-      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={5} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={5} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
+      <path d={shroudPath(b, flagship ? 'angular' : 'flat')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+      <path d={shroudPath(b, flagship ? 'angular' : 'flat')} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
       {bevel(b, 3, 5)}
       {flagship && <rect x={b.x} y={b.y + b.h - 5} width={b.w} height={5} rx={2} fill="var(--accent)" opacity=".8" />}
       {!flagship && <rect x={b.x + 4} y={b.y + b.h - 4} width={b.w * 0.35} height={2.5} rx={1} fill="var(--accent-dim)" />}
-      {cxs.map((cx, i) => <FanDisc key={i} cx={cx} cy={b.y + b.h / 2} r={r} spin={spin} dur={2 + i * 0.3} />)}
+      {cxs.map((cx, i) => <g key={i}>{fanBlades(cx, b.y + b.h / 2, r, 10)}</g>)}
       {thick && <rect x={b.x} y={b.y - 8} width={b.w} height={4} rx={1} fill="var(--panel)" stroke="var(--line)" strokeWidth=".8" />}
     </g>
   )
@@ -442,15 +442,11 @@ const D_GPU = (b: Box, d: VisualDescriptor): ReactNode => {
           ))}
         </g>
       )}
-      {shroud === 'angular' ? (
-        <path d={`M${b.x},${b.y + 6} L${b.x + 10},${b.y} H${b.x + b.w - 10} L${b.x + b.w},${b.y + 6} V${b.y + b.h} H${b.x} Z`}
-          fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-      ) : (
-        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={shroud === 'industrial' ? 2 : 5}
-          fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-      )}
+      <path d={shroudPath(b, shroud as 'flat' | 'dual_tone' | 'angular' | 'industrial')}
+        fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
       {shroud === 'dual_tone' && <rect x={b.x} y={b.y} width={b.w} height={b.h * 0.42} rx={5} fill="var(--panel)" opacity=".55" />}
-      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={5} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
+      <path d={shroudPath(b, shroud as 'flat' | 'dual_tone' | 'angular' | 'industrial')}
+        fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
       {vent === 'diagonal' && Array.from({ length: 5 }, (_, i) => (
         <line key={i} x1={b.x + 8 + i * 9} y1={b.y + b.h - 4} x2={b.x + 16 + i * 9} y2={b.y + 5} stroke="var(--line)" strokeWidth="1" opacity=".5" />
       ))}
@@ -481,12 +477,7 @@ const D_GPU = (b: Box, d: VisualDescriptor): ReactNode => {
       {cxs.map((cx, i) => (
         style === 'blower'
           ? <g key={i}><circle cx={cx} cy={b.y + b.h / 2} r={r * 0.8} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" /><rect x={cx + r} y={b.y + b.h * 0.3} width={b.w * 0.25} height={b.h * 0.4} rx={2} fill="var(--panel)" stroke="var(--line)" strokeWidth=".8" /></g>
-          : <g key={i}>
-              <circle cx={cx} cy={b.y + b.h / 2} r={r} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
-              {style === 'ring' && <circle cx={cx} cy={b.y + b.h / 2} r={r * 0.78} fill="none" stroke="var(--accent-dim)" strokeWidth="1.4" />}
-              <circle cx={cx} cy={b.y + b.h / 2} r={r * 0.62} fill="none" stroke="var(--line)" strokeWidth="1" opacity=".6" />
-              <circle cx={cx} cy={b.y + b.h / 2} r={r * 0.2} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
-            </g>
+          : <g key={i}>{fanBlades(cx, b.y + b.h / 2, r, 10, { ring: style === 'ring' })}</g>
       ))}
     </g>
   )
