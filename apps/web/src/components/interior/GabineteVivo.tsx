@@ -625,7 +625,13 @@ export default function GabineteVivo({
                 + `${chx.toFixed(1)},${(y + 48).toFixed(1)} ${(b.x - 7).toFixed(1)},${y.toFixed(1)}`
             }) : []
             return (
-              <g data-depth="tray" data-asm="0" filter="url(#gv-far)" opacity={0.5} pointerEvents="none">
+              // Fase 2 (2026-08-07): opacity subiu de 0.5 -> 0.78. Em 0.5, o
+              // cabo (que já tinha opacity own de 0.55 no traço externo)
+              // ficava em ~0.275 efetivo — lia como ausente, não como
+              // "atrás". 0.78 mantém a recessão de profundidade (ainda menos
+              // que o plano frontal, que é opacity 1 sem blur) mas o chicote
+              // volta a ser reconhecível como cabo.
+              <g data-depth="tray" data-asm="0" filter="url(#gv-far)" opacity={0.78} pointerEvents="none">
                 <rect x={b.x - 11} y={b.y - 7} width={b.w + 19} height={b.h + 13} rx={4}
                   fill="var(--panel)" stroke="var(--line2)" strokeWidth="1" />
                 {/* CHICOTE atrás da bandeja: 24-pin, EPS e front-panel sobem
@@ -634,7 +640,7 @@ export default function GabineteVivo({
                     z-order: sem um "atrás" onde correr, vira rabisco. */}
                 {runs.map((d, i) => (
                   <g key={`cb${i}`} data-cable={['eps', 'atx24', 'front_panel'][i]}>
-                    <path d={d} fill="none" stroke="var(--line)" strokeWidth="4.2" opacity="0.55" strokeLinecap="round" />
+                    <path d={d} fill="none" stroke="var(--line)" strokeWidth="4.2" opacity="0.7" strokeLinecap="round" />
                     <path d={d} fill="none" stroke="var(--dim2)" strokeWidth="2.1" strokeLinecap="round" />
                   </g>
                 ))}
