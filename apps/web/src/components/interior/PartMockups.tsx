@@ -232,6 +232,43 @@ const moboBoard = (b: Box, wScale: number, hScale: number): ReactNode => {
   )
 }
 
+/* ── Fonte (PSU) ───────────────────────────────────────────────────────────
+   UM genérico só, paramétrico no tamanho (decisão do founder 2026-08-07: sem
+   estética por modelo). No corte lateral a face visível é a LATERAL LONGA da
+   fonte — um tijolo retangular liso. A ventoinha fica no topo/fundo (aponta
+   pro respiro do basement) e NÃO aparece aqui; a tomada AC fica na traseira,
+   vista de canto. Conferido contra foto real (Corsair HX, perfil lateral).
+   Detalhes que o olho reconhece: faixa da etiqueta, tomada+interruptor na
+   traseira (direita = fundo do gabinete), portas modulares na frente
+   (esquerda = interior, onde os cabos plugam). */
+const psuBody = (b: Box): ReactNode => {
+  const r = Math.min(4, b.h * 0.08)
+  const rearX = b.x + b.w - b.h * 0.26   // painel traseiro (tomada AC)
+  return (
+    <g>
+      {/* corpo — tijolo limpo, não shroud chanfrado */}
+      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={r} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={r} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
+      {bevel(b, 3, 4)}
+      {/* faixa da etiqueta (sticker do modelo) — mais escura que o corpo */}
+      <rect x={b.x + b.w * 0.06} y={b.y + b.h * 0.54} width={b.w * 0.62} height={b.h * 0.28} rx={2}
+        fill="var(--panel)" opacity=".85" />
+      {/* portas modulares na frente (esquerda, viradas pro interior): onde os
+          cabos que o viewer desenha plugam */}
+      {[0.16, 0.34, 0.52].map((t, i) => (
+        <rect key={i} x={b.x + b.h * 0.16} y={b.y + b.h * t} width={b.h * 0.5} height={b.h * 0.12} rx={1.5}
+          fill="var(--panel)" stroke="var(--line)" strokeWidth=".8" />
+      ))}
+      {/* painel traseiro (direita = fundo do gabinete): interruptor + tomada
+          C14, vistos de canto — a quebra universal de uma fonte nesta vista */}
+      <rect x={rearX} y={b.y + b.h * 0.12} width={b.h * 0.18} height={b.h * 0.76} rx={2}
+        fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
+      <rect x={rearX + b.h * 0.04} y={b.y + b.h * 0.2} width={b.h * 0.1} height={b.h * 0.15} rx={1} fill="var(--line)" opacity=".6" />
+      <rect x={rearX + b.h * 0.04} y={b.y + b.h * 0.45} width={b.h * 0.1} height={b.h * 0.18} rx={1} fill="var(--line)" opacity=".75" />
+    </g>
+  )
+}
+
 /* ── registry ──────────────────────────────────────────────────────────── */
 
 export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
@@ -332,26 +369,10 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
   },
 
   psu: {
-    'psu-basic': (b) => (
-      <g>
-        <path d={shroudPath(b, 'flat')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-        <path d={shroudPath(b, 'flat')} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
-        {bevel(b, 3, 4)}
-        {fanBlades(b.x + b.h * 0.55, b.y + b.h / 2, b.h * 0.32, 7)}
-      </g>
-    ),
-    'psu-modular': (b) => (
-      <g>
-        <path d={shroudPath(b, 'industrial')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-        <path d={shroudPath(b, 'industrial')} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
-        {bevel(b, 3, 4)}
-        {fanBlades(b.x + b.h * 0.55, b.y + b.h / 2, b.h * 0.32, 7)}
-        {[0, 1, 2, 3].map((i) => (
-          <rect key={i} x={b.x + b.w - b.h * 0.9 + i * 7} y={b.y + b.h * 0.3} width={5} height={5} rx={1} fill="var(--accent-dim)" />
-        ))}
-        <rect x={b.x + b.w - b.h * 0.9} y={b.y + b.h * 0.58} width={26} height={4} rx={2} fill="var(--accent)" opacity=".7" />
-      </g>
-    ),
+    // um genérico só, size-only (decisão do founder) — as duas chaves de
+    // variante ainda existem porque pickVariant as devolve, mas desenham igual
+    'psu-basic': (b) => psuBody(b),
+    'psu-modular': (b) => psuBody(b),
   },
 
   storage: {
@@ -534,30 +555,9 @@ const D_COOLER = (b: Box, d: VisualDescriptor): ReactNode => {
   )
 }
 
-const D_PSU = (b: Box, d: VisualDescriptor): ReactNode => {
-  const cabling = String(d.cabling ?? 'fixed')
-  const grill = String(d.grill ?? 'round')
-  const fanPos = String(d.fan_pos ?? 'bottom')
-  const fcx = fanPos === 'rear' ? b.x + b.w - b.h * 0.55 : b.x + b.h * 0.55
-  return (
-    <g>
-      <path d={shroudPath(b, 'flat')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-      <path d={shroudPath(b, 'flat')} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
-      {bevel(b, 3, 4)}
-      {fanBlades(fcx, b.y + b.h / 2, b.h * 0.32, 7)}
-      {grill === 'honeycomb' && (
-        <circle cx={fcx} cy={b.y + b.h / 2} r={b.h * 0.34} fill="url(#mat-mesh)" opacity=".35" stroke="var(--line)" strokeWidth="1.2" />
-      )}
-      {grill === 'slot' && Array.from({ length: 4 }, (_, i) => (
-        <line key={i} x1={fcx - b.h * 0.3 + i * (b.h * 0.2)} y1={b.y + b.h * 0.2} x2={fcx - b.h * 0.3 + i * (b.h * 0.2)} y2={b.y + b.h * 0.8} stroke="var(--line)" strokeWidth="1" opacity=".6" />
-      ))}
-      {cabling !== 'fixed' && Array.from({ length: cabling === 'modular' ? 4 : 2 }, (_, i) => (
-        <rect key={i} x={b.x + b.w - b.h * 0.9 + i * 7} y={b.y + b.h * 0.3} width={5} height={5} rx={1} fill="var(--accent-dim)" />
-      ))}
-      {cabling === 'modular' && <rect x={b.x + b.w - b.h * 0.9} y={b.y + b.h * 0.58} width={26} height={4} rx={2} fill="var(--accent)" opacity=".7" />}
-    </g>
-  )
-}
+// size-only: o descritor de PSU não muda mais o desenho (decisão do founder).
+// Mantido como wrapper pro caso de o DESCRIPTOR_RENDERERS ainda apontar aqui.
+const D_PSU = (b: Box, _d: VisualDescriptor): ReactNode => psuBody(b)
 
 const D_CASE_FRONT = (b: Box, d: VisualDescriptor): ReactNode => {
   const surface = String(d.surface ?? 'solid')
