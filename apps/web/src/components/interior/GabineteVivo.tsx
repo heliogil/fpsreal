@@ -670,17 +670,22 @@ export default function GabineteVivo({
                     front-panel ~6-8mm. */}
                 {runs.map(({ x0, y }, i) => {
                   const strandCount = [4, 6, 3][i]
-                  const strandW = [1.8, 1.8, 1.5][i]
-                  const spread = [7, 10, 5][i]
+                  const strandW = [1.6, 2.4, 1.2][i]
+                  const spread = [6, 10, 4][i]
+                  const baseD = buildStrand(x0, y, 0)
                   return (
                     <g key={`cb${i}`} data-cable={['eps', 'atx24', 'front_panel'][i]}>
+                      {/* base sólida escura — preenche os vãos entre as vias,
+                          dá o corpo preto do cabo real (não fica ralo/cinza) */}
+                      <path d={baseD} fill="none" stroke="var(--bg)" strokeWidth={spread + strandW}
+                        opacity="0.92" strokeLinecap="round" />
                       {Array.from({ length: strandCount }, (_, s) => {
                         const t = strandCount === 1 ? 0 : s / (strandCount - 1) - 0.5
                         const dx = t * spread
                         return (
                           <path key={s} d={buildStrand(x0, y, dx)} fill="none"
                             stroke="var(--dim2)" strokeWidth={strandW}
-                            opacity={s % 2 === 0 ? 0.9 : 0.65} strokeLinecap="round" />
+                            opacity={s % 2 === 0 ? 1 : 0.85} strokeLinecap="round" />
                         )
                       })}
                     </g>
@@ -818,12 +823,15 @@ export default function GabineteVivo({
             const strandCount = 5, strandW = 2, spread = 9
             return (
               <g data-cable="pcie" data-asm="7" fill="none" strokeLinecap="round" pointerEvents="none" opacity={dimOf('gpu')}>
+                {/* base sólida escura — corpo preto do cabo, preenche os
+                    vãos entre as vias em vez de ficar ralo/cinza */}
+                <path d={buildStrand(0)} stroke="var(--bg)" strokeWidth={spread + strandW} opacity="0.92" />
                 {Array.from({ length: strandCount }, (_, s) => {
                   const t = s / (strandCount - 1) - 0.5
                   const dx = t * spread
                   return (
                     <path key={s} d={buildStrand(dx)} stroke="var(--dim2)" strokeWidth={strandW}
-                      opacity={s % 2 === 0 ? 0.9 : 0.65} />
+                      opacity={s % 2 === 0 ? 1 : 0.85} />
                   )
                 })}
                 {/* plugue discreto na fonte — só a base do conector, sem
