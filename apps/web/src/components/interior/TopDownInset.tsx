@@ -1,4 +1,5 @@
 import type { GeoPlacement, InteriorGeometry, LiveInterior } from '@/lib/live-server'
+import { coolerBand, bandTone, bandSuffix } from './clearance'
 
 /**
  * TopDownInset — corte SUPERIOR do gabinete (profundidade × largura).
@@ -50,13 +51,16 @@ export default function TopDownInset({
   const trayY = Y(0)
   const panelY = Y(W)
 
-  const coolerOk = clr ? !clr.is_tight : true
-  const coolerTone = clr ? (clr.is_tight ? 'var(--warn)' : 'var(--fresh)') : 'var(--dim2)'
+  // A folga não é exacta: sai da ficha do fabricante, que erra (ver
+  // ./clearance). Abaixo da cauda de sobrestimação observada, não se pode
+  // afirmar que cabe — daí a faixa 'risco'.
+  const band = clr ? coolerBand(clr.remaining_mm) : null
+  const coolerTone = band ? bandTone(band) : 'var(--dim2)'
   const dim = (id: string) => (hovered && hovered !== id ? 0.25 : 1)
 
   return (
     <svg viewBox={`0 0 ${VW} ${VH}`} role="img"
-      aria-label={`Corte superior: largura útil ${Math.round(W)}mm (derivada), cooler ${Math.round(coolerH)}mm${clr ? `, folga ${Math.round(clr.remaining_mm)}mm` : ''}`}
+      aria-label={`Corte superior: largura útil ${Math.round(W)}mm (derivada), cooler ${Math.round(coolerH)}mm${clr && band ? `, folga ${Math.round(clr.remaining_mm)}mm${bandSuffix(band)}` : ''}`}
       style={{ display: 'block', width: '100%', height: 'auto', background: 'var(--bg)' }}>
 
       <text x={ox} y={14} className="gv-note" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">
@@ -107,8 +111,8 @@ export default function TopDownInset({
               className="gv-cota" fill="var(--text)" fontWeight="600" fontFamily="var(--font-plex-mono), monospace">
               {Math.round(coolerH)}mm
             </text>
-            {/* folga até à tampa */}
-            {clr && (
+            {/* folga até à tampa — com a ressalva da margem de erro da ficha */}
+            {clr && band && (
               <g>
                 <line x1={cx + cw / 2} y1={trayY + ch} x2={cx + cw / 2} y2={panelY}
                   stroke={coolerTone} strokeWidth="1" strokeDasharray="3 3" />
@@ -116,6 +120,12 @@ export default function TopDownInset({
                   className="gv-cota" fill={coolerTone} fontWeight="600" fontFamily="var(--font-plex-mono), monospace">
                   folga {Math.round(clr.remaining_mm)}mm
                 </text>
+                {band !== 'ok' && (
+                  <text x={cx + cw + 8} y={(trayY + ch + panelY) / 2 + 14}
+                    className="gv-micro gv-hide-sm" fill={coolerTone} fontFamily="var(--font-plex-mono), monospace">
+                    {band === 'risco' ? 'pode não caber' : 'apertado'}
+                  </text>
+                )}
               </g>
             )}
             {/* HEURÍSTICA: uma torre alta costuma avançar sobre o 1º slot de RAM.

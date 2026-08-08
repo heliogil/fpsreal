@@ -5,6 +5,7 @@ import type { GeoMount, GeoPlacement, LiveInterior, LiveProduct } from '@/lib/li
 import { MaterialDefs, bevel, pickVariant, renderPart, renderFromDescriptor } from './PartMockups'
 import TopDownInset from './TopDownInset'
 import BottleneckNote from './BottleneckNote'
+import { coolerBand, bandSuffix } from './clearance'
 
 /**
  * GabineteVivo v5 — função da GEOMETRIA PARAMÉTRICA do backend.
@@ -240,7 +241,10 @@ export default function GabineteVivo({
     specs: [
       ['modelo', products.cooler?.name ?? interior.parts.cooler.name ?? '—'],
       ['altura (spec)', mm(coolerRealH)],
-      ...(coolerClr ? [['folga até a tampa', mm(coolerClr.remaining_mm) + (coolerClr.is_tight ? ' (apertado)' : '')] as [string, string]] : []),
+      // A ficha do fabricante erra (Noctua: 56 de 100+ gabinetes com desvio
+      // relevante, até −3,5mm no lado perigoso), então a folga leva a
+      // ressalva da margem em vez de ser dada como exacta. Ver ./clearance.
+      ...(coolerClr ? [['folga até a tampa', mm(coolerClr.remaining_mm) + bandSuffix(coolerBand(coolerClr.remaining_mm))] as [string, string]] : []),
       ['nota', 'a altura está no plano do corte superior'],
     ],
   }
