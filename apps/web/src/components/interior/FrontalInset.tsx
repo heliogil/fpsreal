@@ -39,8 +39,6 @@ export default function FrontalInset({
 
   const coolerH = interior.parts.cooler.height_mm || 0     // vão bandeja→tampa
   const clr = interior.clearances.cooler
-  const gpuThick = interior.parts.gpu.thickness_mm ?? null
-  const slots = interior.parts.gpu.slots ?? null
 
   /* ── mm → px (largura na horizontal, altura na vertical) ───────────────── */
   const VW = 720, VH = 250
@@ -79,13 +77,11 @@ export default function FrontalInset({
       tone: clr.is_tight ? 'var(--warn)' : 'var(--fresh)',
     })
   }
-  if (gpuThick) {
-    rows.push({
-      label: 'GPU (espessura)',
-      value: `${Math.round(gpuThick)}mm${slots ? ` · ${slots} slots` : ''} · típico`,
-      tone: 'var(--dim)',
-    })
-  }
+  // NÃO existe linha de "GPU (espessura)" aqui de propósito: a espessura em
+  // slots é a dimensão VERTICAL da placa (os slots empilham no bracket
+  // traseiro) e já está no plano da vista lateral. O que a placa ocupa da
+  // bandeja até a tampa é a ALTURA DO CARTÃO (~125-140mm), que não existe no
+  // catálogo — então não se anota cota nenhuma para a GPU nesta vista.
 
   return (
     <svg viewBox={`0 0 ${VW} ${VH}`} role="img"
@@ -133,10 +129,13 @@ export default function FrontalInset({
         )
       })()}
 
-      {/* GPU de topo: espessura real (slots) a partir da bandeja */}
+      {/* GPU: PRESENÇA, sem cota de vão. A placa de facto avança da bandeja
+          para o vidro, mas essa medida é a ALTURA DO CARTÃO e não está no
+          catálogo. Desenhar aqui a espessura em slots seria pôr uma dimensão
+          vertical num eixo horizontal — faixa fina, sem número, é o honesto. */}
       {gpu && (
         <g opacity={dim('gpu')} {...hov('gpu')} style={{ cursor: 'default' }}>
-          <rect x={trayX} y={Y(gpu.y + gpu.h)} width={Math.max(3, (gpuThick ?? 41) * s)} height={gpu.h * s} rx={2}
+          <rect x={trayX} y={Y(gpu.y + gpu.h)} width={Math.max(3, 12 * s)} height={gpu.h * s} rx={2}
             fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
         </g>
       )}

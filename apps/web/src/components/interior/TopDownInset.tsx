@@ -11,8 +11,10 @@ import type { GeoPlacement, InteriorGeometry, LiveInterior } from '@/lib/live-se
  *
  * HONESTIDADE: a largura útil (`width_mm`) é DERIVADA da altura máx. de cooler
  * do gabinete (que é, por definição, esse vão) — vem rotulada como derivada.
- * A espessura da GPU não é estimada (não há dado no catálogo): a GPU aparece
- * como faixa fina, sem número.
+ * A extensão da GPU neste eixo (bandeja→tampa) é a ALTURA DO CARTÃO e não há
+ * dado no catálogo: a GPU aparece como faixa fina, sem número. Em particular
+ * NÃO se usa `thickness_mm` (slots × 20.32) aqui — essa é a dimensão vertical
+ * da placa e o seu lugar é a vista lateral.
  */
 
 export default function TopDownInset({
@@ -71,45 +73,20 @@ export default function TopDownInset({
       <line x1={X(0)} y1={panelY} x2={X(D)} y2={panelY} stroke="var(--line)" strokeWidth="2" strokeDasharray="6 4" opacity=".8" />
       <text x={X(0) - 6} y={panelY + 4} textAnchor="end" className="gv-micro" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">tampa</text>
 
-      {/* GPU: comprimento E espessura reais. A espessura (nº de slots × passo do
-          slot) sai da BANDEJA para dentro do gabinete — é a dimensão que só aqui
-          está no plano. Sem dado de slots (raro), cai numa faixa fina sem número. */}
+      {/* GPU: só o COMPRIMENTO é real nesta vista (eixo horizontal, partilhado
+          com a lateral). A extensão bandeja→tampa é a ALTURA DO CARTÃO, que não
+          está no catálogo — e NÃO é a espessura em slots (essa empilha na
+          vertical, no bracket traseiro, e já está no plano da vista lateral).
+          Desenhá-la aqui punha uma dimensão vertical num eixo horizontal e
+          produzia uma folga que nunca disparava. Faixa fina, sem cota. */}
       {gpu && (() => {
-        const gThick = interior.parts.gpu.thickness_mm || 0
-        const slots = interior.parts.gpu.slots || 0
-        const sideClr = interior.clearances.gpu_side
-        const tone = sideClr ? (sideClr.is_tight ? 'var(--warn)' : 'var(--fresh)') : 'var(--dim2)'
-        if (gThick > 0) {
-          const gh = gThick * s
-          return (
-            <g opacity={dim('gpu')} onMouseEnter={() => onHover?.('gpu')} onMouseLeave={() => onHover?.(null)}>
-              {/* espessura medida da bandeja para dentro */}
-              <rect x={X(gpu.x)} y={trayY} width={gpu.w * s} height={gh} rx={2}
-                fill="var(--panel2)" stroke={tone} strokeWidth="1.3" />
-              <text x={X(gpu.x) + 5} y={trayY + gh / 2 + 3} className="gv-cota" fill="var(--text)" fontWeight="600" fontFamily="var(--font-plex-mono), monospace">
-                {slots ? `${slots}-slot · ~${Math.round(gThick)}mm típico` : `~${Math.round(gThick)}mm`}
-              </text>
-              {/* folga até a tampa */}
-              {sideClr && (
-                <>
-                  <line x1={X(gpu.x) + gpu.w * s - 10} y1={trayY + gh} x2={X(gpu.x) + gpu.w * s - 10} y2={panelY}
-                    stroke={tone} strokeWidth="1" strokeDasharray="3 3" />
-                  <text x={X(gpu.x) + gpu.w * s - 6} y={(trayY + gh + panelY) / 2 + 3} className="gv-micro gv-hide-sm"
-                    fill={tone} fontFamily="var(--font-plex-mono), monospace">
-                    folga {Math.round(sideClr.remaining_mm)}mm
-                  </text>
-                </>
-              )}
-            </g>
-          )
-        }
         const gy = Y(W * 0.52)
         return (
           <g opacity={dim('gpu')} onMouseEnter={() => onHover?.('gpu')} onMouseLeave={() => onHover?.(null)}>
             <rect x={X(gpu.x)} y={gy} width={gpu.w * s} height={Math.max(7, 12 * s)} rx={2}
               fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
             <text x={X(gpu.x) + 4} y={gy - 4} className="gv-micro gv-hide-sm" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">
-              GPU {Math.round(gpu.w)}mm · espessura não estimada
+              GPU {Math.round(gpu.w)}mm de comprimento
             </text>
           </g>
         )

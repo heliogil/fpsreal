@@ -229,7 +229,11 @@ export default function GabineteVivo({
       ...(interior.parts.gpu.thickness_mm ? [['espessura', `${interior.parts.gpu.slots ?? '?'}-slot · ~${mm(interior.parts.gpu.thickness_mm)} típico`] as [string, string]] : []),
       ['TDP', `${Math.round(interior.parts.gpu.tdp_w)} W`],
       ...(gpuClr ? [['folga até a frente', mm(gpuClr.remaining_mm) + (gpuClr.is_tight ? ' (apertado)' : '')] as [string, string]] : []),
-      ...(interior.clearances.gpu_side ? [['folga até a tampa', mm(interior.clearances.gpu_side.remaining_mm) + (interior.clearances.gpu_side.is_tight ? ' (apertado)' : '')] as [string, string]] : []),
+      // "folga até a tampa" (clearances.gpu_side) saiu: é calculada como
+      // largura_útil − espessura_em_slots, que compara um vão horizontal com
+      // uma dimensão vertical. Com os valores reais do catálogo dá 94–129mm
+      // contra um limiar de 12mm — nunca dispara. Volta quando existir a
+      // altura do cartão (ver spec 2026-08-08).
     ],
   }
   if (airCooler) focusTargets.cooler = {
@@ -1107,14 +1111,16 @@ export default function GabineteVivo({
         </div>
       )}
 
-      {/* vista frontal — fecha as três ortográficas. É aqui que o cooler e a
-          espessura da GPU disputam o MESMO vão, com o foco sincronizado com a
-          lateral (o `hovered` é partilhado pelas três vistas). */}
-      {!compact && (
-        <div style={{ borderTop: '1px solid var(--line2)' }}>
-          <FrontalInset interior={interior} g={g} hovered={focused ?? hovered} onHover={setHovered} />
-        </div>
-      )}
+      {/* vista frontal — fecha as três ortográficas, com o foco sincronizado
+          com a lateral (o `hovered` é partilhado pelas três vistas).
+          Aparece TAMBÉM no card compacto: a altura do cooler contra a largura
+          útil é uma restrição de COMPATIBILIDADE (o cooler pode simplesmente
+          não caber), não enfeite — e é na comparação lado a lado que essa
+          diferença entre builds decide. `gv-compact` no wrapper faz o detalhe
+          fino (`gv-hide-sm`) sumir no tamanho pequeno. */}
+      <div className={compact ? 'gv-compact' : undefined} style={{ borderTop: '1px solid var(--line2)' }}>
+        <FrontalInset interior={interior} g={g} hovered={focused ?? hovered} onHover={setHovered} />
+      </div>
 
       {/* legenda */}
       {!compact && (
