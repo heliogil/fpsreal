@@ -633,10 +633,18 @@ export default function GabineteVivo({
             const gy = [b.y + b.h * 0.18, b.y + b.h * 0.52, b.y + b.h * 0.84]
             const pb = psu ? box(psu) : null
             const chx = b.x - 19          // canaleta vertical atrás da bandeja
+            // via única, com deslocamento dx — o cabo é um FEIXE de vias
+            // redondas individualmente encapadas (conferido contra foto
+            // real de cabo sleeved), não um tubo liso nem uma textura por
+            // cima. dx aproxima o deslocamento perpendicular: os 4 cabos
+            // aqui correm quase verticais, então um deslocamento horizontal
+            // já lê como vias paralelas lado a lado.
+            const buildStrand = (x0: number, y: number, dx: number) =>
+              `M${(x0 + dx).toFixed(1)},${pb!.y.toFixed(1)} C${(chx + dx).toFixed(1)},${(pb!.y - 26).toFixed(1)} `
+              + `${(chx + dx).toFixed(1)},${(y + 48).toFixed(1)} ${(b.x - 7 + dx).toFixed(1)},${y.toFixed(1)}`
             const runs = pb ? gy.map((y, i) => {
               const x0 = pb.x + pb.w * (0.20 + i * 0.17)
-              return `M${x0.toFixed(1)},${pb.y.toFixed(1)} C${chx.toFixed(1)},${(pb.y - 26).toFixed(1)} `
-                + `${chx.toFixed(1)},${(y + 48).toFixed(1)} ${(b.x - 7).toFixed(1)},${y.toFixed(1)}`
+              return { x0, y }
             }) : []
             return (
               // Fase 2 (2026-08-07): opacity subiu de 0.5 -> 0.78. Em 0.5, o
@@ -652,18 +660,29 @@ export default function GabineteVivo({
                     pela canaleta e saem nos passa-cabos. Vivem no plano
                     DISTANTE — é exactamente por isto que o cabo dependia do
                     z-order: sem um "atrás" onde correr, vira rabisco.
-                    Larguras calibradas pra escala real (s≈1,38px/mm num
-                    case típico): 24-pin é o chicote mais grosso do PC
-                    (~13-16mm reais), EPS ~9-10mm, front-panel (fios finos,
-                    menos compactados) ~6-8mm — antes os 3 usavam a mesma
-                    largura fina (~3mm equivalente), lia como barbante. */}
-                {runs.map((d, i) => {
-                  const outerW = [8, 11, 6][i]
-                  const innerW = [5, 7, 3.5][i]
+                    Cada cabo é um FEIXE de vias redondas paralelas — não um
+                    tubo liso, não uma textura por cima (conferido contra
+                    foto real de cabo sleeved: vias individuais visíveis,
+                    encapadas, lado a lado). 24-pin é o chicote mais grosso
+                    do PC (mais vias, feixe mais largo), front-panel o mais
+                    fino. Espessura total calibrada pra escala real
+                    (s≈1,38px/mm): 24-pin ~13-16mm, EPS ~9-10mm,
+                    front-panel ~6-8mm. */}
+                {runs.map(({ x0, y }, i) => {
+                  const strandCount = [4, 6, 3][i]
+                  const strandW = [1.8, 1.8, 1.5][i]
+                  const spread = [7, 10, 5][i]
                   return (
                     <g key={`cb${i}`} data-cable={['eps', 'atx24', 'front_panel'][i]}>
-                      <path d={d} fill="none" stroke="var(--line)" strokeWidth={outerW} opacity="0.7" strokeLinecap="round" />
-                      <path d={d} fill="none" stroke="var(--dim2)" strokeWidth={innerW} strokeLinecap="round" />
+                      {Array.from({ length: strandCount }, (_, s) => {
+                        const t = strandCount === 1 ? 0 : s / (strandCount - 1) - 0.5
+                        const dx = t * spread
+                        return (
+                          <path key={s} d={buildStrand(x0, y, dx)} fill="none"
+                            stroke="var(--dim2)" strokeWidth={strandW}
+                            opacity={s % 2 === 0 ? 0.9 : 0.65} strokeLinecap="round" />
+                        )
+                      })}
                     </g>
                   )
                 })}
@@ -786,15 +805,27 @@ export default function GabineteVivo({
             const x0 = pb.x + pb.w * 0.30, y0 = pb.y
             const x1 = gb.x + gb.w * 0.68, y1 = gb.y - 7
             const shroudY = Yc(g.case.shroud_h_mm)
-            const d = `M${x0.toFixed(1)},${y0.toFixed(1)} C${x0.toFixed(1)},${(shroudY - 6).toFixed(1)} `
-              + `${(x1 - 26).toFixed(1)},${(y1 + 34).toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`
+            const buildStrand = (dx: number) =>
+              `M${(x0 + dx).toFixed(1)},${y0.toFixed(1)} C${(x0 + dx).toFixed(1)},${(shroudY - 6).toFixed(1)} `
+              + `${(x1 - 26 + dx).toFixed(1)},${(y1 + 34).toFixed(1)} ${(x1 + dx).toFixed(1)},${y1.toFixed(1)}`
+            // 5 vias — PCIe 8-pin (6+2) tem esse tanto de fios visíveis no
+            // feixe (conferido contra foto real). Largura calibrada pra
+            // escala real: PCIe tem uns 8-9mm de diâmetro (~11px em
+            // s≈1,38px/mm) — o valor antigo (tubo único 5.4/2.9) equivalia
+            // a ~4mm, lia como barbante; o listrado tracejado que veio
+            // depois também não funcionou (textura inventada, não vias
+            // reais). Isto desenha as vias de verdade, com offset.
+            const strandCount = 5, strandW = 2, spread = 9
             return (
               <g data-cable="pcie" data-asm="7" fill="none" strokeLinecap="round" pointerEvents="none" opacity={dimOf('gpu')}>
-                {/* largura calibrada pra escala real: PCIe 8-pin tem uns
-                    8-9mm de diametro (~11-12px em s≈1,38px/mm) — o valor
-                    antigo (5.4/2.9) equivalia a ~4mm, lia como barbante */}
-                <path d={d} stroke="var(--line)" strokeWidth="9" opacity=".55" />
-                <path d={d} stroke="var(--dim2)" strokeWidth="5.5" />
+                {Array.from({ length: strandCount }, (_, s) => {
+                  const t = s / (strandCount - 1) - 0.5
+                  const dx = t * spread
+                  return (
+                    <path key={s} d={buildStrand(dx)} stroke="var(--dim2)" strokeWidth={strandW}
+                      opacity={s % 2 === 0 ? 0.9 : 0.65} />
+                  )
+                })}
                 {/* plugue discreto na fonte — só a base do conector, sem
                     grade de pino em destaque (o founder achou o plugue
                     chamativo demais; o que precisa aparecer é o feixe) */}
