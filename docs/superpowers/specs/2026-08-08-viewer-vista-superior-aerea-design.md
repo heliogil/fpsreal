@@ -1,124 +1,110 @@
-# Vista superior (aérea) do viewer — segunda projeção do gabinete
+# Vistas ortográficas do viewer — corrigir o eixo da espessura da GPU
 
-**Data:** 2026-08-08
-**Componentes:** `apps/web/src/components/interior/` (nova `GabineteTopo.tsx` + refactor leve de `GabineteVivo.tsx`) · consome `services/ingestion` (`/interior/estimate`) **sem alterá-lo**
-**Founder:** aprovado 2026-08-08
-
----
-
-## 0. Correção de terminologia (leia primeiro)
-
-Durante a sessão houve um descasamento de nomes que atrasou tudo. A conclusão, confirmada pelo founder:
-
-- O que o código e as specs anteriores chamavam de **"corte lateral"** é, pra o founder, a **vista frontal** — a **vista do vidro** do gabinete (onde se vê a placa-mãe de chapa, a GPU deitada, o cooler, a fonte no basement). **Essa é a vista principal e JÁ EXISTE** (`GabineteVivo.tsx`).
-- O que falta é **ADICIONAR uma vista superior (aérea)** — olhando o gabinete de cima.
-
-Portanto isto **não é rearquitetura**: a vista principal fica, e a de cima é **aditiva**.
-
-Contexto que continua valendo (specs anteriores):
-- `2026-08-07-viewer-2d-camadas-design.md` — postmortem da forma da GPU (não reabrir por ajuste manual de coordenadas).
-- `2026-08-07-spec-grafica-componentes-e-extracao.md` — o extrator de visão já existe e está dormente (0/51 produtos com foto).
-- **Decisão do founder (2026-08-07):** viewer **genérico por categoria, customizado só no tamanho** — sem estética por modelo. Vale para as duas vistas. Ver memória `project_viewer_generico_por_tamanho`.
+**Data:** 2026-08-08 (v2 — corrige a v1 do mesmo dia)
+**Componentes:** `apps/web/src/components/interior/{GabineteVivo,TopDownInset,FrontalInset}.tsx` · `services/ingestion/routers/interior.py`
+**Status:** v1 propunha construir uma vista superior. **Ela já existe.** Este documento substitui aquela premissa.
 
 ---
 
-## 1. Objetivo da vista superior
+## 0. Correção de premissa (leia primeiro)
 
-Tornar **legível a compatibilidade** das 3 peças que o founder apontou como as mais difíceis: **air cooler, liquid cooler (AIO/radiador) e GPU**. Cada uma tem uma folga crítica que a vista do vidro sozinha não mostra bem, e a vista de cima mostra:
+A v1 deste spec propunha criar `GabineteTopo.tsx` e implementar "hover sincronizado entre as vistas". Verificação no código:
 
-| Peça | Folga crítica que a vista de cima revela |
-|---|---|
-| **GPU** | comprimento vs profundidade do gabinete (a ponta da placa vs ventoinha/radiador frontal) — a estrela |
-| **AIO/radiador** | onde cabe (frente ou topo) e com o que conflita: radiador frontal disputa espaço com a GPU; radiador no topo disputa com a RAM |
-| **Air cooler** | footprint e *overhang* sobre a RAM; e a altura do cooler vs painel lateral (que, na geometria real, é a extensão perpendicular à placa — o próprio backend já anota que "a medida de spec vive na vista superior") |
+**As três vistas ortográficas já existem, e o hover já é compartilhado entre elas.**
 
-As duas vistas **dividem a história**, e é por isso que ter as duas vale a pena: **vidro = altura/silhueta de perfil; cima = footprint/profundidade/fluxo.**
-
----
-
-## 2. Sistema de eixos e contrato de projeção
-
-Referencial 3D do gabinete (torre padrão):
-- **X = profundidade** (frente→trás). Frente em X=0.
-- **Y = largura** (bandeja da placa em Y=W; vidro em Y=0 — as peças "sobem" da bandeja em direção ao vidro, em −Y).
-- **Z = altura** (piso em Z=0).
-
-- **Vista do vidro (existente)** = projeção no plano **X-Z** (olhando por −Y). Mostra profundidade × altura.
-- **Vista superior (nova)** = projeção no plano **X-Y** (olhando por −Z, de cima). Mostra profundidade × largura.
-
-**O eixo X (profundidade) é COMPARTILHADO entre as duas vistas.** Toda posição e extensão em profundidade é reaproveitada direto das placements que o backend já entrega. Só o eixo perpendicular muda (Z na do vidro, Y na de cima).
-
-Contrato por peça (o que cada vista mostra — impede desenhar a face errada, o erro recorrente da sessão):
-
-| Peça | Extensão em X (profund., compartilhada) | Extensão em Y (largura, nova) | Folga que ESTA vista possui |
+| Vista | Componente | Plano | Estado |
 |---|---|---|---|
-| placa-mãe | comprimento do board | laje fina junto à bandeja (Y≈W) | — (backdrop) |
-| GPU | `length_mm` (barra longa) | altura do cartão (~125mm, ~padrão) | **GPU: comprimento vs frente (X)** |
-| air cooler | footprint ~120mm | **altura do cooler** (`height_mm`, tray→vidro) | **cooler: altura vs painel lateral (Y) + overhang RAM** |
-| AIO radiador | `rad_len` (240/280/360) | espessura do stack (rad+fans) | **radiador: cabe na frente/topo? conflita c/ GPU/RAM?** |
-| AIO bomba | ~60mm | ~60mm | — |
-| RAM | slots | **altura da RAM** (~44mm, tray→vidro) | **RAM: altura vs overhang do cooler (Y)** |
-| fonte (PSU) | ~150mm | largura (~150mm) | — (sob o shroud; footprint esmaecido) |
-| ventoinha frontal | tira fina em X=0 | span na largura | ancora o fluxo de entrada |
-| ventoinha traseira | tira fina em X=D | parcial | ancora a saída |
+| Lateral ("vista do vidro") | `GabineteVivo.tsx` | profundidade × altura | principal, sempre visível |
+| **Superior (aérea)** | **`TopDownInset.tsx`** | profundidade × largura | **já existe**, montada em `GabineteVivo:1106`, oculta em `compact` |
+| **Frontal** | **`FrontalInset.tsx`** | largura × altura | **já existe**, montada em `GabineteVivo:1115` |
 
-Extensões em Y derivam de escalares que o backend **já entrega**: `case.width_mm`/`max_cooler_height_mm` (largura total), `parts.cooler.height_mm`, `parts.gpu` (comprimento + slots), largura da fonte, e padrões de form factor pra RAM/board. **Nenhum campo novo no backend.**
+O hover/foco já é partilhado pelas três (`hovered={focused ?? hovered}` nas duas insets). O comentário no próprio código diz: *"o `hovered` é partilhado pelas três vistas"*.
+
+Ou seja: **o que o founder pediu ("adiciona a vista de cima") já está implementado.** Provavelmente não aparecia porque as insets só renderizam quando `!compact` — e a página de resultados usa `compact`.
+
+Isto é o mesmo padrão do erro anterior (propor um pipeline OpenCV quando o `LLMVisionAdapter` já existia): **verificar o código antes de especificar.**
 
 ---
 
-## 3. Sobreposições (o ponto central levantado pelo founder)
+## 1. O que a verificação encontrou de fato: a espessura da GPU está em três eixos ao mesmo tempo
 
-De cima, peças em alturas (Z) diferentes se sobrepõem na projeção X-Y. Regras:
+Uma grandeza física ocupa **um** eixo. `thickness_mm` (= `slots × 20.32`) é usada como três:
 
-1. **Z-order pela altura real:** bandeja/placa ao fundo → fonte sob o shroud → GPU → cooler/radiador por cima. Desenha de baixo pra cima.
-2. **Transparência pra legibilidade:** camadas mais baixas com opacidade reduzida; a de cima opaca. Tudo continua reconhecível.
-3. **Distinguir projeção de CONFLITO — a regra de ouro:**
-   - Sobreposição que é **só projeção** (GPU embaixo da placa, peças em Z distintos que nunca se tocam) → **esmaecida**, sem alarme.
-   - Sobreposição que é **conflito real de folga** (ponta da GPU dentro da zona da ventoinha/radiador frontal; radiador no topo sobre a RAM; overhang do cooler sobre a RAM) → **destacada em cor de aviso** (`--warn`), com o número de folga que o backend **já calcula** (`clearances.gpu.remaining_mm`, `clearances.cooler.remaining_mm`, `is_tight`).
-   - A distinção projeção-vs-conflito vem dos `clearances` e das `obstructions` do fluxo — dados que já existem, não heurística nova.
+| Onde | Eixo em que é desenhada | Código |
+|---|---|---|
+| `GabineteVivo` (lateral) | **Z** (altura da barra) | `gpu_draw_h = gpu_thick` (commit `65bbacf`) |
+| `TopDownInset` (superior) | **Y** (bandeja→tampa) | `height={gThick * s}` a partir de `trayY` (linha 87) |
+| `FrontalInset` (frontal) | **Y** (disputa o vão) | docstring: *"a espessura da GPU (nº de slots)"* come a largura |
 
-Isto transforma a sobreposição de um bug visual num **recurso**: a vista de cima passa a apontar exatamente onde a build aperta.
+**Qual é o certo:** slots são contados no *bracket* traseiro, empilhados na **vertical**. Uma placa 3.5-slot é grossa **para baixo** a partir do slot PCIe. Logo `thickness_mm` é **Z** — a vista lateral está correta.
 
----
+A dimensão que realmente se estende da bandeja até a tampa (**Y**) é a **altura da placa** (do conector PCIe à borda superior do cartão, ~125–140mm). **Essa não existe no catálogo** (chaves de `specs` em gpu: `bus, fps_1080p_agg, length_mm, slots, tdp_w, thickness_mm, vram_gb`).
 
-## 4. Dados: derivado no frontend, zero backend
+### Consequência medida (não hipótese)
 
-Novo módulo `apps/web/src/components/interior/GabineteTopo.tsx`, irmão de `GabineteVivo.tsx`:
-- Recebe o mesmo `LiveInterior` que a vista do vidro já recebe (mesma chamada `/interior/estimate`, nenhuma chamada nova).
-- Reusa X (profundidade) das `placements`.
-- Deriva Y (largura) dos escalares da secção 2.
-- Reusa `clearances`, `mounts` (intake/exhaust, posição), e o diagnóstico de fluxo pra marcar conflitos e desenhar as setas de fluxo frente→trás.
-- Desenho genérico por categoria, paramétrico no tamanho (decisão do founder) — sem descritor de aparência por modelo.
+`clearances.gpu_side = case_width − gpu_thick`, com limiar `is_tight: rem < 12.0` (`interior.py:151`).
 
-O container `pcb_api` (Docker, produção) **não é tocado**.
+Valores reais do catálogo — largura útil dos 4 gabinetes: **165 / 170 / 175 / 180mm**; espessura das GPUs: **51–71mm**:
 
----
+```
+folga = 165…180 − 51…71  =  94…129 mm      (limiar de "apertado": 12 mm)
+```
 
-## 5. Onde aparece (UX)
+**A folga `gpu_side` nunca pode disparar.** Está no ar como se fosse informação, e é inerte.
 
-- **Página de detalhe da build:** as duas vistas juntas — vidro em cima, aérea logo abaixo (ou lado a lado se couber) — com **hover/foco sincronizado**: passar o mouse na GPU numa vista destaca a GPU nas duas. Estado de hover/foco compartilhado (subir `focused`/`hovered` pro componente pai ou um contexto leve).
-- **Cards compactos (comparação 3-up):** **só a vista do vidro.** A aérea viraria ruído no tamanho mini. (Ajustável depois se o founder quiser um mini-aéreo.)
+Se usasse a altura real do cartão (~140mm numa flagship): `165 − 140 = 25mm` → folga significativa, capaz de ficar apertada. É exatamente a pergunta real *"minha placa alta deixa fechar a tampa lateral?"*.
 
----
+### O código já sabia disso, e derivou
 
-## 6. Princípios que NÃO mudam
+`TopDownInset.tsx`, docstring (linhas 13–15):
 
-- **Integridade dimensional:** toda extensão desenhada é a dimensão real em mm. Nada infla a silhueta.
-- **Genérico por tamanho:** um desenho por categoria, só o tamanho muda. Sem estética por modelo, sem cor/logo inventados.
-- **Aterrar em referência real antes de desenhar** cada peça de perfil-superior (a lição que custou a sessão): a disposição espacial de um PC é um fato conhecido, mas confiro contra uma vista de cima real antes de fechar cada peça.
-- **Estimativa, nunca medição:** rótulos e aria-labels seguem explícitos.
+> *"A espessura da GPU **não é estimada** (não há dado no catálogo): a GPU aparece como faixa fina, **sem número**."*
+
+Mas o código na linha 82 faz `if (gThick > 0)` e desenha **com** número (`~71mm típico`). O ramo honesto (linha 106, "espessura não estimada") é **inalcançável** para toda GPU do catálogo, porque todas têm `thickness_mm`. **A intenção documentada está certa; a implementação divergiu dela.**
 
 ---
 
-## 7. Verificação
+## 2. Decisão: o que fazer
 
-- `npx tsc --noEmit` limpo a cada mudança.
-- Extração do SVG servido (via túnel SSH) + preview renderizado pro founder a cada peça, como na vista do vidro.
-- Conferência dos números de folga contra os `clearances` do `/interior/estimate` (o desenho não pode contradizer o que o motor calcula).
+**Recomendação — opção A (honesta, sem backend):**
 
-## 8. Fora de escopo
+1. **Lateral:** mantém `thickness_mm` como Z. Está correto, nada muda.
+2. **Superior e frontal:** param de desenhar a espessura como extensão Y com número. A GPU volta ao ramo honesto que a docstring descreve — faixa fina, sem cota — até existir dado de altura de cartão.
+3. **`gpu_side`:** removida ou marcada como não-computável. Não mostrar folga que não pode disparar. (Consumida hoje em `GabineteVivo:232` e `TopDownInset:80`.)
+4. O **cooler** continua sendo a peça-estrela das vistas nova/frontal — ali a medida está genuinamente no plano e a folga **dispara de verdade**: AK400 (155mm) num NZXT H5 (165mm) → **10mm**, abaixo do limiar de 15mm. Esse é o valor real destas vistas.
 
-- Terceira vista (frontal-de-verdade, olhando a frente do gabinete) — não pedida.
-- Mudança na geometria do backend / no schema de descritor.
-- Reabrir a forma da GPU da vista do vidro por ajuste manual (ver postmortem).
-- Vista aérea nos cards compactos (por ora).
+**Opção B (mais fiel, custa dado):** adicionar `card_height_mm` ao catálogo (ou default por form factor: ~125mm 2-slot, ~140mm 3-slot+), usar como extensão Y, e recalcular `gpu_side` com ela. Torna a folga real. Exige mudança no `interior.py` + seed, e **rebuild/redeploy do container `pcb_api`** — a mesma pendência já aberta pelo commit `65bbacf`.
+
+**Opção C (não fazer nada):** rejeitada. Deixa no ar um número dimensionalmente errado e uma folga inerte.
+
+**Sequência sugerida:** A agora (frontend, sem risco), B depois, junto do redeploy que o `gpu_thick` já exige.
+
+---
+
+## 3. Por que as insets não apareciam
+
+`GabineteVivo:1104` e `:1113` envolvem as duas insets em `{!compact && (...)}`. A página de resultados renderiza `<GabineteVivo ... compact />`, então **só a lateral aparece ali**. Isso é deliberado (a spec anterior decidiu não poluir o card mini) e é provavelmente por isso que o founder não via a vista de cima.
+
+**Decisão pendente do founder:** manter as insets só no detalhe, ou mostrá-las também em algum outro ponto? (Não é bug, é escolha de UX.)
+
+---
+
+## 4. Princípios que NÃO mudam
+
+- **Integridade dimensional:** toda extensão desenhada é dimensão real em mm, no eixo em que ela fisicamente está. Uma grandeza não aparece em dois eixos.
+- **Não desenhar o que não se sabe:** sem dado de altura de cartão, não se inventa a extensão nem a cota. (Lição desta sessão inteira.)
+- **Genérico por tamanho:** um desenho por categoria, só o tamanho muda — sem estética por modelo.
+- **Estimativa, nunca medição:** rótulos e `aria-label` seguem explícitos, incluindo o selo "derivado" da largura útil.
+
+## 5. Verificação
+
+- `npx tsc --noEmit` limpo.
+- Conferir que nenhuma vista desenha `thickness_mm` fora do eixo Z.
+- Conferir que folgas exibidas podem de fato disparar (a de cooler dispara; a de `gpu_side`, hoje, não).
+- Extrair o SVG servido e mandar preview ao founder, como nas peças anteriores.
+
+## 6. Fora de escopo
+
+- Construir vistas novas — as três ortográficas já existem.
+- Reabrir a forma da GPU da vista lateral por ajuste manual (ver postmortem em `2026-08-07-viewer-2d-camadas-design.md`).
+- Alterar o schema do descritor de aparência.
