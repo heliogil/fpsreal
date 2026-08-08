@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import type { GeoMount, GeoPlacement, LiveInterior, LiveProduct } from '@/lib/live-server'
 import { MaterialDefs, bevel, pickVariant, renderPart, renderFromDescriptor } from './PartMockups'
 import TopDownInset from './TopDownInset'
-import FrontalInset from './FrontalInset'
 import BottleneckNote from './BottleneckNote'
 
 /**
@@ -1104,22 +1103,20 @@ export default function GabineteVivo({
       {/* diagnóstico: o que segura o fluxo, e como simular a solução */}
       <BottleneckNote diagnosis={interior.diagnosis} onSimulate={onToggleFan} compact={compact} />
 
-      {/* vista superior — onde a altura do cooler está no plano */}
-      {!compact && (
-        <div style={{ borderTop: '1px solid var(--line2)' }}>
-          <TopDownInset interior={interior} g={g} hovered={focused ?? hovered} onHover={setHovered} />
-        </div>
-      )}
-
-      {/* vista frontal — fecha as três ortográficas, com o foco sincronizado
-          com a lateral (o `hovered` é partilhado pelas três vistas).
-          Aparece TAMBÉM no card compacto: a altura do cooler contra a largura
-          útil é uma restrição de COMPATIBILIDADE (o cooler pode simplesmente
-          não caber), não enfeite — e é na comparação lado a lado que essa
-          diferença entre builds decide. `gv-compact` no wrapper faz o detalhe
-          fino (`gv-hide-sm`) sumir no tamanho pequeno. */}
+      {/* Vista SUPERIOR (aérea) — a única onde a altura do cooler está no
+          plano, logo a única que mostra honestamente se o cooler cabe no vão
+          bandeja→tampa. Aparece TAMBÉM no card compacto: isso é restrição de
+          COMPATIBILIDADE (o cooler pode simplesmente não caber), não enfeite,
+          e é na comparação lado a lado que a diferença entre builds decide.
+          `gv-compact` no wrapper faz o detalhe fino (`gv-hide-sm`) sumir no
+          tamanho pequeno. Foco sincronizado com a vista principal (o `hovered`
+          é partilhado).
+          NOTA: existia aqui uma terceira vista (largura × altura, olhando o
+          gabinete de frente). Foi removida — fora do escopo do projeto. A
+          vista principal deste componente é a do VIDRO (painel lateral), que
+          é o que o produto precisa pra lançar. */}
       <div className={compact ? 'gv-compact' : undefined} style={{ borderTop: '1px solid var(--line2)' }}>
-        <FrontalInset interior={interior} g={g} hovered={focused ?? hovered} onHover={setHovered} />
+        <TopDownInset interior={interior} g={g} hovered={focused ?? hovered} onHover={setHovered} />
       </div>
 
       {/* legenda */}
