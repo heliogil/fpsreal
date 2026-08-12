@@ -188,10 +188,11 @@ UPDATE products SET specs = specs || '{"campo": valor}'::jsonb WHERE sku='<sku>'
 - **Regra de ouro:** se a checagem precisar de mais de dois atributos ou de condição, **não force na tabela** — faça checagem calculada em código, como a da fonte. A tabela é só para comparação binária.
 - **Lembre:** adicionar rótulo legível no dict `rule_label` em `compatibility.py`, senão a UI mostra o `rule_type` cru.
 
-**T-14 · Redeploy do `pcb_api`** 🔴 — **destrava T-10, T-11, T-12 e mudanças pendentes**
-- **Contexto:** o container roda de imagem buildada, sem bind-mount. Há mudanças já commitadas no branch que **não estão valendo em produção**, incluindo a altura de desenho da GPU (`gpu_thick` real em vez de 55mm fixo, commit `65bbacf`).
-- **Fazer:** `docker compose build pcb_api && docker compose up -d pcb_api` a partir de `/opt/pc-builder-br` (conferir o `compose.yaml`). **Ação de risco: afeta o site real.** Fazer com o founder ciente, e ter o comando de rollback pronto.
-- **Verificar:** `curl http://127.0.0.1:8100/health`; depois rodar o `curl` de compatibilidade e comparar com a mesma chamada em 8101.
+**T-14 · Redeploy do `pcb_api`** ✅ CONCLUÍDO 2026-08-12
+- **O que foi feito:** merge de `viewer-fase1-forma` → `master` (commit `3b41d35`, 19 arquivos reais — não confundir com uma tentativa de merge anterior que teria trazido 2062 arquivos porque uma virtualenv de teste tinha sido commitada por engano em `f397146`; corrigido antes em `0bafd8c` e o merge foi refeito limpo). `docker compose build pcb_api pcb_web && up -d` a partir de `/opt/pc-builder-br`.
+- **Achado no caminho:** havia trabalho não commitado e alheio a esta sessão em `services/ingestion/specs/{aib_adapter,reconcile,url_resolver}.py` (specs de comprimento de GPU por fabricante, de 2026-08-06). Guardado em `git stash` antes do merge e devolvido depois — nada foi perdido, mas como o build do Docker copia o diretório como está no disco (não é git-aware), essas mudanças não commitadas **também foram para a imagem nova**. Vale conferir com quem estava mexendo nisso se estava em ponto publicável.
+- **Verificado:** `pcb_api` e `pcb_web` healthy; `curl 127.0.0.1:8100/compatibility/check` em produção confirma T-10 (status `unknown` quando falta dado) e T-12 (CX550+RTX5090 agora dá `error`, antes era só aviso) ao vivo; `curl 127.0.0.1:3100/` responde 200.
+- **Rollback, se algo der errado:** em `/opt/pc-builder-br`, primeiro `git stash push -u` (proteger o trabalho não commitado de specs/*, se ainda estiver lá), depois `git reset --hard bcfec1b` (HEAD do `master` antes do merge), `git stash pop` para devolver o trabalho de specs, e por fim `docker compose build pcb_api pcb_web && docker compose up -d pcb_api pcb_web`.
 
 ---
 
@@ -222,9 +223,9 @@ Premissa: o bloqueio real de lançamento **não é técnico** — é entrar nos 
 - ✅ T-10 (estado desconhecido) ← o mais importante do roadmap — commit `ab02c54`
 - ✅ T-12 (severidade da fonte) — commit `ab02c54`
 - ✅ T-02 (conferir soquetes — valida a regra que acabou de entrar) — verificado, ver Parte 2
-- ⏳ T-14 (redeploy) ao final, para tudo isso valer em produção — **pendente, precisa do founder ciente antes de rodar** (ver seção abaixo)
+- ✅ T-14 (redeploy) — feito e verificado ao vivo em produção, commit `3b41d35`
 
-**Pronto quando:** nenhuma checagem exibe ✅ sem ter comparado dois valores reais; build com fonte insuficiente dá erro.
+**Sprint 1 concluído em 2026-08-12.** Pronto quando: nenhuma checagem exibe ✅ sem ter comparado dois valores reais; build com fonte insuficiente dá erro. **Confirmado ao vivo em produção**, não só no backend de teste.
 
 ### Sprint 2 — "O que não sabíamos medir" (dados)
 **Objetivo:** popular os campos que destravam as incompatibilidades ocultas.
