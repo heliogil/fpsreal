@@ -32,6 +32,26 @@ FORM_FACTOR_ACCEPTS = {
     "Mini-ITX":  ["ITX", "Mini-ITX"],
 }
 
+# ── folga de RAM sob a torre do cooler (T-03) ────────────────────────────────
+# Altura máxima de módulo de RAM que cabe sob o primeiro fan da torre sem ter
+# de erguê-lo. Config de fábrica (dual-fan), fonte: ficha do fabricante.
+# AIO e cooler stock (top-down, não é torre) NÃO têm esse problema — de propósito
+# ausentes daqui, e o campo fica OMITIDO no specs (não é "0mm", é "não se aplica").
+COOLER_RAM_CLEARANCE_MM = {
+    "cooler-ak400": 43,  # DeepCool, config dual-fan de fábrica
+    "cooler-pa120": 42,  # Thermalright, config dual-fan de fábrica
+}
+
+# ── folga de cooler medida pela Noctua (T-07) ────────────────────────────────
+# A Noctua mediu à mão 100+ gabinetes e achou desvio relevante em 56 (post de
+# 07/08/2026). Só os 2 abaixo têm medição própria da Noctua confirmada por nós
+# (consulta pontual, não scraping em massa — ver restrição T-07 no roadmap); os
+# outros 2 gabinetes do catálogo ficam só com a ficha do fabricante.
+NOCTUA_MEASURED_COOLER_HEIGHT_MM = {
+    "case-4000d":   180,  # ficha diz 170 — Noctua mede 170+10mm de folga real
+    "case-h5-flow": 176,  # ficha diz 165 — Noctua mede 165+11mm de folga real
+}
+
 # fps_1080p_agg = aggregate 1080p high/ultra FPS used as the raw signal for
 # performance_index. Source: thepcbottleneckcalculator.com/gpu-benchmarks-2026/
 # NOTE: RTX 5070 Ti corrected to 180 (was 145 — wrongly below RTX 4070 SUPER).
@@ -71,17 +91,21 @@ CPUS = [
     ("cpu-i5-13400f",    "Core i5-13400F",           "Intel", "LGA1700", 65, 10, 16, False, "budget"),
 ]
 
+# height_mm = altura do módulo COM dissipador (fonte: ficha do fabricante).
+# Vengeance LPX é a linha *low-profile* da Corsair (LPX = Low Profile eXtreme);
+# as outras duas são dissipador padrão (não-RGB), não confundir com kits altos.
 RAM = [
-    ("ram-ddr5-6000-32", "Corsair Vengeance 32GB (2x16) DDR5-6000", "Corsair",  "DDR5", 6000, 32, "2x16"),
-    ("ram-ddr5-6000-16", "Kingston Fury Beast 16GB (2x8) DDR5-6000","Kingston", "DDR5", 6000, 16, "2x8"),
-    ("ram-ddr4-3600-16", "Corsair Vengeance LPX 16GB (2x8) DDR4-3600","Corsair","DDR4", 3600, 16, "2x8"),
+    ("ram-ddr5-6000-32", "Corsair Vengeance 32GB (2x16) DDR5-6000", "Corsair",  "DDR5", 6000, 32, "2x16", 35),
+    ("ram-ddr5-6000-16", "Kingston Fury Beast 16GB (2x8) DDR5-6000","Kingston", "DDR5", 6000, 16, "2x8",  35),
+    ("ram-ddr4-3600-16", "Corsair Vengeance LPX 16GB (2x8) DDR4-3600","Corsair","DDR4", 3600, 16, "2x8",  34),
 ]
 
+# m2_slots/ram_slots/max_ram_speed_mts: ficha oficial do fabricante (T-06).
 MOBOS = [
-    ("mb-b650-tuf",      "ASUS TUF Gaming B650-PLUS",   "ASUS",    "AM5",     "DDR5", "ATX"),
-    ("mb-b650-tomahawk", "MSI B650 Tomahawk WiFi",      "MSI",     "AM5",     "DDR5", "ATX"),
-    ("mb-b760-gaming-x", "Gigabyte B760 Gaming X DDR5", "Gigabyte","LGA1700", "DDR5", "ATX"),
-    ("mb-b550-steel",    "ASRock B550 Steel Legend",    "ASRock",  "AM4",     "DDR4", "ATX"),
+    ("mb-b650-tuf",      "ASUS TUF Gaming B650-PLUS",   "ASUS",    "AM5",     "DDR5", "ATX", 3, 4, 7600),
+    ("mb-b650-tomahawk", "MSI B650 Tomahawk WiFi",      "MSI",     "AM5",     "DDR5", "ATX", 3, 4, 7600),
+    ("mb-b760-gaming-x", "Gigabyte B760 Gaming X DDR5", "Gigabyte","LGA1700", "DDR5", "ATX", 3, 4, 7600),
+    ("mb-b550-steel",    "ASRock B550 Steel Legend",    "ASRock",  "AM4",     "DDR4", "ATX", 2, 4, 4733),
 ]
 
 STORAGE = [
@@ -90,19 +114,24 @@ STORAGE = [
     ("ssd-990pro-2tb","Samsung 990 Pro 2TB NVMe",  "Samsung",  "PCIe 4.0 NVMe", 2000),
 ]
 
+# length_mm = comprimento físico da fonte (ficha do fabricante). CX/RMe usam o
+# chassi compacto de 140mm; RM (2021, não-e) usa o chassi de 160mm; a MSI A1000G
+# tem chassi próprio de 150mm.
 PSUS = [
-    ("psu-cx550",   "Corsair CX550",       "Corsair", 550,  "80+ Bronze", False),
-    ("psu-rm650",   "Corsair RM650",       "Corsair", 650,  "80+ Gold",   True),
-    ("psu-rm750e",  "Corsair RM750e",      "Corsair", 750,  "80+ Gold",   True),
-    ("psu-rm850",   "Corsair RM850",       "Corsair", 850,  "80+ Gold",   True),
-    ("psu-a1000g",  "MSI MPG A1000G",      "MSI",     1000, "80+ Gold",   True),
+    ("psu-cx550",   "Corsair CX550",       "Corsair", 550,  "80+ Bronze", False, 140),
+    ("psu-rm650",   "Corsair RM650",       "Corsair", 650,  "80+ Gold",   True,  160),
+    ("psu-rm750e",  "Corsair RM750e",      "Corsair", 750,  "80+ Gold",   True,  140),
+    ("psu-rm850",   "Corsair RM850",       "Corsair", 850,  "80+ Gold",   True,  160),
+    ("psu-a1000g",  "MSI MPG A1000G",      "MSI",     1000, "80+ Gold",   True,  150),
 ]
 
+# max_psu_length_mm = ficha oficial do fabricante do gabinete (T-04). Conferido:
+# é sempre >= a maior fonte do catálogo (160mm), senão nenhuma build fecharia.
 CASES = [
-    ("case-lancool-216", "Lian Li Lancool 216",     "Lian Li", "ATX", 392, 180, "high",   180, 75),
-    ("case-h5-flow",     "NZXT H5 Flow",            "NZXT",    "ATX", 365, 165, "medium",  70, 65),
-    ("case-4000d",       "Corsair 4000D Airflow",   "Corsair", "ATX", 360, 170, "high",    75, 65),
-    ("case-air-903",     "Montech Air 903 MAX",     "Montech", "ATX", 400, 175, "high",   170, 62),
+    ("case-lancool-216", "Lian Li Lancool 216",     "Lian Li", "ATX", 392, 180, "high",   180, 75, 220),
+    ("case-h5-flow",     "NZXT H5 Flow",            "NZXT",    "ATX", 365, 165, "medium",  70, 65, 200),
+    ("case-4000d",       "Corsair 4000D Airflow",   "Corsair", "ATX", 360, 170, "high",    75, 65, 220),
+    ("case-air-903",     "Montech Air 903 MAX",     "Montech", "ATX", 400, 175, "high",   170, 62, 240),
 ]
 
 COOLERS = [
@@ -138,17 +167,19 @@ def build_products() -> list[dict]:
                       "threads": threads, "igpu": igpu, "game_tier": tier},
             "footprint": None,
         })
-    for sku, name, brand, mem_type, speed, cap, layout in RAM:
+    for sku, name, brand, mem_type, speed, cap, layout, height_mm in RAM:
         products.append({
             "sku": sku, "name": name, "category": "ram", "brand": brand,
             "specs": {"type": mem_type, "speed_mts": speed, "capacity_gb": cap,
-                      "layout": layout},
+                      "layout": layout, "height_mm": height_mm},
             "footprint": None,
         })
-    for sku, name, brand, socket, ram_type, ff in MOBOS:
+    for sku, name, brand, socket, ram_type, ff, m2_slots, ram_slots, max_ram_speed_mts in MOBOS:
         products.append({
             "sku": sku, "name": name, "category": "motherboard", "brand": brand,
-            "specs": {"socket": socket, "ram_type": ram_type, "form_factor": ff},
+            "specs": {"socket": socket, "ram_type": ram_type, "form_factor": ff,
+                      "m2_slots": m2_slots, "ram_slots": ram_slots,
+                      "max_ram_speed_mts": max_ram_speed_mts},
             "footprint": None,
         })
     for sku, name, brand, iface, cap in STORAGE:
@@ -157,33 +188,40 @@ def build_products() -> list[dict]:
             "specs": {"interface": iface, "capacity_gb": cap},
             "footprint": None,
         })
-    for sku, name, brand, watts, eff, modular in PSUS:
+    for sku, name, brand, watts, eff, modular, length_mm in PSUS:
         products.append({
             "sku": sku, "name": name, "category": "psu", "brand": brand,
-            "specs": {"watts": watts, "efficiency": eff, "modular": modular},
+            "specs": {"watts": watts, "efficiency": eff, "modular": modular,
+                      "length_mm": length_mm},
             "footprint": None,
         })
-    for sku, name, brand, ff, max_gpu, max_cooler, airflow_class, intake_cfm, exhaust_cfm in CASES:
+    for sku, name, brand, ff, max_gpu, max_cooler, airflow_class, intake_cfm, exhaust_cfm, max_psu_length_mm in CASES:
         # Geometria paramétrica (interior_mm + mounts) entra no specs JSONB — é
         # ela que alimenta a volumetria e o motor de vento composicional.
         geo = CASE_GEOMETRY.get(sku, {})
+        measured = NOCTUA_MEASURED_COOLER_HEIGHT_MM.get(sku)
         products.append({
             "sku": sku, "name": name, "category": "case", "brand": brand,
             "specs": {"form_factor": ff, "max_gpu_length_mm": max_gpu,
                       "max_cooler_height_mm": max_cooler, "airflow_class": airflow_class,
                       "intake_cfm": intake_cfm, "exhaust_cfm": exhaust_cfm,
+                      "max_psu_length_mm": max_psu_length_mm,
+                      "cooler_height_source": "medido_noctua" if measured else "ficha",
                       # lista, não igualdade: gabinete ATX também aceita mATX/ITX
                       "supported_form_factors": FORM_FACTOR_ACCEPTS.get(ff, [ff]),
+                      **({"max_cooler_height_measured_mm": measured} if measured else {}),
                       **geo},
             "footprint": None,
         })
     for sku, name, brand, cooler_type, tdp_rating, height in COOLERS:
         geo = COOLER_GEOMETRY.get(sku, {})
+        ram_clearance = COOLER_RAM_CLEARANCE_MM.get(sku)
         products.append({
             "sku": sku, "name": name, "category": "cooler", "brand": brand,
             "specs": {"cooler_type": cooler_type, "tdp_rating_w": tdp_rating,
                       "height_mm": height,
                       "sockets": COOLER_SOCKETS.get(sku, []),
+                      **({"ram_clearance_mm": ram_clearance} if ram_clearance is not None else {}),
                       **geo},
             "footprint": None,
         })
