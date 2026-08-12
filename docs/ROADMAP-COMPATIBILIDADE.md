@@ -105,12 +105,9 @@ UPDATE products SET specs = specs || '{"campo": valor}'::jsonb WHERE sku='<sku>'
 
 ---
 
-**T-01 · Altura da memória RAM** 🟢
-- **Por quê:** memória alta + cooler torre é a 2ª causa mais comum de "não coube". Hoje não é checável.
-- **Fazer:** para cada peça `category='ram'` (3 hoje), pesquisar a altura do módulo **com dissipador** e gravar `height_mm` (inteiro, mm).
-- **Referência:** módulo sem dissipador ≈ 31–32mm (padrão JEDEC). Com dissipador alto (RGB) chega a 44–52mm.
-- **Fonte:** ficha do fabricante. Se não achar, **deixe o campo ausente** — não chute (regra de integridade 2).
-- **Verificar:** `SELECT name, specs->>'height_mm' FROM products WHERE category='ram';` — todos preenchidos ou explicitamente ausentes com justificativa.
+**T-01 · Altura da memória RAM** ✅ CONCLUÍDO 2026-08-12
+- **Resultado:** Corsair Vengeance LPX DDR4-3600 (linha *low-profile*, LPX = Low Profile eXtreme) = **34mm**; Kingston Fury Beast DDR5-6000 = **35mm** (34,9mm arredondado); Corsair Vengeance DDR5-6000 não-RGB = **35mm**. Todos confirmados contra ficha oficial do fabricante.
+- **Verificado:** `SELECT sku, specs->>'height_mm' FROM products WHERE category='ram';` — os 3 preenchidos. Commit `d5597a3`.
 
 **T-02 · Conferir soquetes dos coolers** ✅ CONCLUÍDO 2026-08-12
 - **Por quê:** o campo `cooler.sockets` foi populado em 2026-08-08 a partir de conhecimento geral, **não conferido peça a peça**. A regra 6 depende dele. Errado aqui = falso erro, que é pior que não checar.
@@ -121,15 +118,14 @@ UPDATE products SET specs = specs || '{"campo": valor}'::jsonb WHERE sku='<sku>'
   - Arctic Liquid Freezer III 360 → confirmado nativo AM5/AM4/LGA1700/LGA1851. **Correção:** LGA1200 exige kit de montagem separado ("Compatibility Upgrade" da própria Arctic) — como não temos certeza se o kit vem no pacote vendido, o banco **não afirma** LGA1200 pra esse cooler. Fica assim mesmo (regra de integridade: não afirmar o que não foi confirmado), e é inofensivo porque o catálogo não tem nenhum CPU LGA1200 hoje.
 - **Verificado:** curl de compatibilidade com build válida (R7 9800X3D + Tomahawk B650 + AK400) não gerou nenhum erro novo — ver commit `ab02c54`.
 
-**T-03 · Folga de RAM dos coolers** 🟢 (depende de T-01)
-- **Fazer:** gravar `ram_clearance_mm` em cada cooler = altura máxima de memória que cabe sob a torre sem deslocar a ventoinha.
-- **Nota:** AIO (`cooler_type` começa com `aio`) **não tem esse problema** — grave `null` ou omita, e documente por quê.
-- **Verificar:** `SELECT name, specs->>'ram_clearance_mm' FROM products WHERE category='cooler';`
+**T-03 · Folga de RAM dos coolers** ✅ CONCLUÍDO 2026-08-12 (depende de T-01)
+- **Resultado:** DeepCool AK400 = **43mm**, Thermalright Peerless Assassin 120 = **42mm** (config dual-fan de fábrica, fonte ficha do fabricante). Os outros 3 coolers (2 AIO + 1 stock top-down) **não têm o campo** — de propósito, não é "0mm", é "o problema não existe pra esse cooler" (AIO não tem torre sobre a RAM; o stock AMD Wraith Stealth é baixo e centrado no socket, não avança sobre o slot vizinho).
+- **Verificado:** `SELECT sku, specs->>'ram_clearance_mm' FROM products WHERE category='cooler';` — 2 preenchidos, 3 ausentes com justificativa acima. Commit `d5597a3`.
 
-**T-04 · Comprimento da fonte e da baia** 🟢
-- **Por quê:** fonte de 180mm+ não entra em alguns gabinetes, e piora com radiador frontal inferior.
-- **Fazer:** `psu.length_mm` (5 peças) e `case.max_psu_length_mm` (4 peças).
-- **Verificar:** ambos preenchidos; `max_psu_length_mm` sempre ≥ o maior `psu.length_mm` do catálogo, senão nenhuma build fecha (sinal de erro de digitação).
+**T-04 · Comprimento da fonte e da baia** ✅ CONCLUÍDO 2026-08-12
+- **Resultado — `psu.length_mm`:** CX550 = 140mm, RM650 = 160mm, RM750e = 140mm, RM850 = 160mm, A1000G = 150mm (CX/RMe usam o chassi compacto Corsair de 140mm; a série RM 2021 não-e usa o chassi de 160mm — não confundir as duas linhas).
+- **Resultado — `case.max_psu_length_mm`:** Lancool 216 = 220mm, H5 Flow = 200mm, 4000D Airflow = 220mm, Air 903 MAX = 240mm. Todos ficha oficial do fabricante.
+- **Verificado:** os 4 `max_psu_length_mm` (200–240) são sempre ≥ a maior fonte do catálogo (160mm) — nenhuma build fica sem opção de fonte. Commit `d5597a3`.
 
 **T-05 · Conectores de força** 🟡
 - **Por quê:** GPU que pede 3×8-pin numa fonte com 2 conectores nativos = não liga. E 12VHPWR exige fonte ATX 3.0 ou adaptador.
@@ -138,16 +134,15 @@ UPDATE products SET specs = specs || '{"campo": valor}'::jsonb WHERE sku='<sku>'
   - `psu.pcie_8pin_count` (inteiro) e `psu.has_12vhpwr` (bool) e `psu.atx_version` (ex.: `2.4`, `3.0`, `3.1`).
 - **Verificar:** `SELECT name, specs->>'power_connector' FROM products WHERE category='gpu';`
 
-**T-06 · Campos da placa-mãe** 🟢
-- **Fazer:** `m2_slots` (int), `ram_slots` (int), `max_ram_speed_mts` (int) para as 4 placas.
-- **Verificar:** query simples.
+**T-06 · Campos da placa-mãe** ✅ CONCLUÍDO 2026-08-12
+- **Resultado:** as 3 placas AM5/LGA1700 com DDR5 (TUF B650-PLUS, Tomahawk WiFi, B760 Gaming X) têm `m2_slots=3, ram_slots=4, max_ram_speed_mts=7600`; a B550 Steel Legend (AM4/DDR4) tem `m2_slots=2, ram_slots=4, max_ram_speed_mts=4733`. Ficha oficial de cada fabricante.
+- **Verificado:** query simples, os 4 preenchidos. Commit `d5597a3`.
 
-**T-07 · Folgas medidas de cooler (fonte Noctua)** 🟡
-- **Por quê:** a Noctua mediu à mão 100+ gabinetes e achou desvio relevante em **56**. A ficha do fabricante erra nos dois sentidos — até +10mm (Corsair 4000D, um dos NOSSOS gabinetes) e até −3,5mm (perigoso: cooler não entra).
-- **Fazer:** para os 4 gabinetes, consultar a base de compatibilidade da Noctua. Se houver medição, gravar `max_cooler_height_measured_mm` **e** `cooler_height_source` = `medido_noctua`; senão `cooler_height_source` = `ficha`.
-- **NÃO sobrescrever** `max_cooler_height_mm`. Guardar os dois — a interface precisa dizer de onde veio.
-- **Restrição:** consulta pontual de 4 itens, manual. **Não fazer extração em massa da base deles** — é o ativo que eles investiram para construir, e o projeto tem postura de "zero scraping". Uso em escala exige permissão + atribuição (decisão do founder).
-- **Verificar:** `SELECT name, specs->>'max_cooler_height_mm', specs->>'max_cooler_height_measured_mm', specs->>'cooler_height_source' FROM products WHERE category='case';`
+**T-07 · Folgas medidas de cooler (fonte Noctua)** ✅ CONCLUÍDO 2026-08-12 (parcial, por honestidade)
+- **Resultado:** confirmado **medição própria da Noctua** para 2 dos 4 gabinetes — Corsair 4000D Airflow (ficha 170mm → Noctua mede **180mm**, +10mm de folga real) e NZXT H5 Flow (ficha 165mm → Noctua mede **176mm**, +11mm). Gravados `max_cooler_height_measured_mm` **sem sobrescrever** `max_cooler_height_mm`, mais `cooler_height_source='medido_noctua'`.
+- **Os outros 2 ficam só com a ficha** (`cooler_height_source='ficha'`): Lian Li Lancool 216 não apareceu na lista de desvio relevante da Noctua e não consegui confirmar um número próprio deles distinto da ficha (180mm em ambos os lugares — pode ser coincidência real, mas não afirmo medição que não vi clara); Montech Air 903 MAX não encontrei evidência de que esteja na base da Noctua (marca menor, banco deles cobre ~100 gabinetes, principalmente marcas maiores). **Não forcei o número** — regra de integridade 2.
+- **Restrição respeitada:** consulta pontual (buscas + páginas individuais via `noctua.at`, rate-limited pelo próprio site depois de ~6 requests — sinal de que não é pra automatizar em escala mesmo). Nenhuma extração em massa.
+- **Verificado:** `SELECT sku, specs->>'max_cooler_height_mm', specs->>'max_cooler_height_measured_mm', specs->>'cooler_height_source' FROM products WHERE category='case';` — 2 com medição, 2 só ficha, nenhum campo sobrescrito. Commit `d5597a3`.
 
 **T-08 · Tabela de BIOS mínimo** 🔴 (pesquisa pesada)
 - **Por quê:** a incompatibilidade **mais oculta** que existe: CPU novo em chipset antigo não dá POST sem atualizar a BIOS antes — e não dá para atualizar sem um CPU que funcione. Nada na ficha indica. Ex.: Ryzen série 9000 em B650 antigo; Zen 3 em chipset série 400.
@@ -229,12 +224,12 @@ Premissa: o bloqueio real de lançamento **não é técnico** — é entrar nos 
 
 ### Sprint 2 — "O que não sabíamos medir" (dados)
 **Objetivo:** popular os campos que destravam as incompatibilidades ocultas.
-- T-01, T-03 (RAM × cooler)
-- T-04 (fonte × baia)
-- T-06 (placa-mãe)
-- T-07 (folgas medidas + campo de origem)
+- ✅ T-01, T-03 (RAM × cooler) — commit `d5597a3`
+- ✅ T-04 (fonte × baia) — commit `d5597a3`
+- ✅ T-06 (placa-mãe) — commit `d5597a3`
+- ✅ T-07 (folgas medidas + campo de origem) — commit `d5597a3`, 2/4 gabinetes com medição própria da Noctua confirmada, 2/4 honestamente só com ficha
 
-**Pronto quando:** todos os campos preenchidos ou explicitamente marcados como ausentes, no seed **e** no banco.
+**Sprint 2 concluído em 2026-08-12.** Pronto quando: todos os campos preenchidos ou explicitamente marcados como ausentes, no seed **e** no banco. **Confirmado nos dois lugares**, e regressão zero no `curl` de compatibilidade. Os dados ficam **inertes** até o Sprint 3 criar regras que os leiam (T-13) — é esperado, não é bug.
 
 ### Sprint 3 — "Regras em cima dos dados"
 **Objetivo:** transformar os dados do Sprint 2 em diagnóstico.
