@@ -8,7 +8,8 @@ interface Check {
 interface CompatibilityCheckerProps {
   errors: string[]
   warnings: string[]
-  clearances: Record<string, { remaining_mm: number; is_tight: boolean }>
+  // `source` ('ficha' | 'medido_noctua'): ver T-07/Sprint 4.
+  clearances: Record<string, { remaining_mm: number; is_tight: boolean; source?: string }>
   checks?: Check[]
 }
 
@@ -80,8 +81,8 @@ export default function CompatibilityChecker({
       {Object.keys(clearances).length > 0 && (
         <div className="mt-3 pt-2 border-t border-border text-xs text-secondary" style={{ fontFamily: mono }}>
           {Object.entries(clearances).map(([slot, c]) => (
-            <span key={slot} style={{ marginRight: 14 }}>
-              {slot} folga {c.remaining_mm}mm{c.is_tight ? ' (apertado)' : ''}
+            <span key={slot} style={{ marginRight: 14 }} title={c.source === 'medido_noctua' ? 'medido pela Noctua, não a ficha do fabricante' : undefined}>
+              {slot} folga {c.remaining_mm}mm{c.is_tight ? ' (apertado)' : ''}{c.source === 'medido_noctua' ? ' · medido' : ''}
             </span>
           ))}
         </div>

@@ -23,9 +23,17 @@
  * Isto é a aplicação directa do princípio do projecto — estimativa, nunca
  * medição. O número continua a ser mostrado; o que muda é que ele deixa de
  * ser apresentado como exacto.
+ *
+ * SPRINT 4 (T-07 + "origem do dado"): quando o backend já mediu o gabinete
+ * de verdade contra a base da Noctua (`source === 'medido_noctua'`, hoje 2
+ * dos 4 gabinetes — Corsair 4000D e NZXT H5 Flow), o número deixa de ser um
+ * palpite da ficha e a margem sintética `SPEC_OVERSTATE_MM` some — ela
+ * existe só para compensar a incerteza da ficha, e aqui não há incerteza de
+ * ficha, há uma medida. O `TIGHT_MM` físico continua valendo nos dois casos.
  */
 
 export type ClearanceBand = 'risco' | 'apertado' | 'ok'
+export type ClearanceSource = 'ficha' | 'medido_noctua'
 
 /** cauda de sobrestimação observada (Lian Li B4-mATX, −3,5mm), arredondada. */
 export const SPEC_OVERSTATE_MM = 4
@@ -33,8 +41,9 @@ export const SPEC_OVERSTATE_MM = 4
 /** mesmo limiar de "apertado" que o motor usa (`TIGHT_MM`, interior.py). */
 export const TIGHT_MM = 15
 
-export function coolerBand(remainingMm: number): ClearanceBand {
-  if (remainingMm < SPEC_OVERSTATE_MM) return 'risco'
+export function coolerBand(remainingMm: number, source: ClearanceSource = 'ficha'): ClearanceBand {
+  const floor = source === 'medido_noctua' ? 0 : SPEC_OVERSTATE_MM
+  if (remainingMm < floor) return 'risco'
   if (remainingMm < TIGHT_MM) return 'apertado'
   return 'ok'
 }
@@ -52,8 +61,13 @@ export function bandSuffix(b: ClearanceBand): string {
   return ''
 }
 
-/** frase completa, para tooltip/aria — explica de onde vem a incerteza. */
-export function bandNote(b: ClearanceBand): string {
+/** frase completa, para tooltip/aria — explica de onde vem a incerteza (ou a confiança). */
+export function bandNote(b: ClearanceBand, source: ClearanceSource = 'ficha'): string {
+  if (source === 'medido_noctua') {
+    if (b === 'risco') return 'medido pela Noctua (não é a ficha do fabricante) — mesmo assim, a folga real é negativa ou quase'
+    if (b === 'apertado') return 'medido pela Noctua — cabe, mas sem margem para subir a ventoinha frontal ou usar memória alta'
+    return 'medido pela Noctua, não a ficha do fabricante — número mais confiável que a média do catálogo'
+  }
   if (b === 'risco') {
     return 'folga dentro da margem de erro da ficha do fabricante — pode não caber; confirme a medida real do gabinete'
   }
@@ -61,4 +75,9 @@ export function bandNote(b: ClearanceBand): string {
     return 'cabe, mas sem margem para subir a ventoinha frontal ou usar memória alta'
   }
   return ''
+}
+
+/** selo curto pra chip: só aparece quando o número vem de medição real, não da ficha. */
+export function sourceTag(source: ClearanceSource = 'ficha'): string {
+  return source === 'medido_noctua' ? ' · medido' : ''
 }

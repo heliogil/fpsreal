@@ -219,7 +219,9 @@ export type CompatCheck = { a: string; b: string; label: string; status: string;
 export type LiveCompat = {
   errors: string[]
   warnings: string[]
-  clearances: Record<string, { remaining_mm: number; is_tight: boolean }>
+  // `source` ('ficha' | 'medido_noctua'): de onde vem o max_cooler_height
+  // usado no cálculo — ver T-07/Sprint 4 e apps/web/.../interior/clearance.ts
+  clearances: Record<string, { remaining_mm: number; is_tight: boolean; source?: string }>
   checks?: CompatCheck[]
   airflow: unknown[]
 }
@@ -340,13 +342,15 @@ export type LiveInterior = {
     airflow_class: string | null
     max_gpu_length_mm: number | null
     max_cooler_height_mm: number | null
+    max_cooler_height_measured_mm?: number | null
+    cooler_height_source?: string
   }
   parts: {
     cpu: { name: string | null; tdp_w: number }
     gpu: { name: string | null; length_mm: number; tdp_w: number; slots?: number | null; thickness_mm?: number | null }
     cooler: { name: string | null; height_mm: number }
   }
-  clearances: Record<string, { remaining_mm: number; is_tight: boolean }>
+  clearances: Record<string, { remaining_mm: number; is_tight: boolean; source?: string }>
   airflow: {
     score: number
     pressure_balance: string

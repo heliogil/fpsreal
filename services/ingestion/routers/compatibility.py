@@ -157,11 +157,15 @@ async def check_build(body: CheckRequest, db: AsyncSession = Depends(get_db)):
                 clearances["gpu"] = {"remaining_mm": remaining, "is_tight": 0 <= remaining < TIGHT_MM}
         cooler = by_cat.get("cooler")
         if cooler:
-            rem = _num(cspecs.get("max_cooler_height_mm"))
+            # T-07/Sprint 4: usa a medição da Noctua quando ela existe pra esse
+            # gabinete, em vez da ficha do fabricante — dado melhor, não só rótulo.
+            src = cspecs.get("cooler_height_source") or "ficha"
+            measured = _num(cspecs.get("max_cooler_height_measured_mm"))
+            rem = measured if (src == "medido_noctua" and measured is not None) else _num(cspecs.get("max_cooler_height_mm"))
             chgt = _num((cooler.specs or {}).get("height_mm"))
             if rem is not None and chgt is not None:
                 remaining = round(rem - chgt, 1)
-                clearances["cooler"] = {"remaining_mm": remaining, "is_tight": 0 <= remaining < TIGHT_MM}
+                clearances["cooler"] = {"remaining_mm": remaining, "is_tight": 0 <= remaining < TIGHT_MM, "source": src}
 
     # PSU headroom (computed): < 1.0x total = pode desligar sob pico → erro;
     # 1.0x–1.25x = liga, mas sem folga para transientes de GPU → aviso; ≥1.25x = ok.

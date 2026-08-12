@@ -1,5 +1,5 @@
 import type { GeoPlacement, InteriorGeometry, LiveInterior } from '@/lib/live-server'
-import { coolerBand, bandTone, bandSuffix } from './clearance'
+import { coolerBand, bandTone, bandSuffix, bandNote, sourceTag, type ClearanceSource } from './clearance'
 
 /**
  * TopDownInset — corte SUPERIOR do gabinete (profundidade × largura).
@@ -51,16 +51,17 @@ export default function TopDownInset({
   const trayY = Y(0)
   const panelY = Y(W)
 
-  // A folga não é exacta: sai da ficha do fabricante, que erra (ver
-  // ./clearance). Abaixo da cauda de sobrestimação observada, não se pode
-  // afirmar que cabe — daí a faixa 'risco'.
-  const band = clr ? coolerBand(clr.remaining_mm) : null
+  // A folga pode vir da ficha do fabricante (que erra, ver ./clearance) ou de
+  // medição real da Noctua pra esse gabinete específico — o `source` muda
+  // qual das duas margens de segurança se aplica.
+  const src: ClearanceSource = (clr?.source as ClearanceSource) ?? 'ficha'
+  const band = clr ? coolerBand(clr.remaining_mm, src) : null
   const coolerTone = band ? bandTone(band) : 'var(--dim2)'
   const dim = (id: string) => (hovered && hovered !== id ? 0.25 : 1)
 
   return (
     <svg viewBox={`0 0 ${VW} ${VH}`} role="img"
-      aria-label={`Corte superior: largura útil ${Math.round(W)}mm (derivada), cooler ${Math.round(coolerH)}mm${clr && band ? `, folga ${Math.round(clr.remaining_mm)}mm${bandSuffix(band)}` : ''}`}
+      aria-label={`Corte superior: largura útil ${Math.round(W)}mm (derivada), cooler ${Math.round(coolerH)}mm${clr && band ? `, folga ${Math.round(clr.remaining_mm)}mm${bandSuffix(band)}${sourceTag(src)}` : ''}`}
       style={{ display: 'block', width: '100%', height: 'auto', background: 'var(--bg)' }}>
 
       <text x={ox} y={14} className="gv-note" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace">
@@ -111,14 +112,17 @@ export default function TopDownInset({
               className="gv-cota" fill="var(--text)" fontWeight="600" fontFamily="var(--font-plex-mono), monospace">
               {Math.round(coolerH)}mm
             </text>
-            {/* folga até à tampa — com a ressalva da margem de erro da ficha */}
+            {/* folga até à tampa — com a ressalva da margem de erro da ficha,
+                ou o selo "medido" quando é a medição real da Noctua pra esse
+                gabinete (ver ./clearance) */}
             {clr && band && (
               <g>
                 <line x1={cx + cw / 2} y1={trayY + ch} x2={cx + cw / 2} y2={panelY}
                   stroke={coolerTone} strokeWidth="1" strokeDasharray="3 3" />
                 <text x={cx + cw + 8} y={(trayY + ch + panelY) / 2 + 3}
                   className="gv-cota" fill={coolerTone} fontWeight="600" fontFamily="var(--font-plex-mono), monospace">
-                  folga {Math.round(clr.remaining_mm)}mm
+                  <title>{bandNote(band, src)}</title>
+                  folga {Math.round(clr.remaining_mm)}mm{sourceTag(src)}
                 </text>
                 {band !== 'ok' && (
                   <text x={cx + cw + 8} y={(trayY + ch + panelY) / 2 + 14}

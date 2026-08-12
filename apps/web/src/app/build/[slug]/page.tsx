@@ -257,7 +257,9 @@ export default async function BuildDetailPage({ params, searchParams }: PageProp
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line2)' }}>
                   <span style={{ color: compat.clearances.cooler.is_tight ? 'var(--warn)' : 'var(--fresh)', fontSize: 12 }}>{compat.clearances.cooler.is_tight ? '⚠' : '✓'}</span>
                   <span style={{ fontSize: 13, color: 'var(--text)', flex: 1 }}>Altura do cooler</span>
-                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--dim)' }}>{Math.round(compat.clearances.cooler.remaining_mm)}mm restantes</span>
+                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--dim)' }} title={compat.clearances.cooler.source === 'medido_noctua' ? 'medido pela Noctua, não a ficha do fabricante' : undefined}>
+                    {Math.round(compat.clearances.cooler.remaining_mm)}mm restantes{compat.clearances.cooler.source === 'medido_noctua' ? ' · medido' : ''}
+                  </span>
                 </div>
               )}
             </div>

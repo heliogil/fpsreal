@@ -5,7 +5,7 @@ import type { GeoMount, GeoPlacement, LiveInterior, LiveProduct } from '@/lib/li
 import { MaterialDefs, bevel, pickVariant, renderPart, renderFromDescriptor } from './PartMockups'
 import TopDownInset from './TopDownInset'
 import BottleneckNote from './BottleneckNote'
-import { coolerBand, bandSuffix } from './clearance'
+import { coolerBand, bandSuffix, sourceTag, type ClearanceSource } from './clearance'
 
 /**
  * GabineteVivo v5 — função da GEOMETRIA PARAMÉTRICA do backend.
@@ -190,6 +190,7 @@ export default function GabineteVivo({
   const cpuHeatM = heatMult(zoneStatus.cpu_zone)
   const gpuClr = interior.clearances.gpu
   const coolerClr = interior.clearances.cooler
+  const coolerSrc: ClearanceSource = (coolerClr?.source as ClearanceSource) ?? 'ficha'
   const coolerRealH = interior.parts.cooler.height_mm || 0
 
   /* variantes visuais por tier (cosmética; dimensões vêm da geometria) */
@@ -244,7 +245,7 @@ export default function GabineteVivo({
       // A ficha do fabricante erra (Noctua: 56 de 100+ gabinetes com desvio
       // relevante, até −3,5mm no lado perigoso), então a folga leva a
       // ressalva da margem em vez de ser dada como exacta. Ver ./clearance.
-      ...(coolerClr ? [['folga até a tampa', mm(coolerClr.remaining_mm) + bandSuffix(coolerBand(coolerClr.remaining_mm))] as [string, string]] : []),
+      ...(coolerClr ? [['folga até a tampa', mm(coolerClr.remaining_mm) + bandSuffix(coolerBand(coolerClr.remaining_mm, coolerSrc)) + sourceTag(coolerSrc)] as [string, string]] : []),
       ['nota', 'a altura está no plano do corte superior'],
     ],
   }
@@ -775,7 +776,7 @@ export default function GabineteVivo({
           {/* cooler a ar — altura de DESENHO (corpo). A folga de spec vive na vista superior. */}
           {airCooler && (
             <g data-part="cooler" data-asm="3" data-variant={vAir} data-src={drawSrc('cooler')} filter="url(#gv-lift)" opacity={dimOf('cooler')}
-              {...partProps('cooler', `cooler ${Math.round(coolerRealH)}mm de altura${coolerClr ? ` · folga ${Math.round(coolerClr.remaining_mm)}mm até a tampa` : ''}${compact ? '' : ' — ver corte superior'}`)}>
+              {...partProps('cooler', `cooler ${Math.round(coolerRealH)}mm de altura${coolerClr ? ` · folga ${Math.round(coolerClr.remaining_mm)}mm até a tampa${sourceTag(coolerSrc)}` : ''}${compact ? '' : ' — ver corte superior'}`)}>
               {drawPart('cooler', vAir, box(airCooler))}
             </g>
           )}

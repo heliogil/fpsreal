@@ -128,6 +128,13 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
 
     max_gpu = _num(cs.get("max_gpu_length_mm"))
     max_cooler = _num(cs.get("max_cooler_height_mm"))
+    # T-07/Sprint 4: quando a Noctua mediu esse gabinete à mão (2/4 hoje), usa
+    # o número medido em vez da ficha do fabricante — é dado melhor, não só
+    # rótulo. `cooler_height_source` sempre existe (T-07 grava nos 4); o valor
+    # medido só existe nos 2 confirmados.
+    cooler_height_source = cs.get("cooler_height_source") or "ficha"
+    max_cooler_measured = _num(cs.get("max_cooler_height_measured_mm"))
+    max_cooler_effective = max_cooler_measured if (cooler_height_source == "medido_noctua" and max_cooler_measured) else max_cooler
     gpu_len = _num(gs.get("length_mm"))
     cooler_h = _num(ks.get("height_mm"))
     # espessura da GPU: dado real do catálogo (nº de slots × passo do slot).
@@ -141,9 +148,10 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
     if max_gpu and gpu_len:
         rem = round(max_gpu - gpu_len, 1)
         clearances["gpu"] = {"remaining_mm": rem, "is_tight": 0 <= rem < TIGHT_MM}
-    if max_cooler and cooler_h:
-        rem = round(max_cooler - cooler_h, 1)
-        clearances["cooler"] = {"remaining_mm": rem, "is_tight": 0 <= rem < TIGHT_MM}
+    if max_cooler_effective and cooler_h:
+        rem = round(max_cooler_effective - cooler_h, 1)
+        clearances["cooler"] = {"remaining_mm": rem, "is_tight": 0 <= rem < TIGHT_MM,
+                                 "source": cooler_height_source}
     # folga da GPU até à tampa lateral (a espessura come da largura útil) — é a
     # medida que só a vista superior mostra: placa 3.5-slot em gabinete estreito.
     if gpu_thick and case_width:
@@ -565,6 +573,8 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
             "airflow_class": cs.get("airflow_class"),
             "max_gpu_length_mm": max_gpu or None,
             "max_cooler_height_mm": max_cooler or None,
+            "max_cooler_height_measured_mm": max_cooler_measured or None,
+            "cooler_height_source": cooler_height_source,
         },
         "parts": {
             "cpu": {"name": cpu.name if cpu else None, "tdp_w": cpu_w},
