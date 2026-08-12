@@ -103,6 +103,7 @@ async def check_build(body: CheckRequest, db: AsyncSession = Depends(get_db)):
         "cooler_tdp_headroom": "cooler dá conta",
         "cooler_socket_match": "cooler monta",
         "mobo_case_form_factor": "placa cabe",
+        "psu_case_fit": "fonte cabe",
     }
 
     rules = (
@@ -207,5 +208,115 @@ async def check_build(body: CheckRequest, db: AsyncSession = Depends(get_db)):
                 "status": severity,
                 "message": (f"{int(watts)}W p/ ~{int(total)}W (recomendado ≥{int(total * 1.25)}W)" if severity != "ok" else None),
             })
+
+    # RAM × folga do cooler (T-13): só coolers-torre têm esse problema. AIO e o
+    # cooler stock (top-down, centrado no socket) não avançam sobre o slot de
+    # RAM — tratados como "ok" por construção, não "unknown" (não é falta de
+    # dado, é a checagem não se aplicar a esse tipo de cooler).
+    ram = by_cat.get("ram")
+    cooler = by_cat.get("cooler")
+    if ram and cooler:
+        cspecs = cooler.specs or {}
+        ctype = str(cspecs.get("cooler_type") or "")
+        if ctype.startswith("aio") or ctype == "stock":
+            checks.append({
+                "a": "ram", "b": "cooler", "label": "folga de RAM",
+                "status": "ok", "message": None,
+            })
+        else:
+            rh = _num((ram.specs or {}).get("height_mm"))
+            rc = _num(cspecs.get("ram_clearance_mm"))
+            if rh is None or rc is None:
+                missing = [
+                    f"{ram.name}: height_mm" if rh is None else None,
+                    f"{cooler.name}: ram_clearance_mm" if rc is None else None,
+                ]
+                checks.append({
+                    "a": "ram", "b": "cooler", "label": "folga de RAM",
+                    "status": "unknown",
+                    "message": f"Não foi possível verificar — falta dado ({', '.join(m for m in missing if m)}).",
+                })
+            else:
+                ok = rh <= rc
+                msg = None if ok else (
+                    f"A {ram.name} tem {rh:g}mm de altura; o cooler {cooler.name} só dá {rc:g}mm de folga sob a torre."
+                )
+                if not ok:
+                    errors.append(msg)
+                checks.append({
+                    "a": "ram", "b": "cooler", "label": "folga de RAM",
+                    "status": "ok" if ok else "error", "message": msg,
+                })
+
+    # Radiador do AIO × mounts do gabinete (T-13): usa case.mounts[].accepts,
+    # não geometria fina — é o que o roadmap pediu (regra de ouro: checagem
+    # calculada porque precisa iterar uma lista, não cabe em comparação binária).
+    if cooler and case:
+        cspecs = cooler.specs or {}
+        ctype = str(cspecs.get("cooler_type") or "")
+        if ctype.startswith("aio"):
+            rad_class = cspecs.get("rad_class")
+            mounts = (case.specs or {}).get("mounts")
+            if rad_class is None or not isinstance(mounts, list):
+                checks.append({
+                    "a": "cooler", "b": "case", "label": "radiador cabe",
+                    "status": "unknown",
+                    "message": "Não foi possível verificar — falta rad_class ou mapa de mounts do gabinete.",
+                })
+            else:
+                fits = any(rad_class in (m.get("accepts") or []) for m in mounts)
+                msg = None if fits else (
+                    f"O radiador {rad_class} do {cooler.name} não cabe em nenhum mount do {case.name}."
+                )
+                if not fits:
+                    errors.append(msg)
+                checks.append({
+                    "a": "cooler", "b": "case", "label": "radiador cabe",
+                    "status": "ok" if fits else "error", "message": msg,
+                })
+
+    # Conector de força da GPU × fonte (T-13): não é comparação binária —
+    # 12vhpwr nativo é ideal, sem nativo mas com 8-pin suficiente pra adaptador
+    # é aviso (funciona, não é o ideal), sem conectores suficientes é erro.
+    gpu = by_cat.get("gpu")
+    if gpu and psu:
+        conn = (gpu.specs or {}).get("power_connector")
+        pspecs = psu.specs or {}
+        p8 = pspecs.get("pcie_8pin_count")
+        has_12v = pspecs.get("has_12vhpwr")
+        needed = {"8pin": 1, "8x2": 2, "8x3": 3}.get(conn) if conn not in (None, "none", "12vhpwr") else None
+        if conn is None or (conn not in ("none", "12vhpwr") and needed is None):
+            checks.append({
+                "a": "gpu", "b": "psu", "label": "conector de força",
+                "status": "unknown",
+                "message": f"Não foi possível verificar — falta power_connector em {gpu.name}.",
+            })
+        elif conn == "none":
+            checks.append({"a": "gpu", "b": "psu", "label": "conector de força", "status": "ok", "message": None})
+        elif p8 is None or has_12v is None:
+            checks.append({
+                "a": "gpu", "b": "psu", "label": "conector de força",
+                "status": "unknown",
+                "message": f"Não foi possível verificar — falta dado de conectores em {psu.name}.",
+            })
+        elif conn == "12vhpwr":
+            if has_12v:
+                checks.append({"a": "gpu", "b": "psu", "label": "conector de força", "status": "ok", "message": None})
+            elif _num(p8) is not None and _num(p8) >= 2:
+                msg = (f"{psu.name} não tem 12V-2x6/12VHPWR nativo — precisa do adaptador que acompanha "
+                       f"a {gpu.name} (ou comprado à parte) usando 2+ conectores 8-pin.")
+                warnings.append(msg)
+                checks.append({"a": "gpu", "b": "psu", "label": "conector de força", "status": "warning", "message": msg})
+            else:
+                msg = f"{psu.name} não tem 12V-2x6/12VHPWR nem conectores 8-pin suficientes para adaptar a {gpu.name}."
+                errors.append(msg)
+                checks.append({"a": "gpu", "b": "psu", "label": "conector de força", "status": "error", "message": msg})
+        else:
+            np8 = _num(p8)
+            ok = np8 is not None and np8 >= needed
+            msg = None if ok else f"A {gpu.name} precisa de {needed}x conector 8-pin; {psu.name} só tem {int(np8 or 0)}."
+            if not ok:
+                errors.append(msg)
+            checks.append({"a": "gpu", "b": "psu", "label": "conector de força", "status": "ok" if ok else "error", "message": msg})
 
     return {"errors": errors, "warnings": warnings, "clearances": clearances, "checks": checks, "airflow": []}

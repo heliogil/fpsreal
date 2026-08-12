@@ -52,6 +52,26 @@ NOCTUA_MEASURED_COOLER_HEIGHT_MM = {
     "case-h5-flow": 176,  # ficha diz 165 — Noctua mede 165+11mm de folga real
 }
 
+# ── conector de força de cada GPU (T-05) ─────────────────────────────────────
+# Placa de referência/Founders Edition — algumas AIB variam (ex.: RTX 5070 tem
+# versão AIB com 2x8pin em vez de 12vhpwr), mas o catálogo é representativo por
+# tier, não por SKU de AIB específico (mesmo padrão do resto do arquivo).
+# ATENÇÃO: chaveado por SKU, não por posição no tuple — cobre também os 3 GPUs
+# (gpu-rtx-5050, gpu-rx-9050, gpu-rx-9070-gre) que existem no banco de produção
+# mas NÃO estão na lista GPUS abaixo (divergência pré-existente, provavelmente
+# de um script de reconciliação de specs em andamento — ver spec/aib_adapter.py
+# não commitado; não mexi nisso, só documento).
+GPU_POWER_CONNECTOR = {
+    "gpu-rtx-5090": "12vhpwr", "gpu-rtx-5080": "12vhpwr",
+    "gpu-rtx-5070-ti": "12vhpwr", "gpu-rtx-5070": "12vhpwr",
+    "gpu-rtx-5060-ti": "8pin", "gpu-rtx-5060": "8pin", "gpu-rtx-5050": "8pin",
+    "gpu-rtx-4090": "12vhpwr", "gpu-rtx-4070-super": "12vhpwr",
+    "gpu-rtx-4060-ti": "8pin", "gpu-rtx-4060": "8pin", "gpu-rtx-3060": "8pin",
+    "gpu-rx-9070-xt": "8x2", "gpu-rx-9070-gre": "8x2", "gpu-rx-9050": "8pin",
+    "gpu-rx-7900-xtx": "8x2", "gpu-rx-7800-xt": "8x2", "gpu-rx-7700-xt": "8x2",
+    "gpu-rx-7600": "8pin", "gpu-rx-6600": "8pin",
+}
+
 # fps_1080p_agg = aggregate 1080p high/ultra FPS used as the raw signal for
 # performance_index. Source: thepcbottleneckcalculator.com/gpu-benchmarks-2026/
 # NOTE: RTX 5070 Ti corrected to 180 (was 145 — wrongly below RTX 4070 SUPER).
@@ -117,12 +137,17 @@ STORAGE = [
 # length_mm = comprimento físico da fonte (ficha do fabricante). CX/RMe usam o
 # chassi compacto de 140mm; RM (2021, não-e) usa o chassi de 160mm; a MSI A1000G
 # tem chassi próprio de 150mm.
+# pcie_8pin_count/has_12vhpwr/atx_version (T-05): conectores nativos além de
+# qualquer cabo 12v-2x6. CX550/RM650/RM850 são unidades pré-ATX3.0 (nenhuma
+# fonte encontrada afirma selo ATX3.0/3.1 pra elas, ao contrário de RM750e/
+# A1000G que anunciam explicitamente) — atx_version="2.4" é inferido por
+# ausência de selo mais novo, não uma ficha que diga o número exato.
 PSUS = [
-    ("psu-cx550",   "Corsair CX550",       "Corsair", 550,  "80+ Bronze", False, 140),
-    ("psu-rm650",   "Corsair RM650",       "Corsair", 650,  "80+ Gold",   True,  160),
-    ("psu-rm750e",  "Corsair RM750e",      "Corsair", 750,  "80+ Gold",   True,  140),
-    ("psu-rm850",   "Corsair RM850",       "Corsair", 850,  "80+ Gold",   True,  160),
-    ("psu-a1000g",  "MSI MPG A1000G",      "MSI",     1000, "80+ Gold",   True,  150),
+    ("psu-cx550",   "Corsair CX550",       "Corsair", 550,  "80+ Bronze", False, 140, 2, False, "2.4"),
+    ("psu-rm650",   "Corsair RM650",       "Corsair", 650,  "80+ Gold",   True,  160, 4, False, "2.4"),
+    ("psu-rm750e",  "Corsair RM750e",      "Corsair", 750,  "80+ Gold",   True,  140, 2, True,  "3.1"),
+    ("psu-rm850",   "Corsair RM850",       "Corsair", 850,  "80+ Gold",   True,  160, 4, False, "2.4"),
+    ("psu-a1000g",  "MSI MPG A1000G",      "MSI",     1000, "80+ Gold",   True,  150, 4, True,  "3.1"),
 ]
 
 # max_psu_length_mm = ficha oficial do fabricante do gabinete (T-04). Conferido:
@@ -153,7 +178,8 @@ def build_products() -> list[dict]:
             "sku": sku, "name": name, "category": "gpu", "brand": brand,
             "specs": {"tdp_w": tdp, "length_mm": length, "vram_gb": vram,
                       "bus": bus, "fps_1080p_agg": fps,
-                      "slots": slots, "thickness_mm": thickness},
+                      "slots": slots, "thickness_mm": thickness,
+                      "power_connector": GPU_POWER_CONNECTOR.get(sku)},
             "footprint": {"length_mm": length, "installed_thickness_mm": thickness,
                           "slot_type_required": "pcie_x16", "airflow_zone": "gpu_zone",
                           # a resistência ao ar já não é fixa: uma placa 3.5-slot
@@ -188,11 +214,12 @@ def build_products() -> list[dict]:
             "specs": {"interface": iface, "capacity_gb": cap},
             "footprint": None,
         })
-    for sku, name, brand, watts, eff, modular, length_mm in PSUS:
+    for sku, name, brand, watts, eff, modular, length_mm, pcie_8pin, has_12vhpwr, atx_version in PSUS:
         products.append({
             "sku": sku, "name": name, "category": "psu", "brand": brand,
             "specs": {"watts": watts, "efficiency": eff, "modular": modular,
-                      "length_mm": length_mm},
+                      "length_mm": length_mm, "pcie_8pin_count": pcie_8pin,
+                      "has_12vhpwr": has_12vhpwr, "atx_version": atx_version},
             "footprint": None,
         })
     for sku, name, brand, ff, max_gpu, max_cooler, airflow_class, intake_cfm, exhaust_cfm, max_psu_length_mm in CASES:

@@ -26,6 +26,13 @@ COMPATIBILITY_RULES = [
      "O cooler {b_name} não tem kit de montagem para o soquete {a_val} do {a_name}. Não monta."),
     ("mobo_case_form_factor", "motherboard", "form_factor", "in", "case", "supported_form_factors", "error",
      "A placa {a_name} é {a_val}, e o gabinete {b_name} não comporta esse formato."),
+
+    # ── T-13 (2026-08-12): comparação binária de 2 atributos, cabe na tabela.
+    # As outras 3 checagens do T-13 (RAM×folga do cooler, radiador AIO×mounts,
+    # conector de força×fonte) precisam de condição (AIO vs torre, iterar lista)
+    # e viraram checagem calculada em compatibility.py — regra de ouro do roadmap.
+    ("psu_case_fit", "psu", "length_mm", "lte", "case", "max_psu_length_mm", "error",
+     "A fonte {a_name} tem {a_val}mm; o gabinete {b_name} comporta até {b_val}mm de fonte."),
 ]
 
 # TDP band (min, max) -> min_cooler_type, min_case_airflow. product_id NULL = generic band.
