@@ -190,10 +190,9 @@ UPDATE products SET specs = specs || '{"campo": valor}'::jsonb WHERE sku='<sku>'
 
 ### GRUPO C — Viewer (🟡, opcional para lançar)
 
-**T-20 · Linkar o download do modelo 3D** 🟢
-- **Contexto:** existe `GET /build/<slug>/modelo.gltf` funcionando (gera glTF 2.0 do motor de geometria), **mas não está linkado em página nenhuma** — `grep 'modelo.gltf'` nos `.tsx` volta vazio. Funcionalidade pronta e invisível.
-- **Fazer:** botão/link na página de detalhe da build. Texto sugerido: "baixar modelo 3D do gabinete (.gltf)". Mencionar que abre em Blender / visualizador 3D do Windows.
-- **Verificar:** clicar e baixar o arquivo.
+**T-20 · Linkar o download do modelo 3D** ✅ CONCLUÍDO 2026-08-12
+- **Feito:** link "⬇ baixar modelo 3D do gabinete (.gltf) — estimativa, não medição" logo abaixo do gabinete vivo em `build/[slug]/page.tsx`, com `download` e tooltip mencionando Blender/Visualizador 3D do Windows.
+- **Verificado:** baixado de verdade via curl (`content-disposition: attachment`, 10536 bytes, JSON glTF válido com 7 meshes e `asset.extras` com o aviso de estimativa) e confirmado no DOM da página via navegador (túnel SSH até o dev server do worktree).
 
 **T-21 · Corrigir o eixo da GPU no glTF** 🔴
 - **Problema:** `services/ingestion/gltf_builder.py:275` usa `gpu_thick` como extensão **Z** (bandeja→vidro), mas o `h` da placement — que também é `gpu_thick` — já é o **Y**. A GPU sai como barra 360×71×71mm. O real é 360 de comprimento × 71 de espessura (vertical) × ~140 de altura de cartão.
@@ -201,8 +200,9 @@ UPDATE products SET specs = specs || '{"campo": valor}'::jsonb WHERE sku='<sku>'
 - **Fazer:** ou (a) adicionar `gpu.card_height_mm` ao catálogo (curadoria, ~20 GPUs) e usar; ou (b) enquanto não houver o dado, **não afirmar** a extensão — usar um valor claramente rotulado como padrão de form factor no `extras.fonte`.
 - **Verificar:** baixar o `.gltf`, abrir num visualizador, conferir que a placa tem proporção de placa.
 
-**T-22 · Remover `model_gltf_path`** 🟢
-- Coluna definida em `services/ingestion/models.py:424`, **nunca escrita, nunca lida**. Remover (migration) ou documentar por que fica.
+**T-22 · Remover `model_gltf_path`** ✅ CONCLUÍDO 2026-08-12
+- **Feito:** removida junto a coluna vizinha `model_generated_at` (mesmo par morto — sem caminho de arquivo pra apontar, a data de geração não tinha uso). Migration Alembic `b1f4a9d02c17` (`DROP COLUMN` nas duas), aplicada no banco compartilhado depois de confirmar que as 17 linhas de `component_footprints` tinham as duas colunas 100% `NULL`. `dimensions_source`, vizinha na tabela, **ficou** — essa é usada de verdade em `seed/run_seed.py`.
+- **Verificado:** módulo `models.py` importa limpo, backend isolado sobe, `/interior/estimate` e `/compatibility/check` respondem 200 depois do drop.
 
 ---
 
@@ -238,11 +238,12 @@ Premissa: o bloqueio real de lançamento **não é técnico** — é entrar nos 
 
 ### Sprint 4 — "Confiança visível"
 **Objetivo:** o usuário entende de onde vem cada número.
-- Exibir origem do dado (ficha vs medido) onde houver divergência
-- T-20 (link do 3D) e T-22 (limpeza)
-- T-08 (BIOS) se o Sprint 3 fechar antes
+- ✅ Origem do dado (ficha vs medido) na folga do cooler — commit `ac50f08`
+- ✅ T-20 (link do 3D) — commit incluso em `ac50f08` (upload separado, sem novo commit dedicado)
+- ✅ T-22 (limpeza) — commit `c13b03a`
+- ⏸️ T-08 (BIOS) — **não entrou neste sprint**, é 🔴 pesquisa pesada (tabela CPU×chipset×versão mínima pra todos os pares do catálogo). Fica pra quando sobrar orçamento de tempo dedicado — ver a tarefa na Parte 2 pra escopo completo.
 
-**Pronto quando:** todo número na tela tem procedência rastreável na interface.
+**Sprint 4 concluído (com T-08 explicitamente adiado) em 2026-08-12.** Pronto quando: todo número na tela tem procedência rastreável na interface — **a única divergência ficha-vs-medido que existe hoje no catálogo (folga do cooler, T-07) agora aparece com selo "· medido" nos 4 lugares onde essa folga é mostrada** (corte superior, tooltip da peça, card de compatibilidade, seção de compatibilidade da página de detalhe); os outros números (comprimento de GPU, potência, conectores etc.) não têm uma segunda fonte pra divergir ainda, então não há o que rotular neles.
 
 ### Sprint 5 — Pré-lançamento
 - Feeds de afiliado ligados (**humano, founder**) → destrava preço, custo/FPS, ranking
