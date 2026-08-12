@@ -112,12 +112,14 @@ UPDATE products SET specs = specs || '{"campo": valor}'::jsonb WHERE sku='<sku>'
 - **Fonte:** ficha do fabricante. Se não achar, **deixe o campo ausente** — não chute (regra de integridade 2).
 - **Verificar:** `SELECT name, specs->>'height_mm' FROM products WHERE category='ram';` — todos preenchidos ou explicitamente ausentes com justificativa.
 
-**T-02 · Conferir soquetes dos coolers** 🟢
+**T-02 · Conferir soquetes dos coolers** ✅ CONCLUÍDO 2026-08-12
 - **Por quê:** o campo `cooler.sockets` foi populado em 2026-08-08 a partir de conhecimento geral, **não conferido peça a peça**. A regra 6 depende dele. Errado aqui = falso erro, que é pior que não checar.
-- **Fazer:** para cada `category='cooler'` (5), abrir a página de compatibilidade do fabricante e conferir a lista.
-- **Valores atuais a conferir:** `AMD Wraith Stealth: [AM4,AM5]` · `AK400 / Peerless Assassin 120 / LT520: [AM4,AM5,LGA1700,LGA1200,LGA1151]` · `Liquid Freezer III 360: [AM4,AM5,LGA1700,LGA1851]`
-- **Vocabulário:** use exatamente as strings que os CPUs usam: `AM4`, `AM5`, `LGA1700`. (Confira: `SELECT DISTINCT specs->>'socket' FROM products WHERE category='cpu';`)
-- **Verificar:** rodar o `curl` de compatibilidade com uma build boa e confirmar que **nenhum erro novo** aparece.
+- **Resultado:** os 5 coolers foram conferidos contra a página oficial do fabricante (busca web, não memória). Os sockets que **realmente aparecem no catálogo hoje** (`AM4`, `AM5`, `LGA1700` — confirmado via `SELECT DISTINCT specs->>'socket' FROM products WHERE category='cpu'`) batem em todos os 5:
+  - AMD Wraith Stealth → AM4/AM5 confirmado (mount idêntico entre os dois soquetes, documentado pela própria AMD).
+  - DeepCool AK400 e LT520 → página oficial (URL do produto já cita "1851-1700-AM5"); linha DeepCool desses coolers cobre também LGA1200/1151, como já estava no banco.
+  - Thermalright Peerless Assassin 120 → confirmado LGA1150/1151/1155/1200/1700/1851 + AM4/AM5.
+  - Arctic Liquid Freezer III 360 → confirmado nativo AM5/AM4/LGA1700/LGA1851. **Correção:** LGA1200 exige kit de montagem separado ("Compatibility Upgrade" da própria Arctic) — como não temos certeza se o kit vem no pacote vendido, o banco **não afirma** LGA1200 pra esse cooler. Fica assim mesmo (regra de integridade: não afirmar o que não foi confirmado), e é inofensivo porque o catálogo não tem nenhum CPU LGA1200 hoje.
+- **Verificado:** curl de compatibilidade com build válida (R7 9800X3D + Tomahawk B650 + AK400) não gerou nenhum erro novo — ver commit `ab02c54`.
 
 **T-03 · Folga de RAM dos coolers** 🟢 (depende de T-01)
 - **Fazer:** gravar `ram_clearance_mm` em cada cooler = altura máxima de memória que cabe sob a torre sem deslocar a ventoinha.
@@ -217,10 +219,10 @@ Premissa: o bloqueio real de lançamento **não é técnico** — é entrar nos 
 
 ### Sprint 1 — "O diagnóstico não mente" (fundação)
 **Objetivo:** nunca afirmar compatibilidade que não foi verificada.
-- T-10 (estado desconhecido) ← o mais importante do roadmap
-- T-12 (severidade da fonte)
-- T-02 (conferir soquetes — valida a regra que acabou de entrar)
-- T-14 (redeploy) ao final, para tudo isso valer em produção
+- ✅ T-10 (estado desconhecido) ← o mais importante do roadmap — commit `ab02c54`
+- ✅ T-12 (severidade da fonte) — commit `ab02c54`
+- ✅ T-02 (conferir soquetes — valida a regra que acabou de entrar) — verificado, ver Parte 2
+- ⏳ T-14 (redeploy) ao final, para tudo isso valer em produção — **pendente, precisa do founder ciente antes de rodar** (ver seção abaixo)
 
 **Pronto quando:** nenhuma checagem exibe ✅ sem ter comparado dois valores reais; build com fonte insuficiente dá erro.
 
