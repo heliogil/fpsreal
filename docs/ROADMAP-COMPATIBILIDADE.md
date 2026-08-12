@@ -127,12 +127,11 @@ UPDATE products SET specs = specs || '{"campo": valor}'::jsonb WHERE sku='<sku>'
 - **Resultado — `case.max_psu_length_mm`:** Lancool 216 = 220mm, H5 Flow = 200mm, 4000D Airflow = 220mm, Air 903 MAX = 240mm. Todos ficha oficial do fabricante.
 - **Verificado:** os 4 `max_psu_length_mm` (200–240) são sempre ≥ a maior fonte do catálogo (160mm) — nenhuma build fica sem opção de fonte. Commit `d5597a3`.
 
-**T-05 · Conectores de força** 🟡
-- **Por quê:** GPU que pede 3×8-pin numa fonte com 2 conectores nativos = não liga. E 12VHPWR exige fonte ATX 3.0 ou adaptador.
-- **Fazer:**
-  - `gpu.power_connector` ∈ {`none`,`6pin`,`8pin`,`8x2`,`8x3`,`12vhpwr`} — **atenção:** já existe um campo `power` no *descritor visual* (`product_visuals`), que é outra coisa. Este vai em `products.specs`.
-  - `psu.pcie_8pin_count` (inteiro) e `psu.has_12vhpwr` (bool) e `psu.atx_version` (ex.: `2.4`, `3.0`, `3.1`).
-- **Verificar:** `SELECT name, specs->>'power_connector' FROM products WHERE category='gpu';`
+**T-05 · Conectores de força** ✅ CONCLUÍDO 2026-08-12
+- **Resultado — `gpu.power_connector`** (20 GPUs, placa de referência/Founders Edition — AIB varia por modelo, catálogo é representativo por tier como o resto do arquivo): RTX 50/40 topo (5090/5080/5070Ti/5070/4090/4070S) = `12vhpwr`; RTX 50/40 entrada (5060Ti/5060/5050/4060Ti/4060) + RTX 3060 = `8pin`; Radeon 9070XT/9070GRE/7900XTX/7800XT/7700XT = `8x2`; Radeon 9050/7600/6600 = `8pin`.
+- **Resultado — fonte:** `pcie_8pin_count`/`has_12vhpwr`/`atx_version` das 5 fontes. CX550=2/false/2.4, RM650=4/false/2.4, RM750e=2/true/3.1, RM850=4/false/2.4, A1000G=4/true/3.1. **Nota de confiança:** o `atx_version` das 3 sem selo explícito (CX550/RM650/RM850) é inferido pela ausência de qualquer fonte anunciando ATX3.0/3.1 pra elas — não é uma ficha que cite o número.
+- **Achado à parte, documentado no código, não corrigido:** o catálogo de produção tem **20 GPUs**, mas o seed `catalog_data.py` (antes desta sessão) só tinha **17** — faltam `gpu-rtx-5050`, `gpu-rx-9050`, `gpu-rx-9070-gre`, provavelmente adicionadas direto no banco por um processo de reconciliação de specs que está em andamento (`services/ingestion/specs/aib_adapter.py`, não commitado, achado durante o T-14 anterior). Populei o conector pras 20 via `UPDATE` direto no banco; no seed, o dict `GPU_POWER_CONNECTOR` já cobre as 3 ausentes (fica pronto pra quando alguém completar a lista `GPUS`).
+- **Verificado:** `SELECT sku, specs->>'power_connector' FROM products WHERE category='gpu';` — 20 preenchidos. Commit `d6ba166`.
 
 **T-06 · Campos da placa-mãe** ✅ CONCLUÍDO 2026-08-12
 - **Resultado:** as 3 placas AM5/LGA1700 com DDR5 (TUF B650-PLUS, Tomahawk WiFi, B760 Gaming X) têm `m2_slots=3, ram_slots=4, max_ram_speed_mts=7600`; a B550 Steel Legend (AM4/DDR4) tem `m2_slots=2, ram_slots=4, max_ram_speed_mts=4733`. Ficha oficial de cada fabricante.
@@ -161,27 +160,25 @@ UPDATE products SET specs = specs || '{"campo": valor}'::jsonb WHERE sku='<sku>'
 - **Cuidado:** hoje os 5 campos das regras 1–5 têm 100% de cobertura, então nada vira `unknown` de imediato. O valor aparece quando o catálogo crescer por feed (spec esparsa).
 - **Verificar:** apagar temporariamente um campo de uma peça de teste, rodar o `curl`, confirmar `unknown` (e **não** `ok`); restaurar.
 
-**T-11 · Comprimento útil da GPU (não o do gabinete)** 🔴
-- **Problema:** a regra 3 compara `gpu.length_mm ≤ case.max_gpu_length_mm` cru. Esse número do fabricante **assume gabinete vazio**. Radiador frontal + ventoinhas comem **30–60mm**; gaiola de HDD, 20–40mm. Uma build com AIO frontal e placa longa **passa e não fecha**.
-- **A boa notícia:** o dado já existe. `services/ingestion/routers/interior.py` já modela mounts, radiador (`radiator_mm`, `rad_class`) e obstrução. É o endpoint de compatibilidade que ignora.
-- **Fazer:** calcular comprimento efetivo = `max_gpu_length_mm − (espessura do radiador frontal + espessura das ventoinhas)` quando houver radiador montado na frente, e usar esse valor. Expor como `clearances.gpu_effective` com a origem do desconto.
-- **Margem:** manter os 10–20mm de folga recomendada (o `TIGHT_MM = 15` atual está nessa faixa — não mexer sem motivo).
-- **Verificar:** build com AIO 360 frontal + GPU longa deve acusar aperto que hoje não acusa.
+**T-11 · Comprimento útil da GPU (não o do gabinete)** ⛔ INVESTIGADO 2026-08-12 — BLOQUEADO PELO MODELO DE DADOS, NÃO IMPLEMENTAR AINDA
+- **Problema original:** a regra 3 compara `gpu.length_mm ≤ case.max_gpu_length_mm` cru, que assumiria gabinete vazio, e radiador frontal comeria 30–60mm de clearance.
+- **Por que NÃO foi implementado:** conferi os `mounts` dos 4 gabinetes do catálogo (`SELECT sku, specs->'mounts' FROM products WHERE category='case'`) — em **todos os 4**, `kind: "rad_bay"` só existe no mount `top_bay`; nenhum mount `front_*` aceita radiador. Ou seja, neste catálogo o radiador do AIO **sempre monta em cima**, num eixo perpendicular ao comprimento da GPU — fisicamente ele nunca reduz esse clearance (reduz, no máximo, a folga de RAM perto do socket, que é outra checagem). Implementar o desconto de "comprimento efetivo" seria escrever uma checagem que **nunca dispara** com o dado real que existe hoje — o mesmo tipo de código-morto que este roadmap já identificou e evitou antes (`gpu_side` clearance, `FrontalInset.tsx`).
+- **O que destravaria isto de verdade:** um gabinete no catálogo cujo mount `front_bottom`/`front_top` (ou um mount novo) tenha `kind: "rad_bay"` e `accepts` incluindo `rad240`/`rad360` — aí sim o desconto de comprimento faz sentido e pode ser testado contra dado real. Até lá, a tarefa fica **fora do Sprint 3**, não é dívida escondida.
+- **Se isso mudar:** o cálculo seria `max_gpu_length_mm − radiator_mm` (ou `− height_mm` do cooler, que já é a espessura do radiador) só quando o mount ocupado pelo AIO tiver `id` começando com `front_`; expor como `clearances.gpu_effective` com a origem do desconto, mantendo `TIGHT_MM = 15`.
 
 **T-12 · Severidade da potência da fonte** 🟡
 - **Problema:** uma CX550 (550W) com RTX 5090 (575W) hoje sai como **aviso**. Essa máquina desliga sob pico transiente — GPUs modernas puxam picos de µs bem acima do TDP, e a proteção da fonte (OCP) corta.
 - **Fazer:** escalar para **erro** abaixo de um limiar (sugestão: fonte < 1,0 × consumo estimado = erro; entre 1,0 e 1,25 = aviso; acima = ok). O cálculo de consumo já existe em `compatibility.py`.
 - **Verificar:** a build 5090 + CX550 passa a dar erro; 5090 + A1000G continua ok.
 
-**T-13 · Regras novas sobre os dados do Grupo A** 🟡 (depende de A e de T-10)
-- **Fazer:** inserir em `compatibility_rules` (e no seed `compatibility_data.py`):
-  - `ram.height_mm` ≤ `cooler.ram_clearance_mm` — erro
-  - `psu.length_mm` ≤ `case.max_psu_length_mm` — erro
-  - radiador do AIO vs mounts que o gabinete aceita (usar `case.mounts[].accepts`) — erro
-  - nº de SSDs M.2 ≤ `motherboard.m2_slots` — erro *(pode exigir checagem calculada, não cabe em regra binária)*
-  - `gpu.power_connector` vs conectores da fonte — erro *(idem, provavelmente calculada)*
-- **Regra de ouro:** se a checagem precisar de mais de dois atributos ou de condição, **não force na tabela** — faça checagem calculada em código, como a da fonte. A tabela é só para comparação binária.
-- **Lembre:** adicionar rótulo legível no dict `rule_label` em `compatibility.py`, senão a UI mostra o `rule_type` cru.
+**T-13 · Regras novas sobre os dados do Grupo A** ✅ CONCLUÍDO 2026-08-12 (parcial — item M.2 adiado por falta de escopo no produto)
+- **Regra de tabela (`compatibility_rules`, comparação binária):** `psu.length_mm ≤ case.max_psu_length_mm` — erro. Regra `psu_case_fit`, id 8, ativa.
+- **Checagens calculadas em `compatibility.py`** (precisam de condição, não cabem em comparação binária — regra de ouro respeitada):
+  - `ram.height_mm ≤ cooler.ram_clearance_mm` — erro. AIO e cooler stock são tratados como `ok` **por construção** (não têm torre sobre a RAM), não `unknown` — a checagem genuinamente não se aplica a eles, não é falta de dado.
+  - Radiador do AIO vs `case.mounts[].accepts` — erro se `rad_class` do cooler não está em nenhum `accepts` de mount.
+  - `gpu.power_connector` vs conectores da fonte — 3 níveis: `ok` (12VHPWR nativo, ou 8-pin suficiente pra GPU 8pin/8x2/8x3), `warning` (GPU pede 12VHPWR mas a fonte só tem 8-pin — funciona com o adaptador que a própria GPU costuma trazer na caixa, mas não é o ideal), `error` (nem native nem 8-pin suficiente pra adaptar).
+- **Item adiado (não é dívida, é escopo):** nº de SSDs M.2 ≤ `motherboard.m2_slots` — o modelo de build atual só tem **um** slot de armazenamento (`storage_id` singular no payload de `/compatibility/check`), então essa checagem nunca teria mais de 1 SSD pra contar contra os 2–3 slots que as placas têm — seria sempre `1 ≤ m2_slots`, trivialmente verdadeiro. Só faz sentido quando o builder permitir múltiplos SSDs.
+- **Verificado:** build válida sem regressão (11 checks, nenhum erro inesperado); forcei os 3 caminhos de erro (RAM 50mm vs 43mm do AK400, fonte 250mm vs 240mm do Air 903 MAX, CX550 com 0 conectores 8-pin vs RTX 5090) via update temporário no banco + restore — os 3 dispararam corretamente; AIO 360 no H5 Flow deu erro (mount só aceita até `rad240`), no Air 903 MAX deu ok (aceita `rad360`). Commit `d6ba166`.
 
 **T-14 · Redeploy do `pcb_api`** ✅ CONCLUÍDO 2026-08-12
 - **O que foi feito:** merge de `viewer-fase1-forma` → `master` (commit `3b41d35`, 19 arquivos reais — não confundir com uma tentativa de merge anterior que teria trazido 2062 arquivos porque uma virtualenv de teste tinha sido commitada por engano em `f397146`; corrigido antes em `0bafd8c` e o merge foi refeito limpo). `docker compose build pcb_api pcb_web && up -d` a partir de `/opt/pc-builder-br`.
@@ -233,11 +230,11 @@ Premissa: o bloqueio real de lançamento **não é técnico** — é entrar nos 
 
 ### Sprint 3 — "Regras em cima dos dados"
 **Objetivo:** transformar os dados do Sprint 2 em diagnóstico.
-- T-13 (regras novas)
-- T-11 (comprimento útil da GPU) ← maior ganho isolado de acerto
-- T-05 (conectores) + a regra correspondente
+- ✅ T-05 (conectores) + a regra correspondente — commit `d6ba166`
+- ✅ T-13 (regras novas) — commit `d6ba166`, 4 dos 5 itens (M.2 adiado, ver T-13)
+- ⛔ T-11 (comprimento útil da GPU) — **investigado e bloqueado**, não implementado (ver T-11: nenhum gabinete do catálogo monta radiador na frente, a checagem nunca dispararia)
 
-**Pronto quando:** as builds curadas passam limpas e builds propositalmente quebradas acusam o problema certo. **Criar um conjunto de builds de teste** (boas e ruins) e rodá-lo a cada mudança — hoje não existe.
+**Sprint 3 concluído (com uma exceção documentada) em 2026-08-12**, ainda **só no backend de teste (8101/worktree)** — não deployado em produção ainda. Pronto quando: as builds curadas passam limpas e builds propositalmente quebradas acusam o problema certo — **confirmado**: build válida sem regressão, e forcei os 3 cenários de erro novos (RAM alta, fonte longa, conector insuficiente) + os 2 lados do radiador AIO (cabe/não cabe), todos corretos. **Ainda não existe** um conjunto de builds de teste permanente (boas e ruins) — continua pendente, cada sprint até aqui testou manualmente.
 
 ### Sprint 4 — "Confiança visível"
 **Objetivo:** o usuário entende de onde vem cada número.
