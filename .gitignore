@@ -17,3 +17,4 @@ coverage/
 .ergon-decisions.jsonl
 compose.yaml.bak*
 .worktrees/
+services/ingestion/.venv-test/

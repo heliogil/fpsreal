@@ -17,7 +17,6 @@
  *   psu:          psu-basic · psu-modular
  *   storage:      ssd-m2 · ssd-sata
  *   motherboard:  mb-matx · mb-atx
- *   fan:          fan-120 · fan-slim
  *   case_front:   front-mesh · front-solid
  *
  * Todos os desenhos usam SÓ tokens da marca (var(--…)) — GUIA §2.
@@ -30,15 +29,34 @@ export type MockupRenderer = (box: Box, opts?: MockupOpts) => ReactNode
 
 /* ── primitivas compartilhadas ─────────────────────────────────────────── */
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function FanDisc({ cx, cy, r, spin: _spin, dur: _dur }: { cx: number; cy: number; r: number; spin?: boolean; dur?: number }) {
-  // Anel + cubo, estático — sem elemento giratório (decisão do founder:
-  // pás animadas viravam ruído). A vida da cena é o fluxo de ar, não o rotor.
+/**
+ * fanBlades — pá de ventoinha real, não só o aro+cubo do FanDisc.
+ * Uma pá é um path assimétrico (tipo foice) desenhado uma vez e repetido
+ * `bladeCount` vezes por rotação ao redor do centro. Referência: fotos reais
+ * de ventoinha de GPU/cooler (blade count típico 9-11, mais fino que largo).
+ * Fica DENTRO do raio `r` — nunca ultrapassa (mesma regra do bevel: a
+ * silhueta nunca infla pra além da dimensão real da peça).
+ */
+function fanBlades(cx: number, cy: number, r: number, bladeCount: number, opts?: { hubR?: number; ring?: boolean }) {
+  const hubR = opts?.hubR ?? r * 0.2
+  const bladeOuterR = r * 0.92
+  const bladeInnerR = hubR * 1.15
+  // uma pá: do cubo até quase a borda, curvada (foice) — ponto de controle
+  // deslocado lateralmente pra dar a curva assimétrica de uma pá real
+  const bladePath = `M ${bladeInnerR} 0 Q ${bladeOuterR * 0.55} ${-bladeOuterR * 0.38} ${bladeOuterR} ${-bladeOuterR * 0.12} Q ${bladeOuterR * 0.5} ${bladeOuterR * 0.22} ${bladeInnerR} 0 Z`
+  const blades = Array.from({ length: bladeCount }, (_, i) => {
+    const angle = (360 / bladeCount) * i
+    return (
+      <path key={i} d={bladePath} fill="var(--line)" opacity=".55"
+        transform={`translate(${cx} ${cy}) rotate(${angle})`} />
+    )
+  })
   return (
     <g>
       <circle cx={cx} cy={cy} r={r} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
-      <circle cx={cx} cy={cy} r={r * 0.62} fill="none" stroke="var(--line)" strokeWidth="1" opacity=".6" />
-      <circle cx={cx} cy={cy} r={r * 0.2} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
+      {opts?.ring && <circle cx={cx} cy={cy} r={r * 0.86} fill="none" stroke="var(--accent-dim)" strokeWidth="1.2" />}
+      {blades}
+      <circle cx={cx} cy={cy} r={hubR} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
     </g>
   )
 }
@@ -104,14 +122,42 @@ export function bevel(b: Box, d = 3, r = 2) {
   )
 }
 
+/**
+ * shroudPath — contorno do corpo da peça (GPU/cooler/PSU) com corte
+ * diagonal nos cantos e crista elevada no topo, em vez do <rect> chapado
+ * atual. Intensidade do corte varia por `cut` (mapeia o enum `shroud` do
+ * descritor). Referência: foto real de GPU (ASUS RTX 3070 KO, Newegg
+ * 14-126-466), que mostra corte diagonal nos 4 cantos + crista central.
+ * Corte SEMPRE pra dentro da caixa — nunca ultrapassa b.w/b.h (mesma regra
+ * do bevel: a caixa em mm nunca é inflada).
+ */
+function shroudPath(b: Box, cut: 'flat' | 'dual_tone' | 'angular' | 'industrial'): string {
+  const notch = cut === 'industrial' ? b.h * 0.28 : cut === 'angular' ? b.h * 0.2 : b.h * 0.1
+  const ridgeH = cut === 'flat' ? 0 : Math.min(3, b.h * 0.06)
+  const { x, y, w, h } = b
+  // 8 pontos: canto sup-esq cortado, crista, canto sup-dir cortado, desce,
+  // canto inf-dir cortado, crista inferior reta, canto inf-esq cortado, fecha
+  return [
+    `M ${x} ${y + notch}`,
+    `L ${x + notch} ${y}`,
+    `L ${x + w - notch} ${y}`,
+    `L ${x + w} ${y + notch}`,
+    ridgeH > 0 ? `L ${x + w} ${y + notch + ridgeH}` : '',
+    `L ${x + w} ${y + h - notch}`,
+    `L ${x + w - notch} ${y + h}`,
+    `L ${x + notch} ${y + h}`,
+    `L ${x} ${y + h - notch}`,
+    'Z',
+  ].filter(Boolean).join(' ')
+}
+
 /* `finLines` foi removido: as aletas passaram a ser o padrão `mat-fins-*`,
    que é mais nítido e troca dezenas de <line> por um único fill. */
 
 /* ── GPU ───────────────────────────────────────────────────────────────── */
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const gpuBody = (b: Box, fans: number, thick: boolean, flagship: boolean, spin?: boolean) => {
-  const r = Math.min(b.h * 0.34, 15)
-  const cxs = Array.from({ length: fans }, (_, i) => b.x + b.w * ((i + 1) / (fans + 1)))
   // Conector de força no topo, perto da traseira (mm→px já resolvido pelo caller).
   const pcx = b.x + b.w * (flagship ? 0.66 : 0.72)
   const pw = flagship ? 16 : 12
@@ -127,12 +173,20 @@ const gpuBody = (b: Box, fans: number, thick: boolean, flagship: boolean, spin?:
         <line key={i} x1={pcx + (pw / (flagship ? 4 : 3)) * (i + 0.5)} y1={b.y - 8.2} x2={pcx + (pw / (flagship ? 4 : 3)) * (i + 0.5)} y2={b.y - 3.8} stroke="var(--line)" strokeWidth="1" />
       ))}
       {/* shroud */}
-      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={5} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={5} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
+      <path d={shroudPath(b, flagship ? 'angular' : 'flat')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+      <path d={shroudPath(b, flagship ? 'angular' : 'flat')} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
       {bevel(b, 3, 5)}
+      {/* sem descritor real pra essa peça, não fingimos saber a forma do
+          recorte de ventilação — o shroud fica liso, só o corte de canto
+          (shroudPath) e a marca de acabamento existem sem precisar de dado */}
       {flagship && <rect x={b.x} y={b.y + b.h - 5} width={b.w} height={5} rx={2} fill="var(--accent)" opacity=".8" />}
       {!flagship && <rect x={b.x + 4} y={b.y + b.h - 4} width={b.w * 0.35} height={2.5} rx={1} fill="var(--accent-dim)" />}
-      {cxs.map((cx, i) => <FanDisc key={i} cx={cx} cy={b.y + b.h / 2} r={r} spin={spin} dur={2 + i * 0.3} />)}
+      {/* bracket traseiro (I/O) com fendas de ventilação — única quebra real
+          de perfil numa GPU, sempre na ponta que encosta no painel do gabinete */}
+      <rect x={b.x + b.w - 10} y={b.y + 2} width={9} height={b.h - 4} rx={1} fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
+      {Array.from({ length: 4 }, (_, i) => (
+        <rect key={i} x={b.x + b.w - 8} y={b.y + 6 + i * ((b.h - 12) / 4)} width={5} height={(b.h - 12) / 4 - 2.5} rx={0.8} fill="var(--line)" opacity=".5" />
+      ))}
       {thick && <rect x={b.x} y={b.y - 8} width={b.w} height={4} rx={1} fill="var(--panel)" stroke="var(--line)" strokeWidth=".8" />}
     </g>
   )
@@ -178,6 +232,43 @@ const moboBoard = (b: Box, wScale: number, hScale: number): ReactNode => {
   )
 }
 
+/* ── Fonte (PSU) ───────────────────────────────────────────────────────────
+   UM genérico só, paramétrico no tamanho (decisão do founder 2026-08-07: sem
+   estética por modelo). No corte lateral a face visível é a LATERAL LONGA da
+   fonte — um tijolo retangular liso. A ventoinha fica no topo/fundo (aponta
+   pro respiro do basement) e NÃO aparece aqui; a tomada AC fica na traseira,
+   vista de canto. Conferido contra foto real (Corsair HX, perfil lateral).
+   Detalhes que o olho reconhece: faixa da etiqueta, tomada+interruptor na
+   traseira (direita = fundo do gabinete), portas modulares na frente
+   (esquerda = interior, onde os cabos plugam). */
+const psuBody = (b: Box): ReactNode => {
+  const r = Math.min(4, b.h * 0.08)
+  const rearX = b.x + b.w - b.h * 0.26   // painel traseiro (tomada AC)
+  return (
+    <g>
+      {/* corpo — tijolo limpo, não shroud chanfrado */}
+      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={r} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={r} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
+      {bevel(b, 3, 4)}
+      {/* faixa da etiqueta (sticker do modelo) — mais escura que o corpo */}
+      <rect x={b.x + b.w * 0.06} y={b.y + b.h * 0.54} width={b.w * 0.62} height={b.h * 0.28} rx={2}
+        fill="var(--panel)" opacity=".85" />
+      {/* portas modulares na frente (esquerda, viradas pro interior): onde os
+          cabos que o viewer desenha plugam */}
+      {[0.16, 0.34, 0.52].map((t, i) => (
+        <rect key={i} x={b.x + b.h * 0.16} y={b.y + b.h * t} width={b.h * 0.5} height={b.h * 0.12} rx={1.5}
+          fill="var(--panel)" stroke="var(--line)" strokeWidth=".8" />
+      ))}
+      {/* painel traseiro (direita = fundo do gabinete): interruptor + tomada
+          C14, vistos de canto — a quebra universal de uma fonte nesta vista */}
+      <rect x={rearX} y={b.y + b.h * 0.12} width={b.h * 0.18} height={b.h * 0.76} rx={2}
+        fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
+      <rect x={rearX + b.h * 0.04} y={b.y + b.h * 0.2} width={b.h * 0.1} height={b.h * 0.15} rx={1} fill="var(--line)" opacity=".6" />
+      <rect x={rearX + b.h * 0.04} y={b.y + b.h * 0.45} width={b.h * 0.1} height={b.h * 0.18} rx={1} fill="var(--line)" opacity=".75" />
+    </g>
+  )
+}
+
 /* ── registry ──────────────────────────────────────────────────────────── */
 
 export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
@@ -188,23 +279,29 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
   },
 
   cooler: {
-    'cooler-lowprofile': (b) => (
-      <g>
-        <rect x={b.x + b.w * 0.2} y={b.y + b.h * 0.55} width={b.w * 0.6} height={b.h * 0.45} rx={3} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
-        <rect x={b.x + b.w * 0.2} y={b.y + b.h * 0.55} width={b.w * 0.6} height={b.h * 0.45} fill="url(#mat-fins-v)" opacity=".9" />
-        {bevel({ x: b.x + b.w * 0.2, y: b.y + b.h * 0.55, w: b.w * 0.6, h: b.h * 0.45 }, 2, 3)}
-        <FanDisc cx={b.x + b.w / 2} cy={b.y + b.h * 0.34} r={Math.min(b.w, b.h) * 0.3} />
-      </g>
-    ),
-    'cooler-tower': (b, o) => (
-      <g>
-        <rect x={b.x + b.w * 0.28} y={b.y} width={b.w * 0.5} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-        <rect x={b.x + b.w * 0.28} y={b.y + 3} width={b.w * 0.5} height={b.h - 6} fill="url(#mat-fins-h)" opacity=".9" />
-        {bevel({ x: b.x + b.w * 0.28, y: b.y, w: b.w * 0.5, h: b.h }, 3, 4)}
-        <rect x={b.x + b.w * 0.3} y={b.y + 2} width={b.w * 0.46} height={3} rx={1.5} fill="var(--accent-dim)" />
-        <FanDisc cx={b.x + b.w * 0.14} cy={b.y + b.h * 0.42} r={Math.min(b.w * 0.16, b.h * 0.3)} spin={o?.spin} dur={2.6} />
-      </g>
-    ),
+    'cooler-lowprofile': (b) => {
+      const lp = { x: b.x + b.w * 0.2, y: b.y + b.h * 0.55, w: b.w * 0.6, h: b.h * 0.45 }
+      return (
+        <g>
+          <path d={shroudPath(lp, 'flat')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
+          <rect x={lp.x} y={lp.y} width={lp.w} height={lp.h} fill="url(#mat-fins-v)" opacity=".9" />
+          {bevel(lp, 2, 3)}
+          {fanBlades(b.x + b.w / 2, b.y + b.h * 0.34, Math.min(b.w, b.h) * 0.3, 9)}
+        </g>
+      )
+    },
+    'cooler-tower': (b) => {
+      const tw = { x: b.x + b.w * 0.28, y: b.y, w: b.w * 0.5, h: b.h }
+      return (
+        <g>
+          <path d={shroudPath(tw, 'angular')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+          <rect x={tw.x} y={tw.y + 3} width={tw.w} height={tw.h - 6} fill="url(#mat-fins-h)" opacity=".9" />
+          {bevel(tw, 3, 4)}
+          <rect x={b.x + b.w * 0.3} y={b.y + 2} width={b.w * 0.46} height={3} rx={1.5} fill="var(--accent-dim)" />
+          {fanBlades(b.x + b.w * 0.14, b.y + b.h * 0.42, Math.min(b.w * 0.16, b.h * 0.3), 9)}
+        </g>
+      )
+    },
     'cooler-aio-pump': (b) => {
       /* water block sobre a CPU — corpo + bracket de montagem + cap com anel
          + barbs (entradas dos tubos) no topo. Os tubos até o radiador são
@@ -272,29 +369,10 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
   },
 
   psu: {
-    'psu-basic': (b) => (
-      <g>
-        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
-        {bevel(b, 3, 4)}
-        <circle cx={b.x + b.h * 0.55} cy={b.y + b.h / 2} r={b.h * 0.32} fill="none" stroke="var(--line)" strokeWidth="1.2" />
-        {[0, 60, 120].map((a) => (
-          <line key={a} x1={b.x + b.h * 0.55 - b.h * 0.3 * Math.cos((a * Math.PI) / 180)} y1={b.y + b.h / 2 - b.h * 0.3 * Math.sin((a * Math.PI) / 180)} x2={b.x + b.h * 0.55 + b.h * 0.3 * Math.cos((a * Math.PI) / 180)} y2={b.y + b.h / 2 + b.h * 0.3 * Math.sin((a * Math.PI) / 180)} stroke="var(--line)" strokeWidth="1" />
-        ))}
-      </g>
-    ),
-    'psu-modular': (b) => (
-      <g>
-        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
-        {bevel(b, 3, 4)}
-        <circle cx={b.x + b.h * 0.55} cy={b.y + b.h / 2} r={b.h * 0.32} fill="none" stroke="var(--line)" strokeWidth="1.2" />
-        {[0, 1, 2, 3].map((i) => (
-          <rect key={i} x={b.x + b.w - b.h * 0.9 + i * 7} y={b.y + b.h * 0.3} width={5} height={5} rx={1} fill="var(--accent-dim)" />
-        ))}
-        <rect x={b.x + b.w - b.h * 0.9} y={b.y + b.h * 0.58} width={26} height={4} rx={2} fill="var(--accent)" opacity=".7" />
-      </g>
-    ),
+    // um genérico só, size-only (decisão do founder) — as duas chaves de
+    // variante ainda existem porque pickVariant as devolve, mas desenham igual
+    'psu-basic': (b) => psuBody(b),
+    'psu-modular': (b) => psuBody(b),
   },
 
   storage: {
@@ -318,15 +396,6 @@ export const PART_REGISTRY: Record<string, Record<string, MockupRenderer>> = {
   motherboard: {
     'mb-matx': (b) => moboBoard(b, 0.82, 0.85),
     'mb-atx': (b) => moboBoard(b, 1, 1),
-  },
-
-  fan: {
-    'fan-120': (b, o) => <FanDisc cx={b.x + b.w / 2} cy={b.y + b.h / 2} r={Math.min(b.w, b.h) / 2 - 1} spin={o?.spin} dur={2.4} />,
-    'fan-slim': (b, o) => (
-      <g opacity=".92">
-        <FanDisc cx={b.x + b.w / 2} cy={b.y + b.h / 2} r={Math.min(b.w, b.h) / 2 - 3} spin={o?.spin} dur={2.1} />
-      </g>
-    ),
   },
 
   case_front: {
@@ -381,15 +450,11 @@ const D_GPU = (b: Box, d: VisualDescriptor): ReactNode => {
           ))}
         </g>
       )}
-      {shroud === 'angular' ? (
-        <path d={`M${b.x},${b.y + 6} L${b.x + 10},${b.y} H${b.x + b.w - 10} L${b.x + b.w},${b.y + 6} V${b.y + b.h} H${b.x} Z`}
-          fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-      ) : (
-        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={shroud === 'industrial' ? 2 : 5}
-          fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-      )}
+      <path d={shroudPath(b, shroud as 'flat' | 'dual_tone' | 'angular' | 'industrial')}
+        fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
       {shroud === 'dual_tone' && <rect x={b.x} y={b.y} width={b.w} height={b.h * 0.42} rx={5} fill="var(--panel)" opacity=".55" />}
-      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={5} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
+      <path d={shroudPath(b, shroud as 'flat' | 'dual_tone' | 'angular' | 'industrial')}
+        fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
       {vent === 'diagonal' && Array.from({ length: 5 }, (_, i) => (
         <line key={i} x1={b.x + 8 + i * 9} y1={b.y + b.h - 4} x2={b.x + 16 + i * 9} y2={b.y + 5} stroke="var(--line)" strokeWidth="1" opacity=".5" />
       ))}
@@ -397,6 +462,14 @@ const D_GPU = (b: Box, d: VisualDescriptor): ReactNode => {
         <rect key={i} x={b.x + 7 + i * 7} y={b.y + 5} width={2.5} height={b.h - 10} rx={1} fill="var(--line)" opacity=".45" />
       ))}
       {vent === 'hex' && <rect x={b.x + 5} y={b.y + 4} width={Math.max(0, b.w - 10)} height={Math.max(0, b.h - 8)} fill="url(#mat-mesh)" opacity=".5" />}
+      {/* recorte de ventilação: só desenha se a ficha técnica REAL da peça
+          declarar um (vent_cut acima) — sem descritor, o shroud fica liso.
+          Bracket traseiro com fendas é universal (toda GPU tem um), esse
+          sim desenha sempre. */}
+      <rect x={b.x + b.w - 10} y={b.y + 2} width={9} height={b.h - 4} rx={1} fill="var(--panel)" stroke="var(--line)" strokeWidth="1" />
+      {Array.from({ length: 4 }, (_, i) => (
+        <rect key={i} x={b.x + b.w - 8} y={b.y + 6 + i * ((b.h - 12) / 4)} width={5} height={(b.h - 12) / 4 - 2.5} rx={0.8} fill="var(--line)" opacity=".5" />
+      ))}
       {bevel(b, 3, shroud === 'industrial' ? 2 : 5)}
       {accent === 'strip_bottom' && <rect x={b.x} y={b.y + b.h - 5} width={b.w} height={5} rx={2} fill="var(--accent)" opacity=".8" />}
       {accent === 'edge' && <rect x={b.x + 4} y={b.y + b.h - 4} width={b.w * 0.35} height={2.5} rx={1} fill="var(--accent-dim)" />}
@@ -417,15 +490,14 @@ const D_GPU = (b: Box, d: VisualDescriptor): ReactNode => {
           )}
         </g>
       )}
-      {cxs.map((cx, i) => (
-        style === 'blower'
-          ? <g key={i}><circle cx={cx} cy={b.y + b.h / 2} r={r * 0.8} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" /><rect x={cx + r} y={b.y + b.h * 0.3} width={b.w * 0.25} height={b.h * 0.4} rx={2} fill="var(--panel)" stroke="var(--line)" strokeWidth=".8" /></g>
-          : <g key={i}>
-              <circle cx={cx} cy={b.y + b.h / 2} r={r} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
-              {style === 'ring' && <circle cx={cx} cy={b.y + b.h / 2} r={r * 0.78} fill="none" stroke="var(--accent-dim)" strokeWidth="1.4" />}
-              <circle cx={cx} cy={b.y + b.h / 2} r={r * 0.62} fill="none" stroke="var(--line)" strokeWidth="1" opacity=".6" />
-              <circle cx={cx} cy={b.y + b.h / 2} r={r * 0.2} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
-            </g>
+      {/* pá/rotor NUNCA aparece aqui — este corte mostra o perfil do cartão,
+          a face onde o fan gira não fica voltada pra esta vista. O duto do
+          blower é a exceção legítima: sai pela lateral, isso sim é visível. */}
+      {style === 'blower' && cxs.map((cx, i) => (
+        <g key={i}>
+          <circle cx={cx} cy={b.y + b.h / 2} r={r * 0.8} fill="var(--panel)" stroke="var(--line)" strokeWidth="1.2" />
+          <rect x={cx + r} y={b.y + b.h * 0.3} width={b.w * 0.25} height={b.h * 0.4} rx={2} fill="var(--panel)" stroke="var(--line)" strokeWidth=".8" />
+        </g>
       ))}
     </g>
   )
@@ -443,10 +515,10 @@ const D_COOLER = (b: Box, d: VisualDescriptor): ReactNode => {
     const lp = { x: b.x + b.w * 0.2, y: b.y + b.h * 0.55, w: b.w * 0.6, h: b.h * 0.45 }
     return (
       <g>
-        <rect x={lp.x} y={lp.y} width={lp.w} height={lp.h} rx={3} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
+        <path d={shroudPath(lp, 'flat')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1" />
         <rect x={lp.x} y={lp.y} width={lp.w} height={lp.h} fill={fin === 'open' ? 'url(#mat-fins-v)' : 'url(#mat-fins-h)'} opacity=".9" />
         {bevel(lp, 2, 3)}
-        <FanDisc cx={b.x + b.w / 2} cy={b.y + b.h * 0.32} r={Math.min(b.w, b.h) * 0.3} />
+        {fanBlades(b.x + b.w / 2, b.y + b.h * 0.32, Math.min(b.w, b.h) * 0.3, 9)}
       </g>
     )
   }
@@ -459,14 +531,14 @@ const D_COOLER = (b: Box, d: VisualDescriptor): ReactNode => {
         const tx = x0 + i * (tw + gap)
         return (
           <g key={i}>
-            <rect x={tx} y={b.y} width={tw} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
+            <path d={shroudPath({ x: tx, y: b.y, w: tw, h: b.h }, 'angular')} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
             <rect x={tx} y={b.y + 3} width={tw} height={b.h - 6} fill={fin === 'open' ? 'url(#mat-fins-v)' : 'url(#mat-fins-h)'} opacity=".9" />
             {bevel({ x: tx, y: b.y, w: tw, h: b.h }, 3, 4)}
           </g>
         )
       })}
       {plate !== 'none' && <rect x={x0} y={b.y + 1} width={tw * towers + gap * (towers - 1)} height={4} rx={2} fill={plate === 'logo_plate' ? 'var(--accent-dim)' : 'var(--panel)'} stroke="var(--line)" strokeWidth=".8" />}
-      {sideFan && <FanDisc cx={b.x + b.w * 0.13} cy={b.y + b.h * 0.42} r={Math.min(b.w * 0.15, b.h * 0.28)} />}
+      {sideFan && fanBlades(b.x + b.w * 0.13, b.y + b.h * 0.42, Math.min(b.w * 0.15, b.h * 0.28), 9)}
       {lit !== 'none' && (
         <g filter="url(#mat-glow)" pointerEvents="none">
           {(lit === 'ring' || lit === 'full') && (
@@ -483,29 +555,9 @@ const D_COOLER = (b: Box, d: VisualDescriptor): ReactNode => {
   )
 }
 
-const D_PSU = (b: Box, d: VisualDescriptor): ReactNode => {
-  const cabling = String(d.cabling ?? 'fixed')
-  const grill = String(d.grill ?? 'round')
-  const fanPos = String(d.fan_pos ?? 'bottom')
-  const fcx = fanPos === 'rear' ? b.x + b.w - b.h * 0.55 : b.x + b.h * 0.55
-  return (
-    <g>
-      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="var(--panel2)" stroke="var(--line)" strokeWidth="1.2" />
-      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill="url(#mat-brushed)" className="gv-hide-sm gv-mat-fine" />
-      {bevel(b, 3, 4)}
-      {grill === 'honeycomb'
-        ? <circle cx={fcx} cy={b.y + b.h / 2} r={b.h * 0.34} fill="url(#mat-mesh)" stroke="var(--line)" strokeWidth="1.2" />
-        : <circle cx={fcx} cy={b.y + b.h / 2} r={b.h * 0.32} fill="none" stroke="var(--line)" strokeWidth="1.2" />}
-      {grill === 'slot' && Array.from({ length: 4 }, (_, i) => (
-        <line key={i} x1={fcx - b.h * 0.3 + i * (b.h * 0.2)} y1={b.y + b.h * 0.2} x2={fcx - b.h * 0.3 + i * (b.h * 0.2)} y2={b.y + b.h * 0.8} stroke="var(--line)" strokeWidth="1" />
-      ))}
-      {cabling !== 'fixed' && Array.from({ length: cabling === 'modular' ? 4 : 2 }, (_, i) => (
-        <rect key={i} x={b.x + b.w - b.h * 0.9 + i * 7} y={b.y + b.h * 0.3} width={5} height={5} rx={1} fill="var(--accent-dim)" />
-      ))}
-      {cabling === 'modular' && <rect x={b.x + b.w - b.h * 0.9} y={b.y + b.h * 0.58} width={26} height={4} rx={2} fill="var(--accent)" opacity=".7" />}
-    </g>
-  )
-}
+// size-only: o descritor de PSU não muda mais o desenho (decisão do founder).
+// Mantido como wrapper pro caso de o DESCRIPTOR_RENDERERS ainda apontar aqui.
+const D_PSU = (b: Box, _d: VisualDescriptor): ReactNode => psuBody(b)
 
 const D_CASE_FRONT = (b: Box, d: VisualDescriptor): ReactNode => {
   const surface = String(d.surface ?? 'solid')
@@ -600,8 +652,6 @@ export function pickVariant(category: string, h: VariantHints = {}): string {
       return /nv|m\.?2|990|sn7|nvme/.test(name + sku) ? 'ssd-m2' : 'ssd-sata'
     case 'motherboard':
       return /matx|m-atx|micro/.test(name + sku + (h.formFactor ?? '').toLowerCase()) ? 'mb-matx' : 'mb-atx'
-    case 'fan':
-      return 'fan-120'
     case 'case_front':
       return (h.airflowClass ?? '') === 'high' || /mesh|airflow|torrent|216/.test(name + sku) ? 'front-mesh' : 'front-solid'
     default:

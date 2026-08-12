@@ -3,6 +3,35 @@ from __future__ import annotations
 
 from .geometry_data import CASE_GEOMETRY, COOLER_GEOMETRY
 
+# ── soquetes suportados por cooler ───────────────────────────────────────────
+# FATO DE ENGENHARIA, não estimativa: é o que o kit de montagem que vem na caixa
+# suporta. Sem isto, um cooler que NÃO monta no soquete passa limpo pela engine
+# de compatibilidade (falha dura, invisível). AM4 e AM5 partilham a furação, por
+# isso quase todo cooler moderno cobre os dois.
+# FONTE: página de compatibilidade do próprio fabricante. Rever ao adicionar
+# cooler novo — ver tarefa T-02 no roadmap.
+COOLER_SOCKETS = {
+    "cooler-stock-amd": ["AM4", "AM5"],
+    "cooler-ak400":     ["AM4", "AM5", "LGA1700", "LGA1200", "LGA1151"],
+    "cooler-pa120":     ["AM4", "AM5", "LGA1700", "LGA1200", "LGA1151"],
+    "cooler-lt520":     ["AM4", "AM5", "LGA1700", "LGA1200", "LGA1151"],
+    "cooler-lf3-360":   ["AM4", "AM5", "LGA1700", "LGA1851"],
+}
+
+# ── que formatos de placa cada formato de gabinete aceita ────────────────────
+# FATO FÍSICO de contenção: um gabinete maior aceita placa menor (a furação ATX
+# é um superconjunto). Derivado do form_factor do gabinete em vez de digitado
+# peça a peça — não há o que errar e não precisa de curadoria.
+# ATENÇÃO: comparar `motherboard.form_factor == case.form_factor` seria ERRADO
+# (reprovaria mATX em gabinete ATX, que cabe perfeitamente).
+FORM_FACTOR_ACCEPTS = {
+    "ATX":       ["ATX", "mATX", "Micro-ATX", "ITX", "Mini-ITX"],
+    "mATX":      ["mATX", "Micro-ATX", "ITX", "Mini-ITX"],
+    "Micro-ATX": ["mATX", "Micro-ATX", "ITX", "Mini-ITX"],
+    "ITX":       ["ITX", "Mini-ITX"],
+    "Mini-ITX":  ["ITX", "Mini-ITX"],
+}
+
 # fps_1080p_agg = aggregate 1080p high/ultra FPS used as the raw signal for
 # performance_index. Source: thepcbottleneckcalculator.com/gpu-benchmarks-2026/
 # NOTE: RTX 5070 Ti corrected to 180 (was 145 — wrongly below RTX 4070 SUPER).
@@ -143,6 +172,8 @@ def build_products() -> list[dict]:
             "specs": {"form_factor": ff, "max_gpu_length_mm": max_gpu,
                       "max_cooler_height_mm": max_cooler, "airflow_class": airflow_class,
                       "intake_cfm": intake_cfm, "exhaust_cfm": exhaust_cfm,
+                      # lista, não igualdade: gabinete ATX também aceita mATX/ITX
+                      "supported_form_factors": FORM_FACTOR_ACCEPTS.get(ff, [ff]),
                       **geo},
             "footprint": None,
         })
@@ -151,7 +182,9 @@ def build_products() -> list[dict]:
         products.append({
             "sku": sku, "name": name, "category": "cooler", "brand": brand,
             "specs": {"cooler_type": cooler_type, "tdp_rating_w": tdp_rating,
-                      "height_mm": height, **geo},
+                      "height_mm": height,
+                      "sockets": COOLER_SOCKETS.get(sku, []),
+                      **geo},
             "footprint": None,
         })
 

@@ -138,8 +138,16 @@ a:hover { color: var(--accent); }
 }
 
 /* modo COMPACTO (viewer em /resultados): os padrões finos aliasam a ~340px —
-   escondê-los deixa a leitura limpa sem perder as peças. */
+   escondê-los deixa a leitura limpa sem perder as peças.
+   Fase 5 (2026-08-07): `.gv-hide-sm`/`.gv-dot-extra` só desligavam por
+   media query de VIEWPORT (max-width: 640px) — mas os 3 cards de
+   comparação em /resultados ficam pequenos com a JANELA larga (desktop),
+   então a regra nunca disparava onde mais precisava. `.gv-compact` já é o
+   sinal certo ("este SVG vai renderizar pequeno"), então ligamos a mesma
+   redução a ele, independente da largura da janela. */
 .gv-compact .gv-mat-fine { display: none; }
+.gv-compact .gv-hide-sm { display: none; }
+.gv-compact .gv-dot-extra { display: none; }
 
 /* ============================================================================
    LEGACY SHIM — brand-corrected tokens + component classes for pages not yet

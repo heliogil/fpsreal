@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 import type { GeoMount, GeoPlacement, LiveInterior, LiveProduct } from '@/lib/live-server'
 import { MaterialDefs, bevel, pickVariant, renderPart, renderFromDescriptor } from './PartMockups'
 import TopDownInset from './TopDownInset'
-import FrontalInset from './FrontalInset'
 import BottleneckNote from './BottleneckNote'
+import { coolerBand, bandSuffix } from './clearance'
 
 /**
  * GabineteVivo v5 — função da GEOMETRIA PARAMÉTRICA do backend.
@@ -36,6 +36,14 @@ type Products = Partial<Record<'gpu' | 'cooler' | 'ram' | 'psu' | 'storage' | 'm
 const ZONE_LABEL: Record<string, string> = {
   intake_front: 'entrada', cpu_zone: 'CPU', gpu_zone: 'GPU', exhaust_rear: 'saída', exhaust_top: 'topo',
 }
+// Fase 4 (2026-08-07): id de mount é nome interno de geometry_data.py
+// (front_bottom, top_bay...) — usuário final via cru com underscore. Cobre
+// os 5 ids que existem hoje no catálogo de gabinetes.
+const MOUNT_LABEL: Record<string, string> = {
+  front_bottom: 'frontal inferior', front_top: 'frontal superior', front_mid: 'frontal meio',
+  rear: 'traseira', top_bay: 'baía superior',
+}
+const mountLabel = (id: string) => MOUNT_LABEL[id] ?? id.replace(/_/g, ' ')
 const STATUS_PT: Record<string, { label: string; color: string; border: string }> = {
   ok: { label: 'ok', color: 'var(--fresh)', border: 'var(--fresh-b)' },
   tight: { label: 'apertado', color: 'var(--warn)', border: 'var(--warn-b)' },
@@ -221,7 +229,11 @@ export default function GabineteVivo({
       ...(interior.parts.gpu.thickness_mm ? [['espessura', `${interior.parts.gpu.slots ?? '?'}-slot · ~${mm(interior.parts.gpu.thickness_mm)} típico`] as [string, string]] : []),
       ['TDP', `${Math.round(interior.parts.gpu.tdp_w)} W`],
       ...(gpuClr ? [['folga até a frente', mm(gpuClr.remaining_mm) + (gpuClr.is_tight ? ' (apertado)' : '')] as [string, string]] : []),
-      ...(interior.clearances.gpu_side ? [['folga até a tampa', mm(interior.clearances.gpu_side.remaining_mm) + (interior.clearances.gpu_side.is_tight ? ' (apertado)' : '')] as [string, string]] : []),
+      // "folga até a tampa" (clearances.gpu_side) saiu: é calculada como
+      // largura_útil − espessura_em_slots, que compara um vão horizontal com
+      // uma dimensão vertical. Com os valores reais do catálogo dá 94–129mm
+      // contra um limiar de 12mm — nunca dispara. Volta quando existir a
+      // altura do cartão (ver spec 2026-08-08).
     ],
   }
   if (airCooler) focusTargets.cooler = {
@@ -229,7 +241,10 @@ export default function GabineteVivo({
     specs: [
       ['modelo', products.cooler?.name ?? interior.parts.cooler.name ?? '—'],
       ['altura (spec)', mm(coolerRealH)],
-      ...(coolerClr ? [['folga até a tampa', mm(coolerClr.remaining_mm) + (coolerClr.is_tight ? ' (apertado)' : '')] as [string, string]] : []),
+      // A ficha do fabricante erra (Noctua: 56 de 100+ gabinetes com desvio
+      // relevante, até −3,5mm no lado perigoso), então a folga leva a
+      // ressalva da margem em vez de ser dada como exacta. Ver ./clearance.
+      ...(coolerClr ? [['folga até a tampa', mm(coolerClr.remaining_mm) + bandSuffix(coolerBand(coolerClr.remaining_mm))] as [string, string]] : []),
       ['nota', 'a altura está no plano do corte superior'],
     ],
   }
@@ -304,8 +319,8 @@ export default function GabineteVivo({
     const isSim = m.occupied_by === 'what_if_fan'
     const isTop = m.y > H * 0.8 && m.w > m.h
     const color = isSim ? 'var(--accent)' : m.orient === 'intake' ? 'var(--fresh)' : 'var(--warn)'
-    const label = `${m.id.replace(/_/g, ' ')} · ${m.orient === 'intake' ? 'entrada' : 'saída'} · ${
-      occupied ? `${Math.round(m.cfm)} CFM${isSim ? ' (simulado)' : ''}` : 'previsão livre — clique p/ simular ventoinha'
+    const label = `${mountLabel(m.id)} · ${m.orient === 'intake' ? 'entrada' : 'saída'} · ${
+      occupied ? `${Math.round(m.cfm)} CFM${isSim ? ' (simulado)' : ''}` : 'espaço livre — clique pra simular uma ventoinha aqui'
     }`
     const clickable = !occupied && !!onToggleFan
     const common = {
@@ -464,7 +479,13 @@ export default function GabineteVivo({
   /** Rampa quente em TOKENS da marca (GUIA §2) — nada de rgb() fixo: assim o
       campo acompanha o tema claro/escuro. Duas bandas bastam: depois do borrão
       gaussiano elas fundem-se e leem como gradiente contínuo. */
-  const heatFill = (t: number) => (t < 0.42 ? 'var(--warn)' : 'var(--danger)')
+  // Fase 3 (2026-08-07): limiar de 'var(--danger)' (vermelho) subiu de 0.42
+  // para 0.6 — o vermelho estava disparando cedo demais e, somado ao blur
+  // que difunde células vizinhas, a zona quente virava uma mancha vermelha
+  // dominando boa parte da cena (lia como erro, não como "aqui esquenta").
+  // Agora a maior parte do campo fica em 'var(--warn)' (âmbar), reservando
+  // vermelho pra obstrução de verdade severa.
+  const heatFill = (t: number) => (t < 0.6 ? 'var(--warn)' : 'var(--danger)')
 
   /* obstrução por peça (somada em todos os fluxos) — vinda do motor */
   const obstrByPart: Record<string, number> = {}
@@ -619,31 +640,78 @@ export default function GabineteVivo({
             const gy = [b.y + b.h * 0.18, b.y + b.h * 0.52, b.y + b.h * 0.84]
             const pb = psu ? box(psu) : null
             const chx = b.x - 19          // canaleta vertical atrás da bandeja
+            // via única, com deslocamento dx — o cabo é um FEIXE de vias
+            // redondas individualmente encapadas (conferido contra foto
+            // real de cabo sleeved), não um tubo liso nem uma textura por
+            // cima. dx aproxima o deslocamento perpendicular: os 4 cabos
+            // aqui correm quase verticais, então um deslocamento horizontal
+            // já lê como vias paralelas lado a lado.
+            const buildStrand = (x0: number, y: number, dx: number) =>
+              `M${(x0 + dx).toFixed(1)},${pb!.y.toFixed(1)} C${(chx + dx).toFixed(1)},${(pb!.y - 26).toFixed(1)} `
+              + `${(chx + dx).toFixed(1)},${(y + 48).toFixed(1)} ${(b.x - 7 + dx).toFixed(1)},${y.toFixed(1)}`
             const runs = pb ? gy.map((y, i) => {
               const x0 = pb.x + pb.w * (0.20 + i * 0.17)
-              return `M${x0.toFixed(1)},${pb.y.toFixed(1)} C${chx.toFixed(1)},${(pb.y - 26).toFixed(1)} `
-                + `${chx.toFixed(1)},${(y + 48).toFixed(1)} ${(b.x - 7).toFixed(1)},${y.toFixed(1)}`
+              return { x0, y }
             }) : []
             return (
-              <g data-depth="tray" data-asm="0" filter="url(#gv-far)" opacity={0.5} pointerEvents="none">
+              // Fase 2 (2026-08-07): opacity subiu de 0.5 -> 0.78. Em 0.5, o
+              // cabo (que já tinha opacity own de 0.55 no traço externo)
+              // ficava em ~0.275 efetivo — lia como ausente, não como
+              // "atrás". 0.78 mantém a recessão de profundidade (ainda menos
+              // que o plano frontal, que é opacity 1 sem blur) mas o chicote
+              // volta a ser reconhecível como cabo.
+              <g data-depth="tray" data-asm="0" filter="url(#gv-far)" opacity={0.78} pointerEvents="none">
                 <rect x={b.x - 11} y={b.y - 7} width={b.w + 19} height={b.h + 13} rx={4}
                   fill="var(--panel)" stroke="var(--line2)" strokeWidth="1" />
                 {/* CHICOTE atrás da bandeja: 24-pin, EPS e front-panel sobem
                     pela canaleta e saem nos passa-cabos. Vivem no plano
                     DISTANTE — é exactamente por isto que o cabo dependia do
-                    z-order: sem um "atrás" onde correr, vira rabisco. */}
-                {runs.map((d, i) => (
-                  <g key={`cb${i}`} data-cable={['eps', 'atx24', 'front_panel'][i]}>
-                    <path d={d} fill="none" stroke="var(--line)" strokeWidth="4.2" opacity="0.55" strokeLinecap="round" />
-                    <path d={d} fill="none" stroke="var(--dim2)" strokeWidth="2.1" strokeLinecap="round" />
-                  </g>
-                ))}
+                    z-order: sem um "atrás" onde correr, vira rabisco.
+                    Cada cabo é um FEIXE de vias redondas paralelas — não um
+                    tubo liso, não uma textura por cima (conferido contra
+                    foto real de cabo sleeved: vias individuais visíveis,
+                    encapadas, lado a lado). 24-pin é o chicote mais grosso
+                    do PC (mais vias, feixe mais largo), front-panel o mais
+                    fino. Espessura total calibrada pra escala real
+                    (s≈1,38px/mm): 24-pin ~13-16mm, EPS ~9-10mm,
+                    front-panel ~6-8mm. */}
+                {runs.map(({ x0, y }, i) => {
+                  const strandCount = [4, 6, 3][i]
+                  const strandW = [1.6, 2.4, 1.2][i]
+                  const spread = [6, 10, 4][i]
+                  const baseD = buildStrand(x0, y, 0)
+                  return (
+                    <g key={`cb${i}`} data-cable={['eps', 'atx24', 'front_panel'][i]}>
+                      {/* base sólida escura — preenche os vãos entre as vias,
+                          dá o corpo preto do cabo real (não fica ralo/cinza).
+                          --dim2 é cinza médio-claro (feito pra texto
+                          esmaecido, não pra corpo escuro) — trocado por
+                          --panel2, bem mais escuro, tanto na base quanto
+                          nas vias. */}
+                      <path d={baseD} fill="none" stroke="var(--bg)" strokeWidth={spread + strandW}
+                        opacity="0.92" strokeLinecap="round" />
+                      {Array.from({ length: strandCount }, (_, s) => {
+                        const t = strandCount === 1 ? 0 : s / (strandCount - 1) - 0.5
+                        const dx = t * spread
+                        return (
+                          <path key={s} d={buildStrand(x0, y, dx)} fill="none"
+                            stroke="var(--panel2)" strokeWidth={strandW}
+                            opacity={s % 2 === 0 ? 1 : 0.8} strokeLinecap="round" />
+                        )
+                      })}
+                    </g>
+                  )
+                })}
                 {/* passa-cabos na borda frontal da bandeja (por cima da ponta
-                    do cabo, para o chicote parecer atravessar a chapa) */}
-                {gy.map((y, i) => (
-                  <rect key={`gr${i}`} x={b.x - 9} y={y - 6.5} width={7} height={13} rx={3.5}
-                    fill="var(--bg)" stroke="var(--line2)" strokeWidth="0.9" />
-                ))}
+                    do cabo, para o chicote parecer atravessar a chapa) —
+                    largura acompanha o cabo que passa por cada um */}
+                {gy.map((y, i) => {
+                  const grW = [11, 14, 9][i]
+                  return (
+                    <rect key={`gr${i}`} x={b.x - grW - 2} y={y - 6.5} width={grW} height={13} rx={3.5}
+                      fill="var(--bg)" stroke="var(--line2)" strokeWidth="0.9" />
+                  )
+                })}
               </g>
             )
           })()}
@@ -676,9 +744,15 @@ export default function GabineteVivo({
           {/* calor: CAMPO contínuo do solver; sem campo, os dois glows de antes */}
           {thermalCells ? (
             <g data-thermal="field" filter="url(#gv-thermal)" pointerEvents="none">
+              {/* Fase 3 (2026-08-07): teto de opacidade por célula desceu de
+                  0.4 para 0.22. Células vizinhas quentes se difundem pelo
+                  blur gaussiano (filter="url(#gv-thermal)") e se acumulam
+                  visualmente mesmo lado a lado sem sobrepor geometricamente
+                  — o teto antigo permitia que a região quente inteira lesse
+                  como um bloco sólido em vez de gradiente sutil. */}
               {thermalCells.cells.map((c, i) => (
                 <rect key={`th${i}`} x={c.x} y={c.y} width={thermalCells.w} height={thermalCells.h}
-                  fill={heatFill(c.t)} opacity={Math.min(0.4, 0.04 + c.t * 0.4)} />
+                  fill={heatFill(c.t)} opacity={Math.min(0.22, 0.03 + c.t * 0.22)} />
               ))}
             </g>
           ) : (
@@ -747,12 +821,35 @@ export default function GabineteVivo({
             const x0 = pb.x + pb.w * 0.30, y0 = pb.y
             const x1 = gb.x + gb.w * 0.68, y1 = gb.y - 7
             const shroudY = Yc(g.case.shroud_h_mm)
-            const d = `M${x0.toFixed(1)},${y0.toFixed(1)} C${x0.toFixed(1)},${(shroudY - 6).toFixed(1)} `
-              + `${(x1 - 26).toFixed(1)},${(y1 + 34).toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`
+            const buildStrand = (dx: number) =>
+              `M${(x0 + dx).toFixed(1)},${y0.toFixed(1)} C${(x0 + dx).toFixed(1)},${(shroudY - 6).toFixed(1)} `
+              + `${(x1 - 26 + dx).toFixed(1)},${(y1 + 34).toFixed(1)} ${(x1 + dx).toFixed(1)},${y1.toFixed(1)}`
+            // 5 vias — PCIe 8-pin (6+2) tem esse tanto de fios visíveis no
+            // feixe (conferido contra foto real). Largura calibrada pra
+            // escala real: PCIe tem uns 8-9mm de diâmetro (~11px em
+            // s≈1,38px/mm) — o valor antigo (tubo único 5.4/2.9) equivalia
+            // a ~4mm, lia como barbante; o listrado tracejado que veio
+            // depois também não funcionou (textura inventada, não vias
+            // reais). Isto desenha as vias de verdade, com offset.
+            const strandCount = 5, strandW = 2, spread = 9
             return (
               <g data-cable="pcie" data-asm="7" fill="none" strokeLinecap="round" pointerEvents="none" opacity={dimOf('gpu')}>
-                <path d={d} stroke="var(--line)" strokeWidth="5.4" opacity=".55" />
-                <path d={d} stroke="var(--dim2)" strokeWidth="2.9" />
+                {/* base sólida escura — corpo preto do cabo, preenche os
+                    vãos entre as vias. --panel2 (bem mais escuro que
+                    --dim2, que é cinza de texto esmaecido) nas vias também. */}
+                <path d={buildStrand(0)} stroke="var(--bg)" strokeWidth={spread + strandW} opacity="0.92" />
+                {Array.from({ length: strandCount }, (_, s) => {
+                  const t = s / (strandCount - 1) - 0.5
+                  const dx = t * spread
+                  return (
+                    <path key={s} d={buildStrand(dx)} stroke="var(--panel2)" strokeWidth={strandW}
+                      opacity={s % 2 === 0 ? 1 : 0.8} />
+                  )
+                })}
+                {/* plugue discreto na fonte — só a base do conector, sem
+                    grade de pino em destaque (o founder achou o plugue
+                    chamativo demais; o que precisa aparecer é o feixe) */}
+                <rect x={x0 - 5.5} y={y0 - 1} width="11" height="5" rx="1" fill="var(--panel)" stroke="var(--line)" strokeWidth=".8" opacity=".85" />
               </g>
             )
           })()}
@@ -1010,21 +1107,21 @@ export default function GabineteVivo({
       {/* diagnóstico: o que segura o fluxo, e como simular a solução */}
       <BottleneckNote diagnosis={interior.diagnosis} onSimulate={onToggleFan} compact={compact} />
 
-      {/* vista superior — onde a altura do cooler está no plano */}
-      {!compact && (
-        <div style={{ borderTop: '1px solid var(--line2)' }}>
-          <TopDownInset interior={interior} g={g} hovered={focused ?? hovered} onHover={setHovered} />
-        </div>
-      )}
-
-      {/* vista frontal — fecha as três ortográficas. É aqui que o cooler e a
-          espessura da GPU disputam o MESMO vão, com o foco sincronizado com a
-          lateral (o `hovered` é partilhado pelas três vistas). */}
-      {!compact && (
-        <div style={{ borderTop: '1px solid var(--line2)' }}>
-          <FrontalInset interior={interior} g={g} hovered={focused ?? hovered} onHover={setHovered} />
-        </div>
-      )}
+      {/* Vista SUPERIOR (aérea) — a única onde a altura do cooler está no
+          plano, logo a única que mostra honestamente se o cooler cabe no vão
+          bandeja→tampa. Aparece TAMBÉM no card compacto: isso é restrição de
+          COMPATIBILIDADE (o cooler pode simplesmente não caber), não enfeite,
+          e é na comparação lado a lado que a diferença entre builds decide.
+          `gv-compact` no wrapper faz o detalhe fino (`gv-hide-sm`) sumir no
+          tamanho pequeno. Foco sincronizado com a vista principal (o `hovered`
+          é partilhado).
+          NOTA: existia aqui uma terceira vista (largura × altura, olhando o
+          gabinete de frente). Foi removida — fora do escopo do projeto. A
+          vista principal deste componente é a do VIDRO (painel lateral), que
+          é o que o produto precisa pra lançar. */}
+      <div className={compact ? 'gv-compact' : undefined} style={{ borderTop: '1px solid var(--line2)' }}>
+        <TopDownInset interior={interior} g={g} hovered={focused ?? hovered} onHover={setHovered} />
+      </div>
 
       {/* legenda */}
       {!compact && (
@@ -1066,7 +1163,7 @@ export default function GabineteVivo({
               color: isSim ? 'var(--accent)' : 'var(--dim)',
               background: isSim ? 'var(--accent-soft)' : 'transparent',
             }}>
-              {m.id.replace(/_/g, ' ')}: {m.orient === 'intake' ? '+' : '−'}{Math.round(m.cfm)} CFM
+              {mountLabel(m.id)}: {m.orient === 'intake' ? 'entrada' : 'saída'} {Math.round(m.cfm)} CFM
               {isSim && ` · ${cnt}×${stepper ? '' : ' simulado'}`}
               {stepper && (
                 <>
@@ -1089,7 +1186,7 @@ export default function GabineteVivo({
               color: 'var(--dim2)', background: 'transparent',
               cursor: onToggleFan ? 'pointer' : 'default',
             }}>
-            {m.id.replace(/_/g, ' ')}: + simular ventoinha
+            + ventoinha na {mountLabel(m.id)}
           </button>
         ))}
         {whatIfFans.length > 0 && onClearWhatIf && (

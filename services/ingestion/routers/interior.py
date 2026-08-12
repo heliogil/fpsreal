@@ -361,8 +361,18 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         gpu_slot_y = board_top - 205.0  # slot PCIe do topo, abaixo do socket
         if gpu is not None and gpu_len:
             gpu_x = max(4.0, mobo_x1 - 8 - gpu_len)  # não escapar pela frente do desenho
-            placements.append({"part": "gpu", "x": gpu_x, "y": gpu_slot_y - 55.0,
-                               "w": gpu_len, "h": 55.0, "source": "spec"})
+            # ATENÇÃO (fidelidade): a altura de desenho usa a espessura REAL
+            # da placa (gpu_thick, já calculada dos slots/specs) em vez de um
+            # 55.0 fixo — uma 3.5-slot desenha visivelmente mais grossa que
+            # uma 2-slot. Clampada dinamicamente pro que cabe entre o slot
+            # PCIe e o topo da PSU sem colidir — checado contra H=350/395/450
+            # (case pequeno aperta mais: uma 4-slot em H=350 desenha só 43mm,
+            # menos que a espessura real, mas nunca menos que 35mm nem invade
+            # a PSU). 4mm de margem de segurança.
+            gpu_max_h = max(20.0, gpu_slot_y - (6.0 + 86.0) - 4.0)  # 6.0+86.0 = topo da PSU
+            gpu_draw_h = max(35.0, min(gpu_thick or 55.0, 85.0, gpu_max_h))
+            placements.append({"part": "gpu", "x": gpu_x, "y": gpu_slot_y - gpu_draw_h,
+                               "w": gpu_len, "h": gpu_draw_h, "source": "spec"})
         placements.append({"part": "m2_ssd", "x": sock_cx - 60, "y": gpu_slot_y + 18, "w": 80.0, "h": 9.0,
                            "source": "form_factor_default"})
         placements.append({"part": "psu", "x": D - 165.0, "y": 6.0, "w": 150.0, "h": 86.0,

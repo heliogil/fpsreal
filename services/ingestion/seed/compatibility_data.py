@@ -18,6 +18,14 @@ COMPATIBILITY_RULES = [
      "O cooler {a_name} tem {a_val}mm de altura; o gabinete {b_name} comporta até {b_val}mm."),
     ("cooler_tdp_headroom", "cooler", "tdp_rating_w", "gte", "cpu", "tdp_w", "warning",
      "O cooler {a_name} dissipa ~{a_val}W; o CPU {b_name} tem TDP {b_val}W. Margem térmica apertada."),
+
+    # ── adicionadas 2026-08-08: duas falhas DURAS que passavam limpas ────────
+    # Ambas usam o operador `in` (a engine já o suporta): o valor de A tem de
+    # estar na LISTA de B. Igualdade seria errada nas duas.
+    ("cooler_socket_match", "cpu", "socket", "in", "cooler", "sockets", "error",
+     "O cooler {b_name} não tem kit de montagem para o soquete {a_val} do {a_name}. Não monta."),
+    ("mobo_case_form_factor", "motherboard", "form_factor", "in", "case", "supported_form_factors", "error",
+     "A placa {a_name} é {a_val}, e o gabinete {b_name} não comporta esse formato."),
 ]
 
 # TDP band (min, max) -> min_cooler_type, min_case_airflow. product_id NULL = generic band.

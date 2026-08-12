@@ -20,6 +20,7 @@ const STATUS: Record<string, { c: string; icon: string }> = {
   ok: { c: 'var(--accent-blue, #3597e6)', icon: '✓' },
   warning: { c: 'var(--accent-orange, #e67a35)', icon: '⚠' },
   error: { c: 'var(--accent-red, #e63535)', icon: '✗' },
+  unknown: { c: 'var(--text-secondary, #8a8a99)', icon: '?' },
 }
 const mono = 'var(--font-plex-mono), monospace'
 
