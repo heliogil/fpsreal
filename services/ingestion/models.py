@@ -421,10 +421,9 @@ class ComponentFootprint(Base):
     airflow_resistance_factor: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(3, 2), default=Decimal("0.10")
     )
-    model_gltf_path: Mapped[Optional[str]] = mapped_column(Text)
-    model_generated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True)
-    )
+    # T-22: model_gltf_path/model_generated_at removidas (migration
+    # b1f4a9d02c17) — eram pra um plano de glTF estático em cache que virou
+    # /interior/model.gltf gerado na hora (gltf_builder.py), sem arquivo.
     dimensions_source: Mapped[Optional[str]] = mapped_column(
         String(100), default="manufacturer_spec"
     )
