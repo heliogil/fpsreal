@@ -93,6 +93,8 @@ async def check_build(body: CheckRequest, db: AsyncSession = Depends(get_db)):
         "gpu_case_clearance": "GPU cabe",
         "cooler_case_clearance": "cooler cabe",
         "cooler_tdp_headroom": "cooler dá conta",
+        "cooler_socket_match": "cooler monta",
+        "mobo_case_form_factor": "placa cabe",
     }
 
     rules = (
