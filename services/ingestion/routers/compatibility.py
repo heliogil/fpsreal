@@ -45,21 +45,29 @@ def _num(v: Any) -> Optional[float]:
         return None
 
 
-def _passes(op: str, a: Any, b: Any) -> bool:
+def _passes(op: str, a: Any, b: Any) -> Optional[bool]:
+    """True/False if comparable, None if the data can't support a verdict.
+
+    None must never be treated as "ok" — a missing or non-coercible value
+    means we don't know, not that the build is fine. Callers surface this as
+    a distinct "unknown" status instead of silently passing.
+    """
+    if a is None or b is None:
+        return None
     if op == "equals":
         return str(a) == str(b)
     if op == "in":
-        return a in b if isinstance(b, (list, tuple)) else False
+        return a in b if isinstance(b, (list, tuple)) else None
     if op == "not_in":
-        return a not in b if isinstance(b, (list, tuple)) else True
+        return a not in b if isinstance(b, (list, tuple)) else None
     na, nb = _num(a), _num(b)
     if na is None or nb is None:
-        return True  # can't compare → don't raise a false error
+        return None  # non-numeric where a number was expected → can't compare
     if op == "gte":
         return na >= nb
     if op == "lte":
         return na <= nb
-    return True
+    return None
 
 
 def _fmt(template: Optional[str], a_p: Product, a_val: Any, b_p: Product, b_val: Any) -> str:
@@ -103,12 +111,27 @@ async def check_build(body: CheckRequest, db: AsyncSession = Depends(get_db)):
     for r in rules:
         pa, pb = by_cat.get(r.category_a), by_cat.get(r.category_b)
         if pa is None or pb is None:
-            continue
+            continue  # component not picked yet — nothing to check, not a data gap
         a_val = (pa.specs or {}).get(r.attribute_a)
         b_val = (pb.specs or {}).get(r.attribute_b)
-        if a_val is None or b_val is None:
+        result = _passes(r.operator, a_val, b_val)
+        if result is None:
+            missing = [
+                f"{pa.name}: {r.attribute_a}" if a_val is None else None,
+                f"{pb.name}: {r.attribute_b}" if b_val is None else None,
+            ]
+            missing = [m for m in missing if m]
+            checks.append({
+                "a": r.category_a, "b": r.category_b,
+                "label": rule_label.get(r.rule_type, r.rule_type),
+                "status": "unknown",
+                "message": (
+                    f"Não foi possível verificar — falta dado ({', '.join(missing)})."
+                    if missing else "Não foi possível verificar — dado em formato inesperado."
+                ),
+            })
             continue
-        ok = _passes(r.operator, a_val, b_val)
+        ok = result
         status = "ok" if ok else ("error" if r.severity == "error" else "warning")
         msg = None if ok else _fmt(r.message_template, pa, a_val, pb, b_val)
         if not ok:
@@ -139,27 +162,50 @@ async def check_build(body: CheckRequest, db: AsyncSession = Depends(get_db)):
                 remaining = round(rem - chgt, 1)
                 clearances["cooler"] = {"remaining_mm": remaining, "is_tight": 0 <= remaining < TIGHT_MM}
 
-    # PSU headroom (computed): recommend >= 1.25x total board power
+    # PSU headroom (computed): < 1.0x total = pode desligar sob pico → erro;
+    # 1.0x–1.25x = liga, mas sem folga para transientes de GPU → aviso; ≥1.25x = ok.
     psu = by_cat.get("psu")
     if psu:
         watts = _num((psu.specs or {}).get("watts"))
         total = 0.0
+        missing_tdp: list[str] = []
         for cat in ("cpu", "gpu"):
             p = by_cat.get(cat)
             if p:
-                total += _num((p.specs or {}).get("tdp_w")) or 0.0
+                tdp = _num((p.specs or {}).get("tdp_w"))
+                if tdp is None:
+                    missing_tdp.append(p.name)
+                else:
+                    total += tdp
         total += 100.0  # board + drives + fans overhead
-        if watts is not None and total > 0:
-            tight = watts < total * 1.25
-            if tight:
-                warnings.append(
-                    f"A fonte {psu.name} ({int(watts)}W) tem margem apertada para ~{int(total)}W de consumo. "
-                    f"Recomendado ≥ {int(total * 1.25)}W."
-                )
+
+        if watts is None:
             checks.append({
                 "a": "psu", "b": "system", "label": "potência",
-                "status": "warning" if tight else "ok",
-                "message": (f"{int(watts)}W p/ ~{int(total)}W (recomendado ≥{int(total * 1.25)}W)" if tight else None),
+                "status": "unknown",
+                "message": f"{psu.name} não informa wattagem — não dá para verificar a margem.",
+            })
+        elif missing_tdp:
+            checks.append({
+                "a": "psu", "b": "system", "label": "potência",
+                "status": "unknown",
+                "message": f"Falta TDP de: {', '.join(missing_tdp)} — não dá para estimar o consumo total.",
+            })
+        else:
+            ratio = watts / total
+            severity = "error" if ratio < 1.0 else ("warning" if ratio < 1.25 else "ok")
+            msg = None
+            if severity != "ok":
+                verb = "não aguenta com folga" if severity == "error" else "tem margem apertada para"
+                msg = (
+                    f"A fonte {psu.name} ({int(watts)}W) {verb} ~{int(total)}W de consumo estimado. "
+                    f"Recomendado ≥ {int(total * 1.25)}W."
+                )
+                (errors if severity == "error" else warnings).append(msg)
+            checks.append({
+                "a": "psu", "b": "system", "label": "potência",
+                "status": severity,
+                "message": (f"{int(watts)}W p/ ~{int(total)}W (recomendado ≥{int(total * 1.25)}W)" if severity != "ok" else None),
             })
 
     return {"errors": errors, "warnings": warnings, "clearances": clearances, "checks": checks, "airflow": []}
