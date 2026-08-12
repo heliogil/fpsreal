@@ -190,9 +190,10 @@ UPDATE products SET specs = specs || '{"campo": valor}'::jsonb WHERE sku='<sku>'
 
 ### GRUPO C — Viewer (🟡, opcional para lançar)
 
-**T-20 · Linkar o download do modelo 3D** ✅ CONCLUÍDO 2026-08-12
+**T-20 · Linkar o download do modelo 3D** ✅ CONCLUÍDO 2026-08-12 (com um susto no caminho — ver nota)
 - **Feito:** link "⬇ baixar modelo 3D do gabinete (.gltf) — estimativa, não medição" logo abaixo do gabinete vivo em `build/[slug]/page.tsx`, com `download` e tooltip mencionando Blender/Visualizador 3D do Windows.
-- **Verificado:** baixado de verdade via curl (`content-disposition: attachment`, 10536 bytes, JSON glTF válido com 7 meshes e `asset.extras` com o aviso de estimativa) e confirmado no DOM da página via navegador (túnel SSH até o dev server do worktree).
+- **Nota operacional (achada no QA mobile do Sprint 5):** a edição foi testada certinho contra o dev server do worktree (que lê direto do disco), reportada como pronta, mas o `git add` do commit que devia levá-la (`ac50f08`) não incluiu esse arquivo — ficou como mudança não commitada, nunca chegou no merge pra `master`, nunca entrou no build do `pcb_web` que eu redeployei. Só apareceu ausente quando testei em produção de verdade no Sprint 5. Corrigido em `bcf14ac` + rebuild/redeploy só do `pcb_web`. **Lição:** "testado no dev server" não é o mesmo que "commitado" — checar `git status` no worktree antes de declarar uma tarefa pronta, não só rodar o teste.
+- **Verificado (depois da correção):** `curl` em produção real (porta 3100, não o dev server) confirma o link no HTML e o download funcionando (`content-disposition: attachment`); confirmado também no DOM via navegador em viewport mobile, sem overflow.
 
 **T-21 · Corrigir o eixo da GPU no glTF** 🔴
 - **Problema:** `services/ingestion/gltf_builder.py:275` usa `gpu_thick` como extensão **Z** (bandeja→vidro), mas o `h` da placement — que também é `gpu_thick` — já é o **Y**. A GPU sai como barra 360×71×71mm. O real é 360 de comprimento × 71 de espessura (vertical) × ~140 de altura de cartão.
@@ -246,9 +247,15 @@ Premissa: o bloqueio real de lançamento **não é técnico** — é entrar nos 
 **Sprint 4 concluído (com T-08 explicitamente adiado) e deployado em 2026-08-12** — merge fast-forward + `docker compose build pcb_api pcb_web && up -d` (os dois, já que essa leva mexeu em backend e frontend; migration Alembic já tinha sido aplicada direto no banco compartilhado antes do build). Pronto quando: todo número na tela tem procedência rastreável na interface — **confirmado ao vivo em produção**: `curl 127.0.0.1:8100` mostra `source: "medido_noctua"` e folga 25mm (não mais 15mm) pro par 4000D+AK400; `curl 127.0.0.1:3100/build/rei-r5k/modelo.gltf` baixa de verdade (`content-disposition: attachment`); home/build/health todos 200. A única divergência ficha-vs-medido que existe hoje no catálogo (folga do cooler, T-07) aparece com selo "· medido" nos 4 lugares onde essa folga é mostrada; os outros números (comprimento de GPU, potência, conectores etc.) não têm uma segunda fonte pra divergir ainda, então não há o que rotular neles.
 
 ### Sprint 5 — Pré-lançamento
-- Feeds de afiliado ligados (**humano, founder**) → destrava preço, custo/FPS, ranking
-- QA das 3 vistas nos cards e no detalhe, em telas pequenas
-- Revisão final: nenhum "TODO" ou número inventado em produção
+- ⏸️ Feeds de afiliado ligados (**humano, founder**) → destrava preço, custo/FPS, ranking — **não é tarefa técnica, aguarda o founder**
+- ✅ QA das 3 vistas nos cards e no detalhe, em telas pequenas — feito 2026-08-12, ver nota abaixo
+- ✅ Revisão final: nenhum "TODO" ou número inventado em produção — feito 2026-08-12, ver nota abaixo
+
+**QA mobile (2026-08-12):** viewport 375×812, produção real via túnel SSH (não dev server, pra evitar repetir o susto do T-20). `document.documentElement.scrollWidth` checado contra `window.innerWidth` na home, na página de detalhe (`rei-r5k`) e na lista de builds — **zero overflow horizontal** nas 3. Os SVGs do viewer (`GabineteVivo` viewBox 720×430, `TopDownInset` viewBox 720×190) escalam corretamente dentro do viewport (`right` do bounding rect ≤ largura da viewport nos 2). O selo "· medido" (Sprint 4) renderiza por inteiro sem cortar. O link do T-20 renderiza e cabe.
+
+**Revisão de TODO/número inventado (2026-08-12):** grep por `TODO|FIXME|XXX` em todo `services/ingestion` e `apps/web/src` não achou nenhum real (só falsos-positivos de "TODOS" em português). Nenhum texto de placeholder (`lorem ipsum`, `coming soon`, `dummy`, etc.) encontrado. `getMockRepository()` ainda existe em 3 páginas (`page.tsx`, `resultados/page.tsx`, `[...slug]/page.tsx`) mas **confirmado como fallback exclusivo de falha de transporte** (`liveResult ?? mock`, com comentário explícito "fall back to mock only if the live engine was unreachable") — não é o caminho ativo enquanto a API estiver de pé, o que está confirmado o sprint inteiro. Não é um número inventado aparecendo em produção; é uma decisão de resiliência de uma sessão anterior, documentada no próprio código — deixei como está, não é escopo deste roadmap mexer na estratégia de fallback.
+
+**Sprint 5 (parte técnica) concluído em 2026-08-12.** O que falta pro lançamento de verdade é só a parte humana: feeds de afiliado.
 
 ---
 
