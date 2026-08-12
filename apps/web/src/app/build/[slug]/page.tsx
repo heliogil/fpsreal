@@ -269,12 +269,29 @@ export default async function BuildDetailPage({ params, searchParams }: PageProp
         {/* direita — O MOAT: gabinete vivo em destaque */}
         <div className="rv" style={{ animationDelay: '.1s' }}>
           {interior ? (
-            <GabineteVivoLive
-              initial={interior}
-              products={products}
-              components={components}
-              cases={caseOptions}
-            />
+            <>
+              <GabineteVivoLive
+                initial={interior}
+                products={products}
+                components={components}
+                cases={caseOptions}
+              />
+              {/* T-20: o /interior/model.gltf já gera o gabinete em 3D a partir
+                  da mesma geometria em mm da vista 2D (sem gerador paralelo,
+                  não pode divergir) — só faltava um link até agora. */}
+              <a
+                href={`/build/${build.slug}/modelo.gltf`}
+                download
+                className="mono"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10,
+                  fontSize: 11.5, color: 'var(--dim)', textDecoration: 'none',
+                }}
+                title="Abre em Blender ou no Visualizador 3D do Windows"
+              >
+                ⬇ baixar modelo 3D do gabinete (.gltf) — estimativa, não medição
+              </a>
+            </>
           ) : (
             <div style={{ background: 'var(--card)', border: '1px dashed var(--line)', borderRadius: 12, padding: 40, textAlign: 'center' }}>
               <span className="mono" style={{ fontSize: 12, color: 'var(--dim2)' }}>interior em análise — sem dados do gabinete</span>
