@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from compat_core import Part, evaluate
 from deps import get_db
-from models import CompatibilityRule, FpsEstimate, Offer, Product, Variant
+from models import CompatibilityRule, FpsEstimate, Offer, Product, ThermalRule, Variant
 
 router = APIRouter(tags=["wizard"])
 
@@ -48,6 +48,12 @@ FUTUREPROOF_MIN_STORAGE_GB = 2000
 DEAD_END_SOCKETS = {"AM4"}       # excluded in future_proof (no upgrade path)
 
 _BUILD_SLOTS = ("cpu", "gpu", "motherboard", "ram", "psu", "cooler", "case", "storage")
+
+# Ordem de "força" das classes — usada só pra dizer se a peça ESCOLHIDA atinge
+# a recomendação de thermal_rules, nunca pra filtrar (é recomendação, não regra
+# de compatibilidade; quem bloqueia build errada é o compat_core).
+_COOLER_TIER = {"stock": 0, "tower_65w": 1, "tower_125w": 2, "aio_240": 3, "aio_360": 4}
+_AIRFLOW_TIER = {"passive": 0, "low": 1, "medium": 2, "high": 3}
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +88,16 @@ class ComponentOut(BaseModel):
     cheapest_price_brl: float
 
 
+class ThermalRecommendation(BaseModel):
+    """Recomendação de classe de cooler/fluxo de ar pro TDP do CPU escolhido —
+    não é uma checagem de compatibilidade (essa é o compat_core), é uma
+    orientação: "pra esse tanto de calor, isso aqui costuma bastar"."""
+    min_cooler_type: str
+    min_case_airflow: Optional[str]
+    note: str
+    meets_recommendation: bool
+
+
 class BuildCandidate(BaseModel):
     cpu_id: int
     gpu_id: int
@@ -91,6 +107,7 @@ class BuildCandidate(BaseModel):
     fps_per_brl: float
     fps_figures: List[FpsFigure]
     components: List[ComponentOut]
+    thermal_recommendation: Optional[ThermalRecommendation] = None
     method: str = "anchor_scale_estimate"
 
 
@@ -121,6 +138,16 @@ async def run_wizard(body: WizardRequest, db: AsyncSession = Depends(get_db)) ->
     # compatibilidade própria, monta em cima da mesma fonte de verdade.
     rules = (
         await db.execute(select(CompatibilityRule).where(CompatibilityRule.is_active.is_(True)))
+    ).scalars().all()
+
+    # Faixas de TDP → classe de cooler/fluxo de ar recomendada. product_id
+    # IS NULL = faixa genérica (as 5 seedadas hoje); estava semeado desde o
+    # início do projeto e nunca tinha sido lido por nenhum endpoint — achado
+    # em auditoria 2026-08-12.
+    thermal_bands = (
+        await db.execute(
+            select(ThermalRule).where(ThermalRule.product_id.is_(None)).order_by(ThermalRule.tdp_min_w)
+        )
     ).scalars().all()
 
     gpus_by_id = {g["product_id"]: g for g in gpus}
@@ -166,6 +193,9 @@ async def run_wizard(body: WizardRequest, db: AsyncSession = Depends(get_db)) ->
                         )
                         for slot in _BUILD_SLOTS
                     ],
+                    thermal_recommendation=_thermal_recommendation(
+                        _fnum(cpu["specs"], "tdp_w"), thermal_bands, parts["cooler"], parts["case"],
+                    ),
                 )
             )
 
@@ -194,6 +224,38 @@ def _metric(mode: str, c: BuildCandidate, gpus_by_id: Dict[int, dict]) -> float:
         vram = _fnum(gpus_by_id.get(c.gpu_id, {}).get("specs", {}), "vram_gb")
         return c.avg_fps * (1.0 + vram / 24.0)
     return c.fps_per_brl  # budget (default)
+
+
+def _thermal_recommendation(
+    cpu_tdp: float, thermal_bands: List[ThermalRule], cooler: dict, case: dict,
+) -> Optional[ThermalRecommendation]:
+    """Acha a faixa de TDP do CPU e diz se o cooler/gabinete ESCOLHIDOS batem
+    com a classe recomendada. Puramente informativo — nunca filtra nada, só
+    explica o porquê da escolha (ou avisa quando ela ficou abaixo do usual).
+    Tier desconhecido (fora do dict de ordem) não vira erro nem "não sei":
+    trata como atendendo, porque não há base pra dizer que não atende.
+    """
+    band = next(
+        (b for b in thermal_bands if b.tdp_min_w <= cpu_tdp and (b.tdp_max_w is None or cpu_tdp <= b.tdp_max_w)),
+        None,
+    )
+    if band is None:
+        return None
+
+    cooler_tier = _COOLER_TIER.get(str(cooler["specs"].get("cooler_type")))
+    min_tier = _COOLER_TIER.get(band.min_cooler_type, 0)
+    cooler_ok = cooler_tier is None or cooler_tier >= min_tier
+
+    airflow_tier = _AIRFLOW_TIER.get(str(case["specs"].get("airflow_class")))
+    min_airflow = _AIRFLOW_TIER.get(band.min_case_airflow or "passive", 0)
+    airflow_ok = airflow_tier is None or airflow_tier >= min_airflow
+
+    return ThermalRecommendation(
+        min_cooler_type=band.min_cooler_type,
+        min_case_airflow=band.min_case_airflow,
+        note=band.notes or "",
+        meets_recommendation=cooler_ok and airflow_ok,
+    )
 
 
 # ---------------------------------------------------------------------------
