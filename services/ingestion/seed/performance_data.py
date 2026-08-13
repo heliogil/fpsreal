@@ -13,13 +13,15 @@ Method (cold-start strategy #1 — âncora + escala):
                           * cpu_scale_factor
     bounded by an optional per-game engine FPS cap.
 
-The aggregate 1080p signal is sourced. The per-game demand factors and CPU
-scale factors are calibrated against real data where a source exists (see
-GAME_CALIBRATION / CPU_CALIBRATION below) and fall back to HEURISTIC priors
-otherwise — every row's ``sources`` says which, with a confidence band that
-narrows for calibrated entries and stays at the full ±18% baseline for
-heuristic ones. They are the seed for the crowdsourced calibration loop
-(strategy #3), not a claim of precision.
+The aggregate 1080p signal is sourced. The per-game demand factors, CPU
+scale factors, and resolution scale are all calibrated against real data
+where a source exists (see GAME_CALIBRATION / CPU_CALIBRATION / RES_SCALE
+below) and fall back to HEURISTIC priors otherwise — every row's ``sources``
+says which, with a confidence band that narrows for calibrated entries (or
+widens, if the real data shows more spread than assumed — see RES_SCALE's
+4K note) and stays at the full ±18% baseline for heuristic ones. They are
+the seed for the crowdsourced calibration loop (strategy #3), not a claim
+of precision.
 """
 from __future__ import annotations
 
@@ -200,10 +202,56 @@ def build_performance_index() -> list[dict]:
 
 # resolution -> (fps multiplier vs 1080p, confidence band %). Higher res = more
 # GPU-bound and more uncertain, so the band widens.
+#
+# Calibrated 2026-08-13 against the SAME Tom's Hardware raster table used for
+# fps_1080p_agg (PERF_SOURCE_URL) — that table already reports 1080p/1440p/4K
+# Ultra FPS per GPU in one row, so no new source was needed. Method: for the
+# 19 GPUs with real fps_1080p_agg coverage (17 catalog + 2 orphans, gpu-rx-9050
+# excluded — untested by Tom's Hardware), computed fps_1440p/fps_1080p and
+# fps_4k/fps_1080p per GPU, averaged both ratios across all 19.
+#
+# 1440p: measured mean 0.704 (barely moved from the old 0.68 heuristic — it
+# was already a good guess). Real per-GPU spread is ~10% of the mean (~6%
+# excluding the one outlier below), so the confidence band only tightens
+# slightly (+4 -> +3).
+#
+# 4K: measured mean 0.369, notably LOWER than the old 0.42 heuristic (the
+# heuristic overestimated 4K performance by ~12%). Real per-GPU spread here
+# is much larger — ~23% of the mean — because several 8GB-VRAM cards
+# (RTX 4060 Ti 8GB, RTX 5060 Ti 8GB, RTX 3070 Ti) fall off a capacity cliff at
+# 4K that a flat multiplier can't see. So even though the base number is now
+# measured instead of guessed, the confidence band WIDENS (+7 -> +12) to
+# honestly reflect that a single flat 4K scalar is less reliable than 1440p's,
+# not more.
+#
+# KNOWN OUTLIER (not corrected, flagged): gpu-rx-6600's real 1440p ratio is
+# 0.478 — far below every other GPU in the sample (next-lowest is 0.65) — a
+# known weakness of that card (RDNA2, narrow memory bus) scaling worse than
+# its raw tier would suggest. Included in the average as real catalog data,
+# not excluded as a cherry-pick; it's the main reason the 1440p band isn't
+# tightened further than +3.
 RES_SCALE = {
     "1080p": (1.00, CONFIDENCE_BAND_PCT),
-    "1440p": (0.68, CONFIDENCE_BAND_PCT + 4),
-    "4k": (0.42, CONFIDENCE_BAND_PCT + 7),
+    "1440p": (0.70, CONFIDENCE_BAND_PCT + 3),   # was 0.68 heuristic
+    "4k":    (0.37, CONFIDENCE_BAND_PCT + 12),  # was 0.42 heuristic — overestimated
+}
+
+RES_CALIBRATION_NOTE = {
+    "1440p": (
+        "Resolution scale calibrated 2026-08-13: fps_1440p/fps_1080p averaged "
+        "across the 19 GPUs with real Tom's Hardware coverage (same raster "
+        "table as fps_1080p_agg). One real outlier (RX 6600, narrow memory "
+        "bus) scales notably worse than the rest and widens the observed "
+        "spread; kept in the average rather than excluded."
+    ),
+    "4k": (
+        "Resolution scale calibrated 2026-08-13: fps_4k/fps_1080p averaged "
+        "across the 19 GPUs with real Tom's Hardware coverage (same raster "
+        "table as fps_1080p_agg) — corrected down from the old 0.42 "
+        "heuristic. Real per-GPU spread is large (~23%) because several "
+        "8GB-VRAM cards hit a capacity cliff at 4K that a flat multiplier "
+        "can't capture, hence the wider confidence band."
+    ),
 }
 
 # Per-game demand_factor sourcing, for the 5 games recalibrated 2026-08-13
@@ -278,6 +326,7 @@ def build_fps_estimates() -> list[dict]:
                         fps = min(fps, cap)  # engine FPS caps apply at every resolution
                     fps = round(fps, 1)
                     fps_low = round(fps * (1 - band / 100.0), 1)
+                    res_note = RES_CALIBRATION_NOTE.get(resolution)
                     rows.append({
                         "cpu_sku": cpu_sku,
                         "gpu_sku": gpu_sku,
@@ -291,7 +340,7 @@ def build_fps_estimates() -> list[dict]:
                         "sources": [
                             PERF_SOURCE_URL,
                             calibration_note,
-                        ] + cpu_sources,
+                        ] + cpu_sources + ([res_note] if res_note else []),
                         "is_crowdsourced": False,
                     })
     return rows
