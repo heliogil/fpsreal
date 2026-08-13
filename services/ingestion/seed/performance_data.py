@@ -38,22 +38,37 @@ ANCHOR_GPU_SKU = "gpu-rtx-5090"  # index 100
 # Games — GameSlug (must match web types.ts) → demand factor vs the aggregate
 # 1080p signal, and an optional hard engine FPS cap.
 # Factor > 1: lighter than average (esports); < 1: heavier (AAA).
-# These are heuristic priors, flagged as such in every row's ``sources``.
+#
+# 5 of these (cs2, apex-legends, fortnite, cyberpunk-2077, gta-v) were
+# recalibrated 2026-08-13 against Tom's Hardware's individual game charts
+# (same page/rig as PERF_SOURCE — see the "GPU BENCHMARKS: INDIVIDUAL GAME
+# CHARTS" section, 1080p gallery). Method: per game, read each current-gen
+# GPU's real FPS off the chart, divide by that GPU's 11-game raster
+# aggregate (img_02 in the sourcing set, matches fps_1080p_agg's source),
+# average the ratio across ~15 GPUs. Apex Legends' saturated cards (RTX 5070
+# Ti/5090/etc. all pinned near the 300 cap) were excluded from the average —
+# only uncapped mid/low cards give a real ratio there. GTA V Enhanced only
+# has an RT chart on Tom's Hardware (no pure-raster entry) and its ranking
+# is visibly non-monotonic by GPU tier (RTX 5080 beats the 5090) — i.e. it's
+# CPU-bound on their Ryzen 7 9800X3D rig at 1080p, so its factor carries more
+# noise than the other four; kept anyway since it's still real measured data,
+# not a guess. The other 8 games have no Tom's Hardware equivalent and
+# remain heuristic priors, flagged as such in every row's ``sources``.
 # ---------------------------------------------------------------------------
 GAMES = [
     # slug,                    demand_factor, engine_fps_cap
-    ("cs2",                    1.9,  None),
+    ("cs2",                    3.8,  None),   # was 1.9 (heuristic) — real data ~2x higher
     ("valorant",               2.6,  None),
     ("league-of-legends",      3.0,  None),
-    ("fortnite",               1.4,  None),
-    ("apex-legends",           1.5,  300),   # engine caps at 300
+    ("fortnite",               1.0,  None),   # was 1.4 (heuristic)
+    ("apex-legends",           2.8,  300),    # was 1.5 (heuristic); cap confirmed by real data
     ("call-of-duty-warzone",   1.1,  None),
-    ("gta-v",                  1.6,  None),
+    ("gta-v",                  0.95, None),   # was 1.6 (heuristic); noisy/CPU-bound source, see note above
     ("minecraft",              1.7,  None),
     ("the-sims-4",             2.2,  None),
     ("hogwarts-legacy",        0.75, None),
     ("rdr2",                   0.85, None),
-    ("cyberpunk-2077",         0.60, None),
+    ("cyberpunk-2077",         0.8,  None),   # was 0.60 (heuristic)
     ("elden-ring",             1.0,  60),    # hard-capped at 60 FPS by the engine
 ]
 
@@ -118,6 +133,41 @@ RES_SCALE = {
     "4k": (0.42, CONFIDENCE_BAND_PCT + 7),
 }
 
+# Per-game demand_factor sourcing, for the 5 games recalibrated 2026-08-13
+# against Tom's Hardware's individual game charts (see the GAMES comment
+# above for method). Slugs not listed here still use the plain heuristic
+# note and the full CONFIDENCE_BAND_PCT. band_delta tightens the confidence
+# band for calibrated games (real per-game data narrows the uncertainty);
+# gta-v gets a smaller tightening since its source chart is CPU-bound/noisy.
+GAME_CALIBRATION = {
+    "cs2": (
+        "Tom's Hardware individual game chart (Counter-Strike 2, DX11, High) — "
+        "avg. ratio to the 11-game raster aggregate across 15 current-gen GPUs.",
+        -6,
+    ),
+    "apex-legends": (
+        "Tom's Hardware individual game chart (Apex Legends, DX12, Very High) — "
+        "engine-capped GPUs (saturated near 300 FPS) excluded from the ratio average.",
+        -6,
+    ),
+    "fortnite": (
+        "Tom's Hardware individual game chart (Fortnite, DX12, High Lumen+Nanite) — "
+        "avg. ratio to the 11-game raster aggregate across 15 current-gen GPUs.",
+        -6,
+    ),
+    "cyberpunk-2077": (
+        "Tom's Hardware individual game chart (Cyberpunk 2077, DX12, Ultra, no RT) — "
+        "avg. ratio to the 11-game raster aggregate across 15 current-gen GPUs.",
+        -6,
+    ),
+    "gta-v": (
+        "Tom's Hardware individual game chart (GTA V Enhanced, DXR, Maximum RT — "
+        "only RT chart exists for this title). Ranking is non-monotonic by GPU tier "
+        "(CPU-bound at 1080p on their rig), so this factor is noisier than the other four.",
+        -2,
+    ),
+}
+
 
 def build_fps_estimates() -> list[dict]:
     """Anchor+scale FPS matrix: GPU x game x representative CPU x resolution, high preset."""
@@ -127,11 +177,16 @@ def build_fps_estimates() -> list[dict]:
     for gpu_sku, g in gpus.items():
         base = g["fps_1080p_agg"]
         for game_slug, demand, cap in GAMES:
+            calibration_note, band_delta = GAME_CALIBRATION.get(
+                game_slug,
+                ("per-game demand: heuristic prior pending real-data calibration", 0),
+            )
             for cpu_sku in FPS_MATRIX_CPUS:
                 tier = cpus[cpu_sku]["tier"]
                 cpu_factor = CPU_TIER_FACTOR[tier]
                 base_fps = base * demand * cpu_factor
-                for resolution, (res_mult, band) in RES_SCALE.items():
+                for resolution, (res_mult, base_band) in RES_SCALE.items():
+                    band = base_band + band_delta
                     fps = base_fps * res_mult
                     if cap is not None:
                         fps = min(fps, cap)  # engine FPS caps apply at every resolution
@@ -149,7 +204,7 @@ def build_fps_estimates() -> list[dict]:
                         "method": "anchor_scale",
                         "sources": [
                             PERF_SOURCE_URL,
-                            "per-game demand + resolution scale: heuristic prior pending crowdsourced calibration",
+                            calibration_note,
                         ],
                         "is_crowdsourced": False,
                     })
