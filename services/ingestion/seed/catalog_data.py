@@ -76,27 +76,36 @@ GPU_POWER_CONNECTOR = {
 # performance_index. Source: thepcbottleneckcalculator.com/gpu-benchmarks-2026/
 # NOTE: RTX 5070 Ti corrected to 180 (was 145 — wrongly below RTX 4070 SUPER).
 # Real-world: 5070 Ti ≈ 4080 range, ~20% above 4070 SUPER. Audit 2026-07-11.
+# fps (col 8, auditoria 2026-08-13): recalibrado contra Tom's Hardware GPU
+# Benchmarks Hierarchy 2026 (atualizado 24/06/2026) — média geométrica real de
+# 11 jogos em 1080p Ultra, MESMA bancada (Ryzen 7 9800X3D) pra toda placa, sem
+# a mistura de CPU que inutilizou a tentativa de calibrar por jogo individual
+# (ver ROADMAP-FPS-CALIBRACAO.md). Antes vinha de thepcbottleneckcalculator.com
+# (metodologia não documentada) — os dois concordavam na maioria das placas
+# (diferença de 1-6 pontos), exceto a RX 9070 XT, que a fonte antiga subestimava
+# em ~20 pontos (quase uma faixa inteira). Ver seed/performance_data.py pro
+# rastro completo da fonte.
 GPUS = [
     # slots = nº de slots PCIe ocupados (dado de catálogo publicado pelo fabricante,
     # como o comprimento). A espessura em mm é DERIVADA: passo do slot PCIe = 20,32 mm
     # (constante física), então thickness ≈ slots × 20,32. Representativo por tier.
     # sku,                name,                         brand,    tdp, len,  vram, bus,        fps, slots
-    ("gpu-rtx-5090",      "GeForce RTX 5090",           "NVIDIA", 575, 304, 32, "PCIe 5.0", 240, 3.5),
-    ("gpu-rtx-5080",      "GeForce RTX 5080",           "NVIDIA", 360, 304, 16, "PCIe 5.0", 200, 3.0),
-    ("gpu-rtx-5070-ti",   "GeForce RTX 5070 Ti",        "NVIDIA", 300, 300, 16, "PCIe 5.0", 180, 2.5),
-    ("gpu-rtx-5070",      "GeForce RTX 5070",           "NVIDIA", 250, 250, 12, "PCIe 5.0", 140, 2.0),
-    ("gpu-rtx-5060-ti",   "GeForce RTX 5060 Ti 16GB",   "NVIDIA", 180, 242, 16, "PCIe 5.0", 110, 2.0),
-    ("gpu-rtx-5060",      "GeForce RTX 5060",           "NVIDIA", 145, 242,  8, "PCIe 5.0",  90, 2.0),
-    ("gpu-rtx-4090",      "GeForce RTX 4090",           "NVIDIA", 450, 304, 24, "PCIe 4.0", 220, 3.5),
-    ("gpu-rtx-4070-super","GeForce RTX 4070 SUPER",     "NVIDIA", 220, 244, 12, "PCIe 4.0", 150, 2.5),
-    ("gpu-rtx-4060-ti",   "GeForce RTX 4060 Ti 8GB",    "NVIDIA", 160, 242,  8, "PCIe 4.0", 100, 2.0),
-    ("gpu-rtx-4060",      "GeForce RTX 4060",           "NVIDIA", 115, 242,  8, "PCIe 4.0",  85, 2.0),
-    ("gpu-rtx-3060",      "GeForce RTX 3060 12GB",      "NVIDIA", 170, 242, 12, "PCIe 4.0",  60, 2.0),
-    ("gpu-rx-9070-xt",    "Radeon RX 9070 XT",          "AMD",    304, 320, 16, "PCIe 5.0", 135, 3.0),
-    ("gpu-rx-7900-xtx",   "Radeon RX 7900 XTX",         "AMD",    355, 287, 24, "PCIe 4.0", 190, 2.5),
-    ("gpu-rx-7800-xt",    "Radeon RX 7800 XT",          "AMD",    263, 267, 16, "PCIe 4.0", 135, 2.5),
-    ("gpu-rx-7700-xt",    "Radeon RX 7700 XT",          "AMD",    245, 267, 12, "PCIe 4.0", 115, 2.5),
-    ("gpu-rx-7600",       "Radeon RX 7600",             "AMD",    165, 204,  8, "PCIe 4.0",  80, 2.0),
+    ("gpu-rtx-5090",      "GeForce RTX 5090",           "NVIDIA", 575, 304, 32, "PCIe 5.0", 204, 3.5),
+    ("gpu-rtx-5080",      "GeForce RTX 5080",           "NVIDIA", 360, 304, 16, "PCIe 5.0", 167, 3.0),
+    ("gpu-rtx-5070-ti",   "GeForce RTX 5070 Ti",        "NVIDIA", 300, 300, 16, "PCIe 5.0", 155, 2.5),
+    ("gpu-rtx-5070",      "GeForce RTX 5070",           "NVIDIA", 250, 250, 12, "PCIe 5.0", 133, 2.0),
+    ("gpu-rtx-5060-ti",   "GeForce RTX 5060 Ti 16GB",   "NVIDIA", 180, 242, 16, "PCIe 5.0", 105, 2.0),
+    ("gpu-rtx-5060",      "GeForce RTX 5060",           "NVIDIA", 145, 242,  8, "PCIe 5.0",  89, 2.0),
+    ("gpu-rtx-4090",      "GeForce RTX 4090",           "NVIDIA", 450, 304, 24, "PCIe 4.0", 184, 3.5),
+    ("gpu-rtx-4070-super","GeForce RTX 4070 SUPER",     "NVIDIA", 220, 244, 12, "PCIe 4.0", 127, 2.5),
+    ("gpu-rtx-4060-ti",   "GeForce RTX 4060 Ti 8GB",    "NVIDIA", 160, 242,  8, "PCIe 4.0",  88, 2.0),
+    ("gpu-rtx-4060",      "GeForce RTX 4060",           "NVIDIA", 115, 242,  8, "PCIe 4.0",  72, 2.0),
+    ("gpu-rtx-3060",      "GeForce RTX 3060 12GB",      "NVIDIA", 170, 242, 12, "PCIe 4.0",  62, 2.0),
+    ("gpu-rx-9070-xt",    "Radeon RX 9070 XT",          "AMD",    304, 320, 16, "PCIe 5.0", 157, 3.0),
+    ("gpu-rx-7900-xtx",   "Radeon RX 7900 XTX",         "AMD",    355, 287, 24, "PCIe 4.0", 162, 2.5),
+    ("gpu-rx-7800-xt",    "Radeon RX 7800 XT",          "AMD",    263, 267, 16, "PCIe 4.0", 118, 2.5),
+    ("gpu-rx-7700-xt",    "Radeon RX 7700 XT",          "AMD",    245, 267, 12, "PCIe 4.0", 103, 2.5),
+    ("gpu-rx-7600",       "Radeon RX 7600",             "AMD",    165, 204,  8, "PCIe 4.0",  70, 2.0),
     ("gpu-rx-6600",       "Radeon RX 6600",             "AMD",    132, 190,  8, "PCIe 4.0",  52, 2.0),
 ]
 

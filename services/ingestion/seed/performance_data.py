@@ -27,10 +27,22 @@ from .catalog_data import GPUS, CPUS
 # ---------------------------------------------------------------------------
 # Sourcing metadata (auditable)
 # ---------------------------------------------------------------------------
-PERF_SOURCE = "thepcbottleneckcalculator.com — GPU Benchmarks 2026 (aggregate 1080p high/ultra FPS)"
-PERF_SOURCE_URL = "https://thepcbottleneckcalculator.com/gpu-benchmarks-2026/"
-PERF_SOURCE_DATE = date(2026, 7, 9)
-PERF_CONFIDENCE = 0.70  # aggregate cross-game signal, pending per-title calibration
+# Recalibrado 2026-08-13 contra Tom's Hardware GPU Benchmarks Hierarchy 2026
+# (atualizado 24/06/2026): geometric mean de 11 jogos em 1080p Ultra, MESMA
+# bancada (Ryzen 7 9800X3D) pra toda placa testada — elimina o problema que
+# matou a tentativa de calibrar por jogo individual via busca (CPU diferente
+# por fonte inflava/reduzia o número sem relação com a GPU). Substitui
+# thepcbottleneckcalculator.com (metodologia não documentada publicamente)
+# como fonte do sinal agregado — os dois concordavam na maioria das placas,
+# a maior divergência foi a RX 9070 XT (subestimada em ~20 pontos na fonte
+# antiga). Cobre 17 das 20 GPUs do catálogo (as que estão em GPUS, ver
+# catalog_data.py); as 3 fora do seed (5050/9070-gre/9050 — divergência
+# pré-existente, ver auditoria do wizard 2026-08-12) foram atualizadas à parte
+# no banco, exceto a 9050, que a Tom's Hardware não testou ainda.
+PERF_SOURCE = "Tom's Hardware — GPU Benchmarks Hierarchy 2026 (11-game 1080p Ultra geomean, fixed Ryzen 7 9800X3D rig)"
+PERF_SOURCE_URL = "https://www.tomshardware.com/reviews/gpu-hierarchy,4388.html"
+PERF_SOURCE_DATE = date(2026, 6, 24)
+PERF_CONFIDENCE = 0.85  # single fixed-rig methodology, não mais agregador de metodologia não documentada
 
 ANCHOR_GPU_SKU = "gpu-rtx-5090"  # index 100
 
