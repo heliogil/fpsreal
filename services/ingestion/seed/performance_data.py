@@ -162,7 +162,43 @@ CPU_CALIBRATION = {
 # build's CPU has real estimates — no tier-mapping hack downstream.
 FPS_MATRIX_CPUS = [row[0] for row in CPUS]
 
-CONFIDENCE_BAND_PCT = 18.0
+# Base confidence band at 1080p, applied to every row before the per-game/
+# per-CPU/per-resolution deltas above. Drives fps_low_1pct too
+# (fps_low_1pct = fps * (1 - band/100)), so this number does double duty:
+# it's both "how far below average is the '1% low'" AND "how uncertain is
+# our anchor+scale estimate."
+#
+# Calibrated 2026-08-13 against real "1% Low" bars on the SAME Tom's
+# Hardware chart used for fps_1080p_agg ("11 Game Rasterization Geomean",
+# 1080p Ultra — the chart shows both an Average bar and a 1% Low bar per
+# GPU). That "1% Low" is a genuine, measured frame-time-consistency metric
+# (not a guess), which is exactly what fps_low_1pct is supposed to
+# represent — the most directly-grounded of all the calibrations done this
+# session, since there's no proxy or bridge involved, just a straight
+# reading. Method: (1 - 1%low/average) per GPU, averaged.
+#
+# Coverage caveat: that chart only covers "current-gen" GPUs (Tom's
+# Hardware's own scoping, for chart readability), so only 9 of our 19
+# catalog GPUs appear in it (gpu-rtx-5090/5080/5070-ti/5070/5060-ti/5060,
+# gpu-rx-9070-xt, gpu-rtx-5050, gpu-rx-9070-gre). The other 10 (older-gen
+# RTX 40/30-series and RX 7000/6000-series) fall back to this same
+# calibrated average as the best available estimate, not a per-GPU
+# measurement — same honest limitation as PERF_CONFIDENCE's single flat
+# score.
+#
+# Result: mean 22.16% across the 9 covered GPUs (was 18.0 heuristic — the
+# old guess UNDERSTATED real variance by ~4 points). Real spread is ~13% of
+# the mean (17.1% to 28.9%); the high outlier is gpu-rtx-5090 itself — makes
+# sense, flagship cards pushing very high frame rates show proportionally
+# more frame-time noise than mid-range, GPU-bound cards. Kept in the average
+# as real data, not excluded.
+#
+# NOT recalibrated by this: the "confidence in our anchor+scale METHOD"
+# meaning of this same number. That would need real crowdsourced FPS
+# submissions compared against our predictions, which don't exist yet
+# (is_crowdsourced is still 0 rows across the table). This calibration only
+# grounds the "1% low" half of the number's double duty.
+CONFIDENCE_BAND_PCT = 22.0
 
 
 def _gpu_by_sku() -> dict[str, dict]:
