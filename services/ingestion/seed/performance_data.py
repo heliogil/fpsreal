@@ -13,10 +13,13 @@ Method (cold-start strategy #1 — âncora + escala):
                           * cpu_scale_factor
     bounded by an optional per-game engine FPS cap.
 
-The aggregate 1080p signal is sourced; the per-game demand factors and the
-CPU scale factors are HEURISTIC priors, clearly flagged in ``sources`` and
-carrying a wide confidence band (±18%). They are the seed for the
-crowdsourced calibration loop (strategy #3), not a claim of precision.
+The aggregate 1080p signal is sourced. The per-game demand factors and CPU
+scale factors are calibrated against real data where a source exists (see
+GAME_CALIBRATION / CPU_CALIBRATION below) and fall back to HEURISTIC priors
+otherwise — every row's ``sources`` says which, with a confidence band that
+narrows for calibrated entries and stays at the full ±18% baseline for
+heuristic ones. They are the seed for the crowdsourced calibration loop
+(strategy #3), not a claim of precision.
 """
 from __future__ import annotations
 
@@ -74,13 +77,83 @@ GAMES = [
 
 # ---------------------------------------------------------------------------
 # CPU scale factor at 1080p by gaming tier. At 1080p the CPU is a real
-# bottleneck, hence the spread. Flagship X3D = reference (1.0).
+# bottleneck, hence the spread. Flagship X3D = reference (1.0). Fallback for
+# any sku not covered by CPU_CALIBRATION below (no real data found).
 # ---------------------------------------------------------------------------
 CPU_TIER_FACTOR = {
     "flagship": 1.00,
     "high":     0.96,
     "mid":      0.92,
     "budget":   0.86,
+}
+
+CPU_PERF_SOURCE_URL = "https://www.tomshardware.com/reviews/cpu-hierarchy,4312.html"
+
+# Direct per-CPU overrides, calibrated 2026-08-13 against Tom's Hardware's own
+# CPU Benchmarks Hierarchy 2026 (Gaming CPU Benchmarks Rankings — RTX 5090 FE,
+# 17-game 1080p geomean, every CPU on ONE fixed GPU: the CPU-side mirror of
+# the GPU-hierarchy calibration, same publisher/methodology discipline).
+# Falls back to CPU_TIER_FACTOR for any sku not listed here (no real data or
+# no safe proxy found — cpu-r7-9700x and cpu-i5-13400f aren't on either of
+# Tom's Hardware's CPU tables at all).
+#
+# cpu-r7-9800x3d/cpu-r7-7800x3d are read straight off that table (97.0% /
+# 85.6%), normalized so 9800X3D=1.00 — consistent with fps_1080p_agg's own
+# anchor, since 9800X3D is literally the GPU-hierarchy's test rig, not a
+# second independent anchor.
+#
+# cpu-i5-14600kf has no own listing; the 14600K (same cores/clocks, KF just
+# drops the iGPU — a well-documented zero-difference-in-gaming substitution)
+# is used as a same-table proxy: 72.8% / 97.0%.
+#
+# cpu-r5-7600 and cpu-r5-5600 aren't on the 2026 (RTX 5090/Zen5-era) table at
+# all — bridged from Tom's Hardware's own SEPARATE 2020-2022 legacy CPU table
+# (different GPU/game suite) via the one CPU present on BOTH tables
+# (i9-13900K: 76.8% on the 2026 table vs 100% — its own anchor — on the
+# legacy table), a x0.768 normalization factor. Cross-checked against two
+# other CPUs present on both tables (13600K, 13700K): the bridged value lands
+# within ~2 points of their real 2026-table score, so the bridge is trusted
+# within that error band — reflected in a smaller confidence tightening than
+# the direct reads. cpu-r5-5600 itself isn't on the legacy table either; its
+# close sibling 5600X (slightly higher boost clock) is used as the nearest
+# proxy, so it's a mild upper-bound estimate stacked on top of the bridge,
+# not a direct reading — smallest confidence tightening of the five.
+CPU_CALIBRATION = {
+    "cpu-r7-9800x3d": (
+        1.00,
+        "Tom's Hardware CPU Benchmarks Hierarchy 2026, Gaming CPU Benchmarks Rankings — "
+        "anchor: this is the exact CPU used as the GPU-hierarchy's test rig.",
+        0,
+    ),
+    "cpu-r7-7800x3d": (
+        0.88,
+        "Tom's Hardware CPU Benchmarks Hierarchy 2026, Gaming CPU Benchmarks Rankings — "
+        "85.6% vs 9800X3D's 97.0%, both read directly off the same table.",
+        -4,
+    ),
+    "cpu-i5-14600kf": (
+        0.75,
+        "Tom's Hardware CPU Benchmarks Hierarchy 2026 — no direct 14600KF listing; "
+        "the 14600K (identical cores/clocks, KF just drops the iGPU) used as a "
+        "same-table proxy — 72.8% vs 9800X3D's 97.0%.",
+        -3,
+    ),
+    "cpu-r5-7600": (
+        0.63,
+        "No 2026-table listing. Bridged from Tom's Hardware's separate 2020-2022 "
+        "legacy CPU table (79.74%, different GPU/game suite) via the i9-13900K "
+        "datapoint present on both tables (x0.768 normalization). Cross-checked "
+        "within ~2 points against two other shared CPUs (13600K, 13700K).",
+        -2,
+    ),
+    "cpu-r5-5600": (
+        0.53,
+        "Same legacy-table bridge as the 7600, but the 5600 itself isn't listed "
+        "there either — its sibling 5600X (slightly higher boost clock) used as "
+        "the nearest proxy, so this is a mild upper-bound estimate, not a direct "
+        "reading.",
+        -1,
+    ),
 }
 
 # Every CPU in the catalog gets FPS rows (scaled by its tier factor), so any
@@ -169,6 +242,19 @@ GAME_CALIBRATION = {
 }
 
 
+def _cpu_factor_and_sources(cpu_sku: str, tier: str) -> tuple[float, list[str], int]:
+    """CPU 1080p scale factor + its sourcing, preferring a real per-CPU
+    calibration over the tier heuristic when one exists."""
+    if cpu_sku in CPU_CALIBRATION:
+        factor, note, band_delta = CPU_CALIBRATION[cpu_sku]
+        return factor, [CPU_PERF_SOURCE_URL, note], band_delta
+    return (
+        CPU_TIER_FACTOR[tier],
+        ["per-CPU-tier factor: heuristic prior pending real-data calibration"],
+        0,
+    )
+
+
 def build_fps_estimates() -> list[dict]:
     """Anchor+scale FPS matrix: GPU x game x representative CPU x resolution, high preset."""
     gpus = _gpu_by_sku()
@@ -177,16 +263,16 @@ def build_fps_estimates() -> list[dict]:
     for gpu_sku, g in gpus.items():
         base = g["fps_1080p_agg"]
         for game_slug, demand, cap in GAMES:
-            calibration_note, band_delta = GAME_CALIBRATION.get(
+            calibration_note, game_band_delta = GAME_CALIBRATION.get(
                 game_slug,
                 ("per-game demand: heuristic prior pending real-data calibration", 0),
             )
             for cpu_sku in FPS_MATRIX_CPUS:
                 tier = cpus[cpu_sku]["tier"]
-                cpu_factor = CPU_TIER_FACTOR[tier]
+                cpu_factor, cpu_sources, cpu_band_delta = _cpu_factor_and_sources(cpu_sku, tier)
                 base_fps = base * demand * cpu_factor
                 for resolution, (res_mult, base_band) in RES_SCALE.items():
-                    band = base_band + band_delta
+                    band = base_band + game_band_delta + cpu_band_delta
                     fps = base_fps * res_mult
                     if cap is not None:
                         fps = min(fps, cap)  # engine FPS caps apply at every resolution
@@ -205,7 +291,7 @@ def build_fps_estimates() -> list[dict]:
                         "sources": [
                             PERF_SOURCE_URL,
                             calibration_note,
-                        ],
+                        ] + cpu_sources,
                         "is_crowdsourced": False,
                     })
     return rows
