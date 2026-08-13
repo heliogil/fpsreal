@@ -159,12 +159,19 @@ CASES = [
     ("case-air-903",     "Montech Air 903 MAX",     "Montech", "ATX", 400, 175, "high",   170, 62, 240),
 ]
 
+# tdp_rating_w (auditoria 2026-08-12, alimenta a regra ativa cooler_tdp_headroom):
+# AK400/PA120/stock-amd conferidos contra ficha oficial, batem. LT520 estava
+# errado (260W cadastrado, ficha real da DeepCool é 280W em múltiplas fontes
+# de varejo/oficiais, corrigido). LF3-360: a Arctic NÃO publica TDP oficial
+# pra esse modelo (só pro "Pro") — 350W não tinha fonte; baixado pra 300W,
+# apoiado em teste real (GamersNexus: delta térmico de 23,1°C a 300W,
+# desempenho ainda saudável) em vez de um número inventado.
 COOLERS = [
     ("cooler-stock-amd",  "AMD Wraith Stealth (stock)",       "AMD",          "stock",      65,  70),
     ("cooler-ak400",      "DeepCool AK400",                   "DeepCool",     "tower_65w",  220, 155),
     ("cooler-pa120",      "Thermalright Peerless Assassin 120","Thermalright","tower_125w", 245, 157),
-    ("cooler-lt520",      "DeepCool LT520 240mm AIO",         "DeepCool",     "aio_240",    260, 27),
-    ("cooler-lf3-360",    "Arctic Liquid Freezer III 360",    "Arctic",       "aio_360",    350, 38),
+    ("cooler-lt520",      "DeepCool LT520 240mm AIO",         "DeepCool",     "aio_240",    280, 27),
+    ("cooler-lf3-360",    "Arctic Liquid Freezer III 360",    "Arctic",       "aio_360",    300, 38),
 ]
 
 

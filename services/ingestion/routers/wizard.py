@@ -27,8 +27,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from compat_core import Part, evaluate
 from deps import get_db
-from models import FpsEstimate, Offer, Product, Variant
+from models import CompatibilityRule, FpsEstimate, Offer, Product, Variant
 
 router = APIRouter(tags=["wizard"])
 
@@ -115,6 +116,13 @@ async def run_wizard(body: WizardRequest, db: AsyncSession = Depends(get_db)) ->
     if not cpus or not gpus:
         raise HTTPException(status_code=404, detail="Catalog has no priced CPUs/GPUs yet.")
 
+    # As mesmas regras que a tela de detalhe usa — buscadas uma vez, não a
+    # cada candidato. Ver compat_core.py: o wizard NÃO tem mais uma lógica de
+    # compatibilidade própria, monta em cima da mesma fonte de verdade.
+    rules = (
+        await db.execute(select(CompatibilityRule).where(CompatibilityRule.is_active.is_(True)))
+    ).scalars().all()
+
     gpus_by_id = {g["product_id"]: g for g in gpus}
     # Every CPU has its own FPS rows now, so use the CPU directly (no tier map).
     fps_map = await _load_fps(
@@ -127,7 +135,7 @@ async def run_wizard(body: WizardRequest, db: AsyncSession = Depends(get_db)) ->
         for gpu in gpus:
             if cpu["price"] + gpu["price"] > budget:
                 continue
-            built = _complete_build(cpu, gpu, catalog, mode)
+            built = _complete_build(cpu, gpu, catalog, mode, rules)
             if built is None:
                 continue
             parts, total = built
@@ -242,9 +250,20 @@ def _fnum(specs: dict, key: str) -> float:
 
 
 def _complete_build(
-    cpu: dict, gpu: dict, catalog: Dict[str, List[dict]], mode: str
+    cpu: dict, gpu: dict, catalog: Dict[str, List[dict]], mode: str, rules: list
 ) -> Optional[Tuple[dict, Decimal]]:
-    """Cheapest compatible mobo/ram/psu/cooler/case/storage. Selection adapts to mode."""
+    """Cheapest compatible mobo/ram/psu/cooler/case/storage. Selection adapts to mode.
+
+    "Compatible" aqui significa de verdade — cada peça candidata é validada
+    contra ``compat_core.evaluate()`` (as mesmas 8 regras + 4 checagens
+    calculadas da tela de detalhe) antes de ser aceita, não só os filtros
+    locais abaixo (que continuam a existir para o corte grosso — TDP, tipo
+    de RAM, orçamento — mas não são mais a única linha de defesa). É o que
+    impede, por exemplo, o cooler stock da AMD (grátis, então sempre "mais
+    barato") de ser oferecido pra um CPU Intel — bug real, achado em auditoria
+    2026-08-12, que a versão anterior desta função cometia sempre que o
+    filtro de TDP sozinho deixava passar.
+    """
     socket = cpu["specs"].get("socket")
     cpu_tdp = _fnum(cpu["specs"], "tdp_w")
     gpu_tdp = _fnum(gpu["specs"], "tdp_w")
@@ -253,9 +272,27 @@ def _complete_build(
     if mode == "future_proof" and socket in DEAD_END_SOCKETS:
         return None  # no upgrade path
 
-    mobo = _cheapest_where(catalog.get("motherboard", []), lambda m: m["specs"].get("socket") == socket)
+    by_cat: Dict[str, Part] = {
+        "cpu": Part(cpu["name"], cpu["specs"]),
+        "gpu": Part(gpu["name"], gpu["specs"]),
+    }
+
+    def _compat_ok(category: str, candidate: dict) -> bool:
+        """True se adicionar `candidate` em `category` não gera nenhum erro
+        contra o que já foi escolhido até aqui (avisos não bloqueiam — mesmo
+        critério da tela de detalhe: uma build com aviso ainda é oferecível)."""
+        trial = dict(by_cat)
+        trial[category] = Part(candidate["name"], candidate["specs"])
+        return not evaluate(trial, rules)["errors"]
+
+    mobo = _cheapest_where(
+        catalog.get("motherboard", []),
+        lambda m: m["specs"].get("socket") == socket and _compat_ok("motherboard", m),
+    )
     if not mobo:
         return None
+    by_cat["motherboard"] = Part(mobo["name"], mobo["specs"])
+
     ram_type = mobo["specs"].get("ram_type")
     ram_min = FUTUREPROOF_MIN_RAM_GB if mode == "future_proof" else 0
     ram = _cheapest_where(
@@ -264,30 +301,39 @@ def _complete_build(
     )
     if not ram:
         return None
+    by_cat["ram"] = Part(ram["name"], ram["specs"])
 
     headroom = PSU_HEADROOM.get(mode, PSU_HEADROOM_DEFAULT)
     need_w = (cpu_tdp + gpu_tdp + PSU_OVERHEAD_W) * headroom
-    psu = _cheapest_where(catalog.get("psu", []), lambda p: _fnum(p["specs"], "watts") >= need_w)
+    psu = _cheapest_where(
+        catalog.get("psu", []),
+        lambda p: _fnum(p["specs"], "watts") >= need_w and _compat_ok("psu", p),
+    )
     if not psu:
         return None
+    by_cat["psu"] = Part(psu["name"], psu["specs"])
 
     cool_mult = QUIET_COOLER_MULT if mode == "quiet" else 1.0
     cooler = _cheapest_where(
         catalog.get("cooler", []),
         lambda c: _fnum(c["specs"], "tdp_rating_w") >= cpu_tdp * cool_mult
-        and (mode != "quiet" or c["specs"].get("cooler_type") != "stock"),
+        and (mode != "quiet" or c["specs"].get("cooler_type") != "stock")
+        and _compat_ok("cooler", c),
     )
     if not cooler:
         return None
+    by_cat["cooler"] = Part(cooler["name"], cooler["specs"])
     cooler_h = _fnum(cooler["specs"], "height_mm")
 
     case = _cheapest_where(
         catalog.get("case", []),
         lambda k: _fnum(k["specs"], "max_gpu_length_mm") >= gpu_len
-        and _fnum(k["specs"], "max_cooler_height_mm") >= cooler_h,
+        and _fnum(k["specs"], "max_cooler_height_mm") >= cooler_h
+        and _compat_ok("case", k),
     )
     if not case:
         return None
+    by_cat["case"] = Part(case["name"], case["specs"])
 
     storage_list = catalog.get("storage", [])
     if not storage_list:

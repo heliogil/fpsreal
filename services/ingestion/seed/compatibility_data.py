@@ -33,6 +33,13 @@ COMPATIBILITY_RULES = [
     # e viraram checagem calculada em compatibility.py — regra de ouro do roadmap.
     ("psu_case_fit", "psu", "length_mm", "lte", "case", "max_psu_length_mm", "error",
      "A fonte {a_name} tem {a_val}mm; o gabinete {b_name} comporta até {b_val}mm de fonte."),
+
+    # ── auditoria 2026-08-12: dado existia desde o T-06 (max_ram_speed_mts),
+    # nunca virou regra. Aviso, não erro — RAM acima do máximo garantido pela
+    # placa continua funcionando, só não bate a velocidade nominal do XMP/EXPO
+    # (cai pro JEDEC). Não é o mesmo tipo de falha que impede o PC de ligar.
+    ("ram_speed_headroom", "ram", "speed_mts", "lte", "motherboard", "max_ram_speed_mts", "warning",
+     "A {a_name} roda a até {a_val}MT/s, mas a placa {b_name} só garante {b_val}MT/s de XMP/EXPO — funciona, só não bate a velocidade nominal."),
 ]
 
 # TDP band (min, max) -> min_cooler_type, min_case_airflow. product_id NULL = generic band.
