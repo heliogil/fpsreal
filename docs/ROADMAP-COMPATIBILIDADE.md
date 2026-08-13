@@ -285,7 +285,7 @@ Depois do Sprint 5, o Hélio pediu uma auditoria de verdade da tabela de compati
 - Varredura completa: **7 CPUs × 4 modos = 28 combinações reais, 0 incompatibilidades de soquete**, 1 único `None` esperado (AM4 excluído de `future_proof` por design — não regressão).
 - Varredura HTTP no `/wizard/` real: 5 orçamentos × 4 modos, 0 erros/exceções, contagem de candidatos no mesmo padrão de antes.
 
-**Status:** commitado (`71b8225` no branch `viewer-fase1-forma`), **ainda não deployado em produção** — pendente confirmação explícita antes do redeploy (mudança grande demais pra subir sem check-in, mesmo padrão desta sessão inteira).
+**Status:** ✅ CONCLUÍDO E DEPLOYADO EM PRODUÇÃO 2026-08-12 (commit `25fe66e` em `master`, `docker compose build pcb_api && up -d` — só o backend, `pcb_web` não precisou). **Verificado contra o banco de produção real e o container real após o deploy**: `_complete_build(i5-13400F, ..., 'budget')` contra a base de produção escolhe `cooler-ak400` (compatível), não mais `cooler-stock-amd`; `curl` em `127.0.0.1:8100` confirma `/compatibility/check`, `/wizard/` e `/health` respondendo 200 sem regressão.
 
 ### Outros achados da auditoria
 
