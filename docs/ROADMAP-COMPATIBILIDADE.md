@@ -259,6 +259,44 @@ Premissa: o bloqueio real de lançamento **não é técnico** — é entrar nos 
 
 ---
 
+## PARTE 3.5 — Auditoria da fundação (2026-08-12, pedido explícito: "isso precisa ficar perfeito")
+
+Depois do Sprint 5, o Hélio pediu uma auditoria de verdade da tabela de compatibilidade — "a pedra fundamental de todo o projeto". Não foi releitura do que já estava feito; foi caça a lacuna.
+
+### Achado crítico — RESOLVIDO — o wizard tinha motor de compatibilidade próprio
+
+**O problema:** `services/ingestion/routers/wizard.py` (`_complete_build()`) tinha sua **própria lógica de seleção "cheapest compatible X"**, escrita independente de `compatibility.py`/`compatibility_rules`. Os 5 sprints de correção de compatibilidade — as 8 regras, o estado "desconhecido", as 4 checagens calculadas — nunca chegavam no wizard, que é o fluxo principal de recomendação ("Montar minha build").
+
+**Provado com código real, não teoria:** em modo `budget`, `_complete_build(cpu-i5-13400f, ...)` retornava `cooler: cooler-stock-amd` — o cooler stock da AMD (soquete AM4/AM5 apenas) pra um CPU **Intel LGA1700**. Montagem fisicamente impossível. Causa: o Wraith Stealth custa **R$0** na amostra, então é sempre "o mais barato" pra qualquer CPU cujo TDP ele cubra (65W), e o filtro do wizard nunca checava soquete do cooler — só TDP.
+
+**Escopo do estrago:** as 5 builds "Rei" da home (r3k/r5k/r8k/r12k/absoluto) são curadas à mão, não passam pelo wizard — **essas nunca estiveram em risco**. O bug só existia no fluxo interativo "Montar minha build".
+
+**O que mais o wizard nunca verificava** (mesma causa raiz — lógica duplicada, nunca as 8 regras/4 checagens reais): `psu_case_fit`, RAM × folga do cooler, radiador AIO × mounts do gabinete, conector de força × fonte.
+
+**Correção — fonte única de verdade:**
+- `services/ingestion/compat_core.py` (novo): toda a lógica de comparação — as 8(+1) regras de tabela e as 4 checagens calculadas — extraída pra um módulo puro, sem SQLAlchemy/DB, via um `Part(name, specs)` mínimo. `evaluate(by_cat, rules) -> {errors, warnings, clearances, checks}`.
+- `compatibility.py`: virou casca HTTP fina sobre `compat_core.evaluate()`. **Resposta da API idêntica a antes** — testado.
+- `wizard.py`: `_complete_build()` monta o `by_cat` incrementalmente (cpu, gpu, depois cada peça escolhida) e cada peça candidata passa por `_compat_ok()` — roda `evaluate()` contra o que já foi escolhido + o candidato, **rejeita se gerar erro** (avisos não bloqueiam, mesmo critério da tela de detalhe) — antes de aceitar a mais barata.
+
+**Testado (backend isolado 8101, antes de qualquer redeploy):**
+- Regressão de `/compatibility/check`: 3 builds reais (válida, radiador incompatível, fonte insuficiente) — saída **idêntica** à de antes do refactor, checks/errors/warnings/clearances linha por linha.
+- Bug reproduzido e confirmado corrigido: i5-13400F + RTX 3060 em modo budget agora escolhe `cooler-ak400` (compatível LGA1700), não mais `cooler-stock-amd`.
+- Caso válido não quebrou: Ryzen 5 5600 (AM4) continua escolhendo `cooler-stock-amd` normalmente.
+- Varredura completa: **7 CPUs × 4 modos = 28 combinações reais, 0 incompatibilidades de soquete**, 1 único `None` esperado (AM4 excluído de `future_proof` por design — não regressão).
+- Varredura HTTP no `/wizard/` real: 5 orçamentos × 4 modos, 0 erros/exceções, contagem de candidatos no mesmo padrão de antes.
+
+**Status:** commitado (`71b8225` no branch `viewer-fase1-forma`), **ainda não deployado em produção** — pendente confirmação explícita antes do redeploy (mudança grande demais pra subir sem check-in, mesmo padrão desta sessão inteira).
+
+### Outros achados da auditoria
+
+- **`cooler-lt520` tdp_rating_w corrigido: 260W → 280W** (ficha real da DeepCool, confirmada em múltiplas fontes — nunca tinha sido verificado; só os soquetes foram checados no T-02). Inofensivo no catálogo atual (nenhuma CPU passa de 260W), mas era dado errado numa regra ativa.
+- **`cooler-lf3-360` (Arctic Liquid Freezer III 360) tdp_rating_w corrigido: 350W → 300W.** A Arctic **não publica** TDP oficial pra esse modelo (só pro "Pro") — 350W não tinha fonte nenhuma. 300W é apoiado em teste real (GamersNexus: delta térmico saudável a 300W sustentado) em vez de número sem lastro.
+- **Nova regra `ram_speed_headroom`** (aviso, não erro): `ram.speed_mts ≤ motherboard.max_ram_speed_mts`. O dado (`max_ram_speed_mts`) existia desde o T-06 e nunca tinha virado checagem — lacuna, não bug (nenhuma combinação do catálogo atual dispara, toda RAM é mais lenta que o máximo de cada placa).
+- **Achado, não corrigido — oportunidade:** existe uma tabela `thermal_rules` inteira (5 faixas de TDP → cooler recomendado + mensagem, ex. "251W+: AIO 360 recomendado") já escrita e semeada, **nunca lida por nenhum endpoint**. É recomendação positiva ("o que comprar"), diferente das checagens atuais (só pass/fail) — daria pra alimentar o wizard ou a ficha da peça. Fica como ideia pro próximo ciclo, não é uma correção urgente.
+- **Achado, não corrigido — cruft inofensivo:** 4 tabelas do schema (`case_slots`, `build_clearances`, `case_airflow_zones`, `build_airflow_state`) estão **vazias e nunca lidas** — resquício de um desenho anterior (compatibilidade por "slots 3D"), substituído pela abordagem atual (specs JSONB + zone-graph). Não atrapalham nada, só confundem quem olhar o schema achando que tem lógica ali.
+
+---
+
 ## PARTE 4 — O que NÃO fazer
 
 - **Não** recriar a vista largura×altura do gabinete (removida, fora do escopo).
