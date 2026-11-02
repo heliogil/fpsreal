@@ -1,59 +1,45 @@
-# Rei do FPS
+# Rei do FPS — [reidofps.com.br](https://reidofps.com.br)
 
-> **R$ por FPS.** The BR-native tool that ranks gamer PC builds by **cost-per-FPS** — not specs, not hype.
-> *(Working name was "FPSReal"; the repo keeps that slug. Brand is **Rei do FPS**, mascot **Harpia** — "a Harpia observa".)*
+> **"Which gaming PC gives me the most FPS for my money?"** — a Brazilian comparator that ranks PC builds by **cost per FPS**, not by specs or hype.
 
-**Domain:** `reidofps.com.br` · **Audience:** Brazil · **Model:** media/SEO + affiliate.
-
----
-
-## Status — honest snapshot (2026-07-09)
-
-The project is **whole on the price-independent half and blocked on the priced half.**
-
-- ✅ **Foundation + technical moat are live.** Catalog, the FPS estimation engine, and the compatibility engine are seeded and served by the API. A live page (`/pecas`) renders real data.
-- ⏳ **Everything that needs `R$` is blocked on one human step:** joining the affiliate programs and wiring their official feeds. Prices → cost/FPS ranking → "Tronos" → ranked wizard → anomaly content → launch all depend on it.
-
-This is **not** where the old README put us ("Sprint 1 in progress"). We finished the data foundation and, because they don't need prices, built chunks of Sprint 3/4 **out of order**.
+**Live since 2026-08-13** · Audience: Brazilian PC gamers · Model: SEO content + affiliate commissions · Repo slug keeps the working name `fpsreal`.
 
 ---
 
-## What changed since the first plan (read this)
+## The case in one page
 
-If you're comparing against the original 6-sprint README, three things diverged materially:
+**Problem.** Brazilian buyers compare parts by spec sheets and influencer hype. Prices in R$ swing a lot between stores, and nobody answers the real question: *with my budget and my games, which build gives the most frames per real spent?*
 
-1. **Data strategy pivoted: official affiliate feeds, _zero scraping_.**
-   The original thesis was a "price data moat via scraping" (Playwright, anti-bot probe). That was **dropped**. We now take prices **only** from official affiliate feeds/APIs (KaBuM, Mercado Livre Developers first). Playwright was removed; the anti-bot probe is obsolete. **The moat moved** from scraped prices to the **FPS estimation + compatibility/airflow engines** — our own code, not someone else's catalog.
+**Positioning.** One number that a non-expert understands: **R$ per FPS**. Each budget tier gets a "King" (*Rei*), the build with the best R$/FPS in that tier. The brand (Rei do FPS, mascot Harpia, *"a Harpia observa"*) was built around a trust promise, because the category is full of inflated numbers:
 
-2. **Scope expanded well beyond a "rules engine + 3D viewer".**
-   The schema (17 tables) already models a **slot-based physical fit engine** (clearance propagation), an **airflow simulation** (directed zone graph — the "wind tunnel"), **thermal rules**, and **"Tronos por faixa"** (a King per budget tier). Plus a hard **integrity contract** (below).
+> **We estimate FPS, we never fake it.** Every FPS figure ships with its method, a confidence band and its sources. Only prices are called "measured".
 
-3. **Integrity rule (non-negotiable): we _estimate_ FPS, we never _measure_ it.**
-   Every FPS figure carries `method`, a confidence band, and its sources. We only say "measured" for **price**. Estimates use an anchor+scale method over public relative-performance data, with crowdsourced calibration planned as the long-term moat.
+**Data product.**
+- Catalog of real parts (GPU, CPU, RAM, motherboard, storage, PSU, case, cooler) from 5 merchants.
+- FPS engine calibrated in Aug/2026 against a single-bench public benchmark (48 GPUs, same test rig); 17 of 20 catalog GPUs recalibrated, one was off by ~20 points.
+- Compatibility rules (socket, RAM type, GPU/cooler clearance, PSU headroom).
+- Affiliate click tracking, so every recommendation can be tied to revenue.
 
----
+**Go-to-market.**
+- **Distribution:** SEO pages + content generated from the data. Price/FPS anomalies become posts (*"this GPU delivers 94% of that one's FPS at 71% of the cost"*), so content scales with the catalog, not with writing hours.
+- **Monetization:** affiliate commissions (KaBuM and Mercado Livre first).
+- **Pivot that mattered:** the first plan was to scrape store prices. It was dropped for **official affiliate feeds only** — legally clean, and it moved the moat from someone else's prices to our own FPS and compatibility engines.
+- **Kill criteria written before launch:** fewer than 500 affiliate clicks in 90 days → archive.
 
-## What's live right now (verified)
+## Status — honest snapshot (2026-11-02)
 
-Served by `pcb_api` (FastAPI, port `8100`), data in `pcb_db` (PostgreSQL 16, port `5434`):
+| | State |
+|---|---|
+| Site, catalog, FPS explorer, curated builds, wizard | ✅ Live at reidofps.com.br (HTTPS) |
+| FPS engine | ✅ Calibrated (GPU anchor); game and CPU factors still heuristic |
+| Prices | ⏳ **Sample prices, labeled as demo on the site.** The pipeline is real; it waits for the official affiliate feeds |
+| Affiliate revenue | ⏳ Starts when feeds are wired |
 
-| Surface | Endpoint | State |
-|---|---|---|
-| Catalog | `GET /products` (with `specs`) | **Live** — 48 real products (GPU/CPU/RAM/mobo/storage/PSU/case/cooler) |
-| FPS estimates | `GET /fps?cpu=&gpu=&game=&res=` | **Live** — 663 rows, `method=anchor_scale`, confidence band, sources |
-| Compatibility | `POST /compatibility/check` | **Live** — socket/RAM/clearance rules + PSU headroom |
-| Offers (prices) | `GET /offers`, `/offers/best`, `/offers/:id/history` | **Live but empty by design** — no fabricated prices; waits for feeds |
-| Click tracking | `POST /track/click` | **Live** — records to `affiliate_clicks` |
-| Curated builds | `GET /builds`, `/builds/:tier/rei` | Schema + endpoint ready; **needs prices to crown** |
-| Wizard | `POST /wizard` | Ranks CPU+GPU by `avg_fps / price`; **returns empty until prices exist** |
-
-**Live web surface:** `apps/web` (Next.js 14, port `3100`).
-- `/pecas` — **live** catalog + FPS explorer (SSR fetch to the internal API; real data in the HTML).
-- Home / Tronos / Wizard — still on the **mock** repository (they're price-dependent) until feeds land.
+Full calibration notes: [`docs/FPS-CALIBRACAO.md`](docs/FPS-CALIBRACAO.md) (PT-BR).
 
 ---
 
-## The engines
+## How it works (technical)
 
 - **FPS (anchor+scale).** `fps ≈ gpu_1080p_aggregate × game_demand_factor × cpu_tier_factor`, bounded by per-game engine caps (e.g. Elden Ring 60). Seeded from a cited public source with a ±18% band. Cold-start is honest-by-construction; crowdsourced calibration (`is_crowdsourced`) is the planned upgrade.
 - **Compatibility.** Data-driven rules (`compatibility_rules`) evaluated against each product's `specs` JSONB: CPU/motherboard socket, RAM type, GPU/case & cooler/case clearance, plus a computed PSU-headroom warning.
@@ -77,29 +63,6 @@ compose.yaml              pcb_db (5434) · pcb_api (8100) · pcb_web (3100)
 **No Playwright** — removed with the no-scraping pivot.
 
 > ⚠️ **Known drift:** `db/schema.sql` lags the real Alembic migration in one place (`fps_estimates.sources` is `TEXT[]` in the SQL file but `jsonb` in the migrated DB). The migration/DB is the source of truth.
-
----
-
-## Sprint reality
-
-| Sprint | Original plan | Reality |
-|---|---|---|
-| 0 — Gates | anti-bot probe, affiliate research, capacity baseline | Probe **obsolete** (no scraping); research/baseline done |
-| 1 — Data foundation | monorepo, schema, catalog seed | ✅ **Done** — schema expanded to 17 tables; seed loaded |
-| 2 — Live prices | KaBuM + ML adapters | ⏳ **Not started** — `adapters/` empty; blocked on affiliate feeds |
-| 3 — Compat & FPS | rules engine, benchmarks, cost/FPS | 🔄 Compat + FPS engines **live** (out of order); cost/FPS needs prices |
-| 4 — Usable product | wizard, affiliate tracking | 🔄 Wizard scaffolded (mock); `/track` live |
-| 5 — Distribution | SEO pages, 3D viewer | ⏳ Not built (airflow/slot **data model** exists; viewer does not) |
-| 6 — Launch | QA, observability, go-live | ⏳ Not started (needs prices) |
-
-**The one gate that unblocks the rest:** official affiliate feeds. Everything priced is downstream of it.
-
----
-
-## Monetization & content
-
-- **Affiliate commissions** (KaBuM, Mercado Livre first; Pichau/Terabyte after feeds). Target R$0.5k–5k/mo year 1 (media/SEO model).
-- **Content engine (planned):** anomaly detection over price/FPS data auto-generates copy — *"the RTX 4070 Super delivers 94% of the 4080's FPS at 71% of the cost."* The **FPS half already exists**; it becomes near-trivial once prices land. Mix: ~70% anomalies + 30% technical education.
 
 ---
 
