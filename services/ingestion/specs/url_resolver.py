@@ -71,11 +71,15 @@ _STOPWORDS = {
     "case", "cooler", "cpu", "gpu", "psu", "kit",
 }
 
-#: subiu de 8: sites com dezenas de países (ASUS = 83) têm vários
-#: sub-sitemaps NUMERADOS por região só (us1.xml, us2.xml, ...) — 8 mal dava
-#: pra uma região só depois da priorização por _PREFERRED_REGIONS
-MAX_NESTED_SITEMAPS = 20
-MAX_URLS_COLLECTED = 20000
+#: subiu de 8→20→180 (2026-08-06, decisão explícita: sem custo de LLM,
+#: tempo/banda não é problema). ASUS tem 167 sub-sitemaps SÓ pra região
+#: "us" (us1.xml..us167.xml aprox) — 20 cobria ~12% da própria região
+#: preferida e ainda perdia produto. 180 cobre a região "us" inteira com
+#: folga; regiões menos prioritárias continuam de fora do orçamento.
+MAX_NESTED_SITEMAPS = 180
+#: sobe junto — 180 sub-sitemaps × ~400 URLs cada pode passar de 20000 e
+#: truncar no MEIO da região "us" antes mesmo de terminar de coletar
+MAX_URLS_COLLECTED = 150000
 MIN_TEXT_TOKEN_MATCHES = 2
 
 _SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
@@ -102,6 +106,28 @@ def _is_model_code(token: str) -> bool:
     if _CAPACITY_SUFFIX_RE.match(token):
         return False
     return any(ch.isdigit() for ch in token)
+
+
+#: achado real (2026-08-06): a ASUS escreve "rtx5070" GRUDADO (sem hífen
+#: entre a linha e o número) — o token "5070" nunca existe isolado, então
+#: exigir associação em ``slug_tokens`` (set) rejeitava TODOS os produtos
+#: reais da ASUS. Mas aceitar "5070" como substring livre reabriria o
+#: problema oposto: "rtx3060ti" contém "3060" como substring, e é a Ti — um
+#: produto DIFERENTE. A regra que resolve os dois: o token bate se FOR o
+#: código, ou se for um prefixo de linha GPU conhecido + código, SEM NADA
+#: depois. "rtx5070" bate (prefixo+código, fim do token). "rtx3060ti" não
+#: bate pra "3060" (tem "ti" depois, dentro do MESMO token).
+_GPU_LINE_PREFIXES = ("rtx", "gtx", "rx", "radeon")
+
+
+def _token_matches_code(token: str, code: str) -> bool:
+    if token == code:
+        return True
+    return any(token == f"{prefix}{code}" for prefix in _GPU_LINE_PREFIXES)
+
+
+def _slug_has_all_codes(slug_tokens: set[str], required: list[str]) -> bool:
+    return all(any(_token_matches_code(t, code) for t in slug_tokens) for code in required)
 
 
 #: prefixo de locale no início do path (ex. /en-us/, /pt-br/, /en-intl/,
@@ -161,7 +187,7 @@ def best_match_url(urls: list[str], product_name: str) -> Optional[str]:
     scored: list[tuple[int, str]] = []
     for url in urls:
         slug_tokens = set(re.findall(r"[a-z0-9]+", url.lower()))
-        if not all(t in slug_tokens for t in required):
+        if not _slug_has_all_codes(slug_tokens, required):
             continue
         score = sum(1 for t in tokens if t in slug_tokens)
         scored.append((score, url))
@@ -255,7 +281,15 @@ _RELEVANT_HINTS = ("product", "catalog", "shop", "en", "en-us", "global")
 #: zero candidatos apareciam pra QUALQUER produto. Cobre os padrões mais
 #: comuns vistos (ASUS: us/uk; NZXT: en-intl) — não exaustivo, só evita
 #: desperdiçar o orçamento numa região aleatória primeiro.
-_PREFERRED_REGIONS = {"us", "en-us", "en-intl", "en-gb", "uk", "en", "global", "en-au", "ca-en", "au"}
+#: achado real (2026-08-06): com "us"/"uk"/"au"/"ca-en" todas na MESMA
+#: pontuação, se outra região preferida aparecesse ANTES de "us" no arquivo
+#: (ordem que eu não controlo), ela consumia o orçamento inteiro de
+#: sub-sitemaps sozinha e "us" nunca era alcançado — RTX 5070 existe mesmo
+#: na ASUS (Dual/TUF/Prime/ProArt confirmados por busca direta) e ainda
+#: assim dava zero candidatos. "us" precisa de prioridade EXCLUSIVA, não
+#: empatada — as outras ficam como reserva de segunda linha.
+_TOP_REGION = "us"
+_SECONDARY_REGIONS = {"en-us", "en-intl", "en-gb", "uk", "en", "global", "en-au", "ca-en", "au"}
 
 _REGION_SEGMENT_RE = re.compile(r"^https?://[^/]+/([^/]+)/", re.IGNORECASE)
 
@@ -269,10 +303,11 @@ def _prioritize_nested(nested: list[str]) -> list[str]:
     """Sitemap-índice de site grande tem dezenas de sub-sitemaps (blog,
     suporte, fórum, idiomas, dezenas de países...); prioriza primeiro por
     região preferida (segmento de path de verdade, não substring solta),
-    depois pelos hints de conteúdo de sempre."""
+    depois pelos hints de conteúdo de sempre. "us" tem prioridade EXCLUSIVA
+    (nunca empata com outra região) — ver nota acima."""
     def score(url: str) -> tuple[int, int]:
         region = _region_segment(url)
-        region_score = 2 if region in _PREFERRED_REGIONS else 0
+        region_score = 3 if region == _TOP_REGION else (2 if region in _SECONDARY_REGIONS else 0)
         low = url.lower()
         hint_score = sum(1 for hint in _RELEVANT_HINTS if hint in low)
         return (region_score, hint_score)

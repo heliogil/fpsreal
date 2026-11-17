@@ -60,6 +60,27 @@ def test_best_match_does_not_require_vram_capacity_in_slug():
     assert match == "https://www.example.com/graphics-cards/rtx-3060/"
 
 
+def test_best_match_accepts_prefix_fused_model_code_without_hyphen():
+    # regressão real (2026-08-06): a ASUS escreve "rtx5070" GRUDADO (sem
+    # hífen) -- "5070" isolado nunca existe como token, e nada resolvia pra
+    # NENHUMA GPU da ASUS até este fix. Só uma URL aqui de propósito: com
+    # duas montadoras reais e DIFERENTES a mesma altura, best_match_url
+    # corretamente recusa escolher (isso é testado à parte no aib_adapter,
+    # que quer TODAS as variantes, não uma escolhida).
+    urls = ["https://www.asus.com/us/motherboards-components/graphics-cards/dual/dual-rtx5070-o12g/"]
+    match = best_match_url(urls, "GeForce RTX 5070")
+    assert match == urls[0]
+
+
+def test_best_match_prefix_fused_code_does_not_swallow_variant_suffix():
+    # o mesmo mecanismo NÃO pode aceitar "rtx3060ti" pra quem procura
+    # "3060" -- é a Ti, um produto DIFERENTE (achado real: causou o oposto
+    # do bug acima, ASUS tem exatamente essa forma pro 3060 Ti)
+    urls = ["https://www.asus.com/dual/dual-rtx3060ti-o8g/"]
+    match = best_match_url(urls, "GeForce RTX 3060 12GB")
+    assert match is None
+
+
 def test_best_match_returns_none_when_no_url_has_model_code():
     urls = ["https://www.example.com/graphics-cards/rtx-5080/",
             "https://www.example.com/news/rtx-launch-event/"]
@@ -208,6 +229,23 @@ def test_prioritize_nested_puts_preferred_region_first():
     ]
     ordered = _prioritize_nested(nested)
     assert ordered[0] == "https://www.asus.com/us/sitemap/us1.xml"
+
+
+def test_prioritize_nested_us_never_loses_budget_to_other_preferred_regions():
+    # regressão real (2026-08-06): "us"/"uk"/"au"/"ca-en" empatavam na MESMA
+    # pontuação — se "au" aparecesse ANTES de "us" no arquivo e tivesse
+    # sub-sitemaps suficientes, consumia o orçamento inteiro sozinha e "us"
+    # nunca era alcançado (RTX 5070 existe na ASUS — Dual/TUF/Prime/ProArt
+    # confirmados por busca direta — e mesmo assim dava zero candidatos).
+    # "au" tem MAIS entradas que o orçamento inteiro e vem primeiro no arquivo.
+    budget = 5
+    nested = (
+        [f"https://www.asus.com/au/sitemap/au{i}.xml" for i in range(1, 20)]  # vem primeiro, é MUITO maior que o orçamento
+        + [f"https://www.asus.com/us/sitemap/us{i}.xml" for i in range(1, 4)]
+    )
+    ordered = _prioritize_nested(nested)[:budget]
+    us_urls = [u for u in ordered if "/us/" in u]
+    assert len(us_urls) == 3   # todas as "us" entram, mesmo com "au" tendo vindo antes e sendo maior
 
 
 def test_prioritize_nested_falls_back_to_content_hints_without_region():
