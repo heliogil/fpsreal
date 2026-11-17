@@ -24,7 +24,8 @@ export const alt = 'Build gamer no Rei do FPS — custo por FPS e fluxo de ar'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
-export default async function Image({ params }: { params: { slug: string } }) {
+export default async function Image(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params
   const [mono, monoSemi] = await Promise.all([
     readFile(join(process.cwd(), 'public/fonts/IBMPlexMono-400.woff')),
     readFile(join(process.cwd(), 'public/fonts/IBMPlexMono-600.woff')),

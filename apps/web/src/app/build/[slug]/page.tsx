@@ -21,8 +21,8 @@ const VALID_RES = ['1080p', '1440p', '4k'] as const
 type Res = (typeof VALID_RES)[number]
 
 interface PageProps {
-  params: { slug: string }
-  searchParams: { res?: string }
+  params: Promise<{ slug: string }>
+  searchParams: Promise<{ res?: string }>
 }
 
 const RANK: GameSlug[] = ['valorant', 'cs2', 'fortnite', 'gta-v'] as GameSlug[]
@@ -45,7 +45,8 @@ const SLOTS: Array<{ key: keyof BuildComponents; slot: string; label: string }> 
 
 const SITE = 'https://reidofps.com.br'
 
-export async function generateMetadata({ params }: PageProps) {
+export async function generateMetadata(props: PageProps) {
+  const params = await props.params
   const builds = await getLiveBuilds()
   const build = builds?.find((b) => b.slug === params.slug)
   if (!build) return { title: 'Build | Rei do FPS' }
@@ -71,7 +72,8 @@ async function cpfOf(b: CuratedBuild): Promise<number> {
   return avg > 0 ? b.total_price_brl / avg : 0
 }
 
-export default async function BuildDetailPage({ params, searchParams }: PageProps) {
+export default async function BuildDetailPage(props: PageProps) {
+  const [params, searchParams] = await Promise.all([props.params, props.searchParams])
   const builds = await getLiveBuilds()
   const build = builds?.find((b) => b.slug === params.slug)
   if (!build) notFound()
@@ -149,7 +151,7 @@ export default async function BuildDetailPage({ params, searchParams }: PageProp
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
     <main style={{ padding: '28px clamp(16px,4vw,40px) 0' }}>
       <Link href="/#challengers" className="mono navlink" style={{ fontSize: 12, color: 'var(--dim2)' }}>
         ← voltar às builds

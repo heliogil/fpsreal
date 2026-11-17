@@ -9,7 +9,7 @@ import { gameLabel, priorityLabel } from '@/lib/labels'
 export const dynamic = 'force-dynamic'
 
 interface PageProps {
-  searchParams: { budget?: string; games?: string; priority?: string; resolution?: string }
+  searchParams: Promise<{ budget?: string; games?: string; priority?: string; resolution?: string }>
 }
 
 function parseResolution(s?: string): '1080p' | '1440p' | '4k' {
@@ -30,7 +30,8 @@ export const metadata = {
   description: 'A Harpia decreta: as 3 melhores builds gamer para o seu orçamento, jogos e prioridade. Ranking ao vivo por custo/FPS.',
 }
 
-export default async function ResultadosPage({ searchParams }: PageProps) {
+export default async function ResultadosPage(props: PageProps) {
+  const searchParams = await props.searchParams
   const budget = parseBudget(searchParams.budget)
   const games = parseGames(searchParams.games)
   const resolution = parseResolution(searchParams.resolution)

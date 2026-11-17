@@ -73,6 +73,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <br />
                 🤝 Alguns links são de afiliado — se você comprar por eles, a gente ganha comissão da loja.
                 O preço para você <strong style={{ color: 'var(--dim)' }}>não muda</strong>, e isso nunca reordena o ranking.
+                <br />
+                <a href="/privacidade" style={{ color: 'inherit', textDecoration: 'underline' }}>Privacidade</a>
+                {' · '}
+                <a href="/termos" style={{ color: 'inherit', textDecoration: 'underline' }}>Termos de uso</a>
               </div>
             </div>
           </footer>
