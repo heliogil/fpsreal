@@ -50,11 +50,11 @@ export default function BuildCard({ build, variant = 'default', detailHref, reso
 
       <div className="flex items-baseline justify-between mb-1">
         <PriceTag price_brl={build.total_price_brl} in_stock size="lg" />
-        {!build.is_rei_absoluto && build.rs_per_fps_top_game > 0 && (
+        {!build.is_rei_absoluto && build.rs_per_fps > 0 && (
           <div className="text-right">
             <div className="text-xs uppercase tracking-wider text-secondary">R$/FPS</div>
             <div className="num-mono text-lg font-bold">
-              {formatBRL(build.rs_per_fps_top_game)}
+              {formatBRL(build.rs_per_fps)}
             </div>
           </div>
         )}

@@ -1,5 +1,6 @@
 import type { CuratedBuild, FpsEstimate, GameSlug, WizardInput } from './repositories/types'
 import { priorityLabel } from './labels'
+import { REFERENCE_RES, avgReferenceFps, costPerFps } from './metrics'
 
 const API = process.env.PCB_API_INTERNAL || 'http://pcb_api:8100'
 
@@ -54,7 +55,9 @@ function candidateToBuild(
       cooler_id: byCat['cooler']?.product_id ?? 0,
     },
     total_price_brl: c.total_price_brl,
-    rs_per_fps_top_game: c.avg_fps > 0 ? c.total_price_brl / c.avg_fps : 0,
+    // no wizard a média é sobre os jogos que a pessoa escolheu — é o número certo ali
+    rs_per_fps: costPerFps(c.total_price_brl, c.avg_fps),
+    avg_fps: c.avg_fps,
     fps_top_game: top ? Math.round(top.fps_estimate) : Math.round(c.avg_fps),
     top_game_slug: (top?.game_slug ?? 'cs2') as GameSlug,
     is_rei_absoluto: false,
@@ -141,10 +144,9 @@ async function buildOutToCurated(b: BuildOut): Promise<CuratedBuild> {
   const gpuId = compId(b, 'gpu')
   const total = b.total_price_brl ?? 0
   const fpb = b.fps_per_brl ?? 0
-  const cs2 = await getJson<FpsEstimate | null>(
-    `/fps/?cpu=${cpuId}&gpu=${gpuId}&game=cs2&res=1080p`,
-  )
-  const fpsTop = cs2?.fps ?? Math.round(fpb * total)
+  const rows = (await getJson<FpsEstimate[]>(`/fps/?cpu=${cpuId}&gpu=${gpuId}&res=${REFERENCE_RES}`)) ?? []
+  const avg = avgReferenceFps(rows) || fpb * total
+  const fpsTop = rows.find((r) => r.game_slug === 'cs2')?.fps ?? avg
   const now = new Date().toISOString()
   return {
     id: b.id,
@@ -164,7 +166,8 @@ async function buildOutToCurated(b: BuildOut): Promise<CuratedBuild> {
       cooler_id: compId(b, 'cooler'),
     },
     total_price_brl: total,
-    rs_per_fps_top_game: fpsTop > 0 ? total / fpsTop : 0,
+    rs_per_fps: costPerFps(total, avg),
+    avg_fps: avg,
     fps_top_game: Math.round(fpsTop),
     top_game_slug: 'cs2' as GameSlug,
     is_rei_absoluto: b.slug === 'rei-absoluto',
