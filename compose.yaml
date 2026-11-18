@@ -48,6 +48,8 @@ services:
       context: ./apps/web
       dockerfile: Dockerfile
       network: host
+      args:
+        UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
     container_name: pcb_web
     restart: unless-stopped
     ports:
@@ -73,6 +75,26 @@ services:
       timeout: 10s
       retries: 3
       start_period: 25s
+
+  # Analytics próprio (Umami). Base de dados `umami` no mesmo Postgres (ver
+  # scripts/umami-init.sh). Painel SÓ por túnel SSH (porta 3300 em loopback);
+  # na internet só passam o script e o envio, via nginx em /u/.
+  pcb_umami:
+    image: ghcr.io/umami-software/umami:3.4.1
+    container_name: pcb_umami
+    restart: unless-stopped
+    profiles: ["analytics"]
+    environment:
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD}@pcb_db:5432/umami
+      APP_SECRET: ${UMAMI_APP_SECRET}
+      DISABLE_TELEMETRY: 1
+    ports:
+      - "127.0.0.1:3300:3000"
+    depends_on:
+      pcb_db:
+        condition: service_healthy
+    networks:
+      - pcb_net
 
 networks:
   pcb_net:

@@ -70,7 +70,7 @@ export default function BottleneckNote({
         </span>
       )}
       {diagnosis.suggest_mount && onSimulate && (
-        <button type="button" onClick={() => onSimulate(diagnosis.suggest_mount!)}
+        <button type="button" data-umami-event="viewer-simular-ventoinha" onClick={() => onSimulate(diagnosis.suggest_mount!)}
           style={{
             fontSize: compact ? 11 : 12, padding: '3px 9px', borderRadius: 99, cursor: 'pointer',
             border: '1px solid var(--accent-dim)', background: 'var(--accent-soft)', color: 'var(--accent)',

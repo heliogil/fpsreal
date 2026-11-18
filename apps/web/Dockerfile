@@ -5,6 +5,8 @@ RUN npm ci --no-audit --no-fund
 
 FROM node:20-alpine AS builder
 WORKDIR /app
+ARG UMAMI_WEBSITE_ID=
+ENV UMAMI_WEBSITE_ID=$UMAMI_WEBSITE_ID
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1

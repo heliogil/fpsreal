@@ -173,7 +173,7 @@ export default function GabineteVivoLive({
         {otherCases.length > 0 && (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
             <label htmlFor="cmp-case">comparar com:</label>
-            <select id="cmp-case" value={compareId ?? ''}
+            <select id="cmp-case" data-umami-event="viewer-comparar-gabinete" value={compareId ?? ''}
               onChange={(e) => void pickCase(e.target.value ? Number(e.target.value) : null)}
               className="mono"
               style={{
@@ -239,12 +239,12 @@ export default function GabineteVivoLive({
               {suggestion.demo && ' · preço de amostra'}
             </span>
           </div>
-          <button type="button" onClick={() => void pickCase(suggestion.id)} className="mono"
+          <button type="button" data-umami-event="viewer-sugestao-comparar" onClick={() => void pickCase(suggestion.id)} className="mono"
             style={{ fontSize: 12, padding: '6px 12px', borderRadius: 99, cursor: 'pointer', border: '1px solid var(--line)', background: 'transparent', color: 'var(--text)' }}>
             comparar lado a lado
           </button>
           {suggestion.offerId != null && (
-            <a href={`/go/${suggestion.offerId}?utm_source=build&utm_medium=viewer_sugestao`} className="mono"
+            <a data-umami-event="viewer-sugestao-oferta" href={`/go/${suggestion.offerId}?utm_source=build&utm_medium=viewer_sugestao`} className="mono"
               style={{ fontSize: 12, padding: '6px 12px', borderRadius: 99, background: 'var(--accent)', color: 'var(--accent-ink)', fontWeight: 600, whiteSpace: 'nowrap' }}>
               ver oferta →
             </a>
