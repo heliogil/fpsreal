@@ -25,8 +25,9 @@ const SIZE = { width: 1600, height: 1000 }
 
 export async function GET(
   _req: Request,
-  { params }: { params: { slug: string } },
+  props: { params: Promise<{ slug: string }> },
 ) {
+  const params = await props.params
   const [mono, monoSemi] = await Promise.all([
     readFile(join(process.cwd(), 'public/fonts/IBMPlexMono-400.woff')),
     readFile(join(process.cwd(), 'public/fonts/IBMPlexMono-600.woff')),

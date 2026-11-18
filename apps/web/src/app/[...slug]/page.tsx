@@ -1,56 +1,63 @@
 import Link from 'next/link'
+import { notFound, permanentRedirect } from 'next/navigation'
 import { getLiveBuilds } from '@/lib/live-server'
 import { getMockRepository } from '@/lib/repositories'
 
 interface PageProps {
-  params: { slug: string[] }
+  params: Promise<{ slug: string[] }>
 }
 
 /**
  * Catch-all SEO — rota usada pelos "X vs o Rei".
  * Ex: /i5-13400f-rtx-4060-vs-rei-dos-r-5k
  *
- * Quando o slug corresponde a um build real, redireciona para /build/[slug].
- * Caso contrário, renderiza uma página editorial genérica "X vs o Rei".
+ * Só responde a slugs no formato "<desafiante>-vs-rei-dos-<faixa>" com faixa
+ * reconhecida. Qualquer outra URL (/.env, erros de digitação, etc.) devolve
+ * 404 de verdade — antes respondia 200 a tudo, o que gerava páginas vazias
+ * indexáveis ao infinito (soft-404).
+ * Slug igual ao de um build real → redirect permanente para /build/[slug].
  */
+
+const VS_REI = /^[a-z0-9-]+-vs-rei-dos-(r-?3k|r-?5k|r-?8k|r-?12k)$/
+
+const TIERS = {
+  r3k: { tier: 'r3k', label: 'R$ 3k' },
+  r5k: { tier: 'r5k', label: 'R$ 5k' },
+  r8k: { tier: 'r8k', label: 'R$ 8k' },
+  r12k: { tier: 'r12k_plus', label: 'R$ 12k+' },
+} as const
+
+function parseSlug(slug: string[] | undefined) {
+  if (!slug || slug.length !== 1) return null
+  const m = VS_REI.exec(slug[0].toLowerCase())
+  if (!m) return null
+  return TIERS[m[1].replace('-', '') as keyof typeof TIERS]
+}
+
+export async function generateMetadata(props: PageProps) {
+  const { slug } = await props.params
+  // Página editorial ainda sem dado do desafiante: não indexar até ter conteúdo real.
+  return parseSlug(slug) ? { robots: { index: false, follow: true } } : {}
+}
 
 function formatBRL(n: number): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-export default async function SeoCatchAllPage({ params }: PageProps) {
+export default async function SeoCatchAllPage(props: PageProps) {
+  const params = await props.params
   const slugStr = (params.slug ?? []).join('/')
   // Live-first, mock only as a fallback if the API is unreachable — the same
   // pattern as the home and results pages, so these SEO pages show the same
   // numbers as the rest of the site (never stale fixture prices).
   const builds = (await getLiveBuilds()) ?? (await getMockRepository().builds.getAll())
   const directBuild = builds.find((b) => b.slug === slugStr) ?? null
-  if (directBuild) {
-    return (
-      <div className="text-center py-16">
-        <p>
-          Este slug é um build real.{' '}
-          <Link href={`/build/${directBuild.slug}`} style={{ color: 'var(--accent-gold)' }}>
-            Abrir build →
-          </Link>
-        </p>
-      </div>
-    )
-  }
+  if (directBuild) permanentRedirect(`/build/${directBuild.slug}`)
 
-  // Tenta inferir o tier pelo slug (heurística simples).
-  const lower = slugStr.toLowerCase()
-  let tierGuess: 'r3k' | 'r5k' | 'r8k' | 'r12k_plus' | null = null
-  let tierLabel = ''
-  if (lower.includes('r-3k') || lower.includes('r3k')) {
-    tierGuess = 'r3k'; tierLabel = 'R$ 3k'
-  } else if (lower.includes('r-5k') || lower.includes('r5k')) {
-    tierGuess = 'r5k'; tierLabel = 'R$ 5k'
-  } else if (lower.includes('r-8k') || lower.includes('r8k')) {
-    tierGuess = 'r8k'; tierLabel = 'R$ 8k'
-  } else if (lower.includes('r-12k') || lower.includes('r12k')) {
-    tierGuess = 'r12k_plus'; tierLabel = 'R$ 12k+'
-  }
+  const parsed = parseSlug(params.slug)
+  if (!parsed) notFound()
+  const tierGuess = parsed.tier
+  const tierLabel = parsed.label
 
   // Pega o Rei da faixa inferida (se houver), a partir dos builds ao vivo.
   const rei = tierGuess
@@ -137,7 +144,7 @@ export default async function SeoCatchAllPage({ params }: PageProps) {
 
       <footer className="text-xs text-secondary pt-4 border-t border-border">
         <p>
-          Comparativo editorial. Estimativas via modelo anchor_scale v1 (±15%).{' '}
+          Comparativo editorial. Estimativas via modelo anchor_scale, com banda de confiança.{' '}
           <Link href="/como-medimos" style={{ color: 'var(--accent-gold)' }}>
             Ver metodologia
           </Link>

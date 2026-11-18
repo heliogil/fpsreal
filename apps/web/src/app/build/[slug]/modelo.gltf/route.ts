@@ -20,8 +20,9 @@ const API = process.env.PCB_API_INTERNAL || 'http://pcb_api:8100'
 
 export async function GET(
   _req: Request,
-  { params }: { params: { slug: string } },
+  props: { params: Promise<{ slug: string }> },
 ) {
+  const params = await props.params
   const builds = await getLiveBuilds()
   const build = builds?.find((b) => b.slug === params.slug)
   if (!build) return new Response('build não encontrada', { status: 404 })

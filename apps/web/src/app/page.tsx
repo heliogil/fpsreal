@@ -8,10 +8,10 @@ export const revalidate = 300  // ISR: regenera a landing a cada 5 minutos
 
 export const metadata: Metadata = {
   title: 'Rei do FPS — Melhor build gamer para o seu orçamento',
-  description: 'Qual PC dá o melhor FPS com o seu dinheiro e o seu jogo? Builds curadas com preço real e FPS estimado com fonte. Sem chute.',
+  description: 'Qual PC dá o melhor FPS com o seu dinheiro e o seu jogo? Builds curadas, ranqueadas por custo/FPS, com FPS estimado com fonte e banda de confiança. Sem chute.',
   openGraph: {
     title: 'Rei do FPS — Melhor build gamer para o seu orçamento',
-    description: 'Compare builds gamer por custo/FPS. Preços reais de lojas brasileiras. Estimativas com fonte pública e banda de confiança.',
+    description: 'Compare builds gamer por custo/FPS para o mercado brasileiro. Estimativas de FPS com fonte pública e banda de confiança.',
     url: 'https://reidofps.com.br',
     siteName: 'Rei do FPS',
     locale: 'pt_BR',
@@ -58,7 +58,7 @@ async function enrich(b: CuratedBuild): Promise<Enriched> {
       name: g.name,
       fps,
       conf,
-      prov: `estimativa ${r?.method ?? 'anchor_scale'} · ±${conf}% · fonte pública, jul/2026`,
+      prov: `estimativa ${r?.method ?? 'anchor_scale'} · ±${conf}% · fonte pública, ago/2026`,
     }
   }).filter((g) => g.fps > 0)
   const maxFps = Math.max(...games.map((g) => g.fps), 1)
@@ -111,15 +111,15 @@ export default async function HomePage() {
             <div className="mono" style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '.14em', color: 'var(--accent-2)', lineHeight: 1.35 }}>
               MEDIDO CONTRA O REI
               <br />
-              <span style={{ color: 'var(--dim2)', letterSpacing: '.1em' }}>preço e FPS com fonte e data, sempre</span>
+              <span style={{ color: 'var(--dim2)', letterSpacing: '.1em' }}>FPS com fonte, data e banda, sempre</span>
             </div>
           </div>
           <h1 className="disp rv" style={{ fontWeight: 700, fontSize: 'clamp(38px,6vw,58px)', lineHeight: 1.02, letterSpacing: '-1px', margin: 0, color: 'var(--strong)', animationDelay: '.08s' }}>
             Com o seu dinheiro e o seu jogo, qual PC dá o melhor FPS hoje?
           </h1>
           <p className="rv" style={{ fontSize: 'clamp(15px,2vw,17px)', lineHeight: 1.6, color: 'var(--dim)', maxWidth: 520, margin: '22px 0 30px', animationDelay: '.16s' }}>
-            Comparamos preços em lojas brasileiras e estimamos FPS em jogos reais. Cada build entra na arena{' '}
-            <strong style={{ color: 'var(--text)' }}>contra o Rei</strong> — e o veredicto vem com fonte, data e link.{' '}
+            Estimamos o FPS em jogos reais e ranqueamos builds pelo custo por FPS. Cada build entra na arena{' '}
+            <strong style={{ color: 'var(--text)' }}>contra o Rei</strong> — e o veredicto vem com fonte, data e banda de confiança.{' '}
             <strong style={{ color: 'var(--text)' }}>A gente não inventa FPS.</strong>
           </p>
           <div className="rv" style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', animationDelay: '.24s' }}>
@@ -132,7 +132,7 @@ export default async function HomePage() {
           </div>
           <div className="mono rv" style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginTop: 32, fontSize: 12, color: 'var(--dim2)', animationDelay: '.32s' }}>
             <span><span style={{ color: 'var(--accent-2)' }}>✓</span> sem FPS inventado</span>
-            <span><span style={{ color: 'var(--accent-2)' }}>✓</span> preço com fonte e data</span>
+            <span><span style={{ color: 'var(--accent-2)' }}>✓</span> preço de amostra sempre sinalizado</span>
             <span><span style={{ color: 'var(--accent-2)' }}>✓</span> medido contra o Rei</span>
           </div>
         </div>
@@ -169,7 +169,7 @@ export default async function HomePage() {
               ))}
             </div>
             <div className="mono" style={{ marginTop: 18, paddingTop: 14, borderTop: '1px dashed var(--line)', fontSize: 11, lineHeight: 1.5, color: 'var(--dim2)' }}>
-              estimativas · base TechPowerUp + GamersNexus · jul/2026 · 1080p alto
+              estimativas · base Tom&apos;s Hardware (GPU Hierarchy 2026) · calibrado ago/2026 · 1080p
             </div>
           </div>
         )}
@@ -182,7 +182,7 @@ export default async function HomePage() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 24 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <span className="mono" style={{ alignSelf: 'flex-start', fontSize: 11, fontWeight: 600, color: 'var(--fresh)', border: '1px solid var(--fresh-b)', padding: '4px 10px', borderRadius: 99 }}>~142 FPS · ±8%</span>
+            <span className="mono" style={{ alignSelf: 'flex-start', fontSize: 11, fontWeight: 600, color: 'var(--fresh)', border: '1px solid var(--fresh-b)', padding: '4px 10px', borderRadius: 99 }}>~142 FPS · ±16%</span>
             <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--strong)' }}>FPS é estimativa — e a gente assume</div>
             <div style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--dim)' }}>Todo número vem com fonte, data e banda de confiança. Estimativa nunca é vendida como medição.</div>
           </div>
@@ -193,7 +193,7 @@ export default async function HomePage() {
               <span className="mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--dim2)', border: '1px solid var(--line)', padding: '4px 10px', borderRadius: 99, textDecoration: 'line-through' }}>&gt;72h</span>
             </div>
             <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--strong)' }}>Preço velho não é preço</div>
-            <div style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--dim)' }}>Selo de frescura em toda oferta. Passou de 72h sem confirmação? A oferta some — nada de preço fantasma.</div>
+            <div style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--dim)' }}>Quando o preço vier da loja, toda oferta leva selo de frescura; passou de 72h sem confirmação, some. Até os feeds oficiais entrarem, o preço aparece marcado como amostra.</div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <span className="mono" style={{ alignSelf: 'flex-start', fontSize: 11, fontWeight: 600, color: 'var(--dim)', border: '1px dashed var(--dim2)', padding: '4px 10px', borderRadius: 99 }}>desempenho em análise</span>

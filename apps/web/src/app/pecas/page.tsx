@@ -158,7 +158,7 @@ export default async function PecasPage() {
         <p className="text-sm text-secondary mb-4">
           CPU de referência: <strong>{ref?.name ?? '—'}</strong>. Valores são{' '}
           <strong>estimativas</strong> (método âncora+escala), não medições. Fonte pública + banda de
-          confiança ±18%. <a href="/como-medimos" style={{ color: 'var(--accent-gold)' }}>como medimos →</a>
+          confiança (±16–22% em 1080p). <a href="/como-medimos" style={{ color: 'var(--accent-gold)' }}>como medimos →</a>
         </p>
         <div style={{ overflowX: 'auto' }}>
           <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>

@@ -9,11 +9,12 @@ const VALID_RES = ['1080p', '1440p', '4k'] as const
 type Res = (typeof VALID_RES)[number]
 
 interface PageProps {
-  params: { slugA: string; slugB: string }
-  searchParams: { res?: string }
+  params: Promise<{ slugA: string; slugB: string }>
+  searchParams: Promise<{ res?: string }>
 }
 
-export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
+export async function generateMetadata(props: PageProps): Promise<Metadata> {
+  const [params, searchParams] = await Promise.all([props.params, props.searchParams])
   const res: Res = VALID_RES.includes(searchParams.res as Res)
     ? (searchParams.res as Res)
     : '1080p'
@@ -30,7 +31,8 @@ function short(name: string) {
   return name.replace('GeForce ', '').replace('Radeon ', '')
 }
 
-export default async function VsPage({ params, searchParams }: PageProps) {
+export default async function VsPage(props: PageProps) {
+  const [params, searchParams] = await Promise.all([props.params, props.searchParams])
   const res: Res = VALID_RES.includes(searchParams.res as Res)
     ? (searchParams.res as Res)
     : '1080p'
@@ -227,7 +229,7 @@ export default async function VsPage({ params, searchParams }: PageProps) {
           </tbody>
         </table>
         <p className="text-xs p-3 text-secondary">
-          FPS estimado · anchor+scale · {reference_cpu_name} · preset High · ±15–25% estimativa
+          FPS estimado · anchor+scale · {reference_cpu_name} · preset High · estimativa com banda de confiança
         </p>
       </div>
 

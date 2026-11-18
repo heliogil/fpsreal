@@ -61,11 +61,10 @@ function Thumb({ children, w, h }: { children: ReactNode; w: number; h: number }
   )
 }
 
-export default async function ModelosPage({
-  searchParams,
-}: {
-  searchParams: { token?: string }
+export default async function ModelosPage(props: {
+  searchParams: Promise<{ token?: string }>
 }) {
+  const searchParams = await props.searchParams
   const envToken = process.env.VISUALS_REVIEW_TOKEN
   const token = searchParams.token ?? ''
   if (!envToken || token !== envToken) notFound()

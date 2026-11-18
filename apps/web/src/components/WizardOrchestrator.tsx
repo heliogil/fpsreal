@@ -137,7 +137,7 @@ export default function WizardOrchestrator() {
             </span>
           </div>
           <div className="text-xs text-secondary">
-            para {formatBRL(budget)} · estimativa (±15%), não medição
+            para {formatBRL(budget)} · estimativa com banda de confiança, não medição
           </div>
         </div>
       </div>

@@ -217,10 +217,13 @@ def _reconcile_dimensional(sku, attribute, usable, candidates, is_critical, floo
 
 
 def _reconcile_market_range(sku, attribute, usable, candidates) -> ReconcileResult:
-    """Promove o MAIOR valor visto entre montadoras REAIS e DIFERENTES —
-    nunca a média (mascararia o pior caso) e nunca por confiança alta de
-    uma fonte só (uma montadora sozinha não fala pelo mercado inteiro,
-    mesmo que tenha certeza absoluta do próprio produto)."""
+    """Promove o MAIOR valor visto entre SKUs REAIS e DIFERENTES — nunca a
+    média (mascararia o pior caso) e nunca por confiança alta de um produto
+    só (um SKU sozinho não fala pelo mercado inteiro, mesmo com certeza
+    absoluta sobre si mesmo). "Independente" conta por PRODUTO físico
+    distinto (``aib_market:marca:sku-da-pagina``), não por marca — uma
+    montadora que vende 3 modelos diferentes do mesmo chip (ex. ASUS Dual/
+    TUF/Prime) já é 3 observações de mercado válidas, não 1."""
     numeric = [(o, _to_float(o.value)) for o in usable]
     numeric = [(o, v) for o, v in numeric if v is not None]
     if not numeric:
@@ -231,16 +234,16 @@ def _reconcile_market_range(sku, attribute, usable, candidates) -> ReconcileResu
     if len(independent_sources) < MIN_INDEPENDENT_MARKET_SOURCES:
         return ReconcileResult(
             sku, attribute, "insufficient", None, 0.0, candidates,
-            f"só {len(independent_sources)} montadora(s) real(is) — precisa de pelo menos "
-            f"{MIN_INDEPENDENT_MARKET_SOURCES} fontes independentes de mercado, nunca confia "
-            f"numa fabricante sozinha",
+            f"só {len(independent_sources)} produto(s) real(is) visto(s) — precisa de pelo menos "
+            f"{MIN_INDEPENDENT_MARKET_SOURCES} SKUs independentes de mercado, nunca confia "
+            f"num produto sozinho",
         )
 
     max_value = max(v for _, v in numeric)
     best_confidence = max(o.confidence for o, _ in numeric)
+    labels = sorted(":".join(s.split(":")[1:]) for s in independent_sources)
     return ReconcileResult(
         sku, attribute, "confirmed", f"{max_value:g}", best_confidence, candidates,
-        f"maior valor entre {len(independent_sources)} montadoras reais "
-        f"({', '.join(sorted(s.split(':')[-1] for s in independent_sources))}) — "
-        f"varia por fabricante, valor conservador (pior caso de tamanho)",
+        f"maior valor entre {len(independent_sources)} produtos reais ({', '.join(labels)}) — "
+        f"varia por modelo, valor conservador (pior caso de tamanho)",
     )

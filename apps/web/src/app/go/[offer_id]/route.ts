@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 const API = process.env.PCB_API_INTERNAL || 'http://pcb_api:8100'
 
 interface RouteParams {
-  params: { offer_id: string }
+  params: Promise<{ offer_id: string }>
 }
 
 /**
@@ -24,7 +24,8 @@ interface RouteParams {
  * Query string (utm_source, utm_medium, utm_campaign, build_id) is passed
  * through verbatim to the API.
  */
-export async function GET(req: NextRequest, { params }: RouteParams) {
+export async function GET(req: NextRequest, props: RouteParams) {
+  const params = await props.params
   const offerId = parseInt(params.offer_id, 10)
   if (!Number.isFinite(offerId) || offerId <= 0) {
     return NextResponse.json({ error: 'offer_id inválido' }, { status: 400 })
