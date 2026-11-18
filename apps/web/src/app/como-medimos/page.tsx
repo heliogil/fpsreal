@@ -53,7 +53,7 @@ export default function ComoMedimosPage() {
           <span className="num-mono">anchor_scale</span>:
         </p>
         <p className="num-mono text-sm mt-2 mb-2">
-          FPS ≈ desempenho da GPU em 1080p × fator do jogo × fator da CPU × escala da resolução
+          FPS ≈ o menor entre o limite da placa e o limite do processador
         </p>
         <ul className="list-disc pl-6 mt-2 space-y-1 text-secondary">
           <li>
@@ -71,6 +71,13 @@ export default function ComoMedimosPage() {
             2026 do Tom&apos;s Hardware; os outros 2 por aproximação documentada.
           </li>
         </ul>
+        <p className="mt-3">
+          <strong>Gargalo:</strong> o limite da placa é o desempenho dela no jogo e na
+          resolução escolhidos. O limite do processador é o FPS que ele entrega com a placa
+          mais rápida do catálogo (é assim que a tabela de CPUs do Tom&apos;s Hardware mede).
+          Numa placa de entrada quem limita é a placa — trocar o processador quase não muda o
+          número; numa placa topo de linha, o processador passa a pesar.
+        </p>
         <p className="mt-3">
           Cada número sai com <strong>banda de confiança</strong>: hoje entre{' '}
           <span className="num-mono">±16%</span> e <span className="num-mono">±22%</span> em
