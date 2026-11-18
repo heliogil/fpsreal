@@ -1,7 +1,13 @@
 import type { Metadata } from 'next'
 import { Syne, IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google'
 import './globals.css'
+import Script from 'next/script'
 import ThemeToggle from '@/components/ThemeToggle'
+
+// Analytics próprio (Umami self-hosted na VPS, sem cookies ⇒ sem banner LGPD).
+// O script e o envio passam pelo próprio domínio (nginx /u/ → container), por
+// isso o CSP 'self' chega. Vazio ⇒ nada é carregado. Lido no build da imagem.
+const UMAMI_ID = process.env.UMAMI_WEBSITE_ID?.trim()
 
 const syne = Syne({ subsets: ['latin'], weight: ['500', '600', '700', '800'], variable: '--font-syne', display: 'swap' })
 const plex = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-plex', display: 'swap' })
@@ -34,6 +40,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" data-theme="dark" className={`${syne.variable} ${plex.variable} ${plexMono.variable}`}>
       <body>
+        {UMAMI_ID && (
+          <Script src="/u/script.js" data-website-id={UMAMI_ID} data-host-url="/u" strategy="afterInteractive" />
+        )}
         <div style={{ minHeight: '100vh', background: 'var(--grad)', backgroundAttachment: 'fixed' }}>
           <header
             className="site-header"

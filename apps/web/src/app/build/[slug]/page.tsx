@@ -281,6 +281,7 @@ export default async function BuildDetailPage(props: PageProps) {
                   da mesma geometria em mm da vista 2D (sem gerador paralelo,
                   não pode divergir) — só faltava um link até agora. */}
               <a
+                data-umami-event="baixar-3d"
                 href={`/build/${build.slug}/modelo.gltf`}
                 download
                 className="mono"
@@ -360,7 +361,7 @@ export default async function BuildDetailPage(props: PageProps) {
                   {demo ? (
                     <span className="mono" style={{ fontSize: 10, color: 'var(--dim2)', border: '1px solid var(--line)', padding: '1px 7px', borderRadius: 99 }}>amostra</span>
                   ) : (
-                    <a href={`/go/${offer!.id}?utm_source=build&utm_medium=detalhe&utm_campaign=${build.slug}`} className="mono" style={{ fontSize: 11, color: 'var(--accent-2)' }}>
+                    <a data-umami-event="lista-comprar" href={`/go/${offer!.id}?utm_source=build&utm_medium=detalhe&utm_campaign=${build.slug}`} className="mono" style={{ fontSize: 11, color: 'var(--accent-2)' }}>
                       comprar → {offer!.merchant.name}
                     </a>
                   )}

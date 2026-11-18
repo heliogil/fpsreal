@@ -118,7 +118,7 @@ export default function GabineteVivo({
       )}
       {pending && <span className="mono" style={{ fontSize: 11.5, color: 'var(--dim2)' }}>recalculando…</span>}
       {g && (
-        <button type="button" onClick={() => setAsmRun((n) => n + 1)} className="mono"
+        <button type="button" onClick={() => setAsmRun((n) => n + 1)} className="mono" data-umami-event="viewer-montar"
           title="ver as peças assentarem na ordem de instalação"
           style={{ fontSize: 12, fontWeight: 600, color: 'var(--dim)', background: 'transparent',
             border: '1px solid var(--line)', borderRadius: 99, padding: '3px 10px', cursor: 'pointer' }}>
@@ -1104,7 +1104,7 @@ export default function GabineteVivo({
                 </span>
                 {ftOffer.demo && <span style={{ fontSize: 10.5, color: 'var(--dim2)' }}>amostra</span>}
                 <span style={{ flex: 1 }} />
-                <a href={`/go/${ftOffer.id}?utm_source=build&utm_medium=viewer`} style={{ fontSize: 12, color: 'var(--accent-2)', whiteSpace: 'nowrap' }}>
+                <a data-umami-event="viewer-peca-oferta" href={`/go/${ftOffer.id}?utm_source=build&utm_medium=viewer`} style={{ fontSize: 12, color: 'var(--accent-2)', whiteSpace: 'nowrap' }}>
                   ver oferta →
                 </a>
               </div>
@@ -1181,6 +1181,7 @@ export default function GabineteVivo({
         {g.mounts.filter((m) => m.occupied_by === null).map((m) => (
           <button key={m.id} type="button" className="mono"
             onClick={onToggleFan ? () => onToggleFan(m.id) : undefined}
+            data-umami-event="viewer-ventoinha-mais"
             disabled={!onToggleFan}
             style={{
               fontSize: 12, padding: '3px 9px', borderRadius: 99, border: '1px dashed var(--dim2)',
@@ -1198,7 +1199,7 @@ export default function GabineteVivo({
         )}
       </div>
       <details style={{ padding: '0 16px 14px' }}>
-        <summary className="mono" style={{ fontSize: 12, color: 'var(--dim2)', cursor: 'pointer', padding: '4px 0' }}>
+        <summary data-umami-event="viewer-detalhes" className="mono" style={{ fontSize: 12, color: 'var(--dim2)', cursor: 'pointer', padding: '4px 0' }}>
           detalhes do fluxo de ar
         </summary>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 6, alignItems: 'center' }}>
