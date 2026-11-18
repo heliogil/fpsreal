@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 export const metadata: Metadata = {
   title: 'Comparar GPUs — FPS por jogo | Rei do FPS',
   description:
-    'Compare o desempenho de GPUs jogo a jogo. Estimativas anchor+scale com CPU de referência Ryzen 5 7600. Veja qual GPU entrega mais FPS no seu orçamento.',
+    'Compare o desempenho de GPUs jogo a jogo. Estimativas anchor+scale com CPU de referência Ryzen 7 9800X3D. Veja qual GPU entrega mais FPS no seu orçamento.',
 }
 
 const GPU_NAMES: Record<string, string> = {
@@ -100,7 +100,7 @@ export default function VsIndexPage() {
           Qual GPU entrega mais FPS?
         </h1>
         <p className="text-secondary text-sm max-w-xl">
-          Comparações jogo a jogo com CPU de referência Ryzen 5 7600 (mid-tier). Estimativas
+          Comparações jogo a jogo com CPU de referência Ryzen 7 9800X3D — o processador mais rápido do catálogo, para o processador não esconder a diferença entre as placas. Estimativas
           anchor+scale — não medições em hardware.
         </p>
       </div>
