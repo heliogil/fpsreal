@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { LiveCaseOption, LiveInterior, LiveProduct } from '@/lib/live-server'
 import GabineteVivo from './GabineteVivo'
 
@@ -19,6 +19,20 @@ import GabineteVivo from './GabineteVivo'
  */
 
 type Products = Partial<Record<'gpu' | 'cooler' | 'ram' | 'psu' | 'storage' | 'motherboard' | 'case', LiveProduct | null>>
+
+const PRESSAO: Record<string, string> = { positive: 'positiva', negative: 'negativa', neutral: 'neutra' }
+
+type Suggestion = { id: number; name: string; score: number; offerId: number | null; price: number | null; demo: boolean }
+
+async function bestOffer(productId: number): Promise<{ id: number; price_brl: number; merchant: { name: string } } | null> {
+  try {
+    const r = await fetch(`/api/offers/best?product=${productId}`)
+    if (!r.ok) return null
+    return await r.json()
+  } catch {
+    return null
+  }
+}
 
 async function estimate(
   components: Record<string, number>,
@@ -111,6 +125,35 @@ export default function GabineteVivoLive({
     [cases, components.case_id, gpuLen, coolerH],
   )
 
+  // Passo 4 do viewer: quando o fluxo está apertado, procurar NO CATÁLOGO o
+  // gabinete onde esta mesma build respira melhor — com o mesmo motor
+  // (/interior/estimate) e o preço da oferta. Só sugere se o ganho for real
+  // (≥ 10 pontos); empate decide pelo preço. Nada é inventado no cliente.
+  const [suggestion, setSuggestion] = useState<Suggestion | null>(null)
+  const currentPrice = offers?.case?.price_brl ?? null
+  useEffect(() => {
+    if (baseScore >= 70) return
+    const candidates = otherCases.filter((c) => c.fits)
+    if (!candidates.length) return
+    let cancelled = false
+    ;(async () => {
+      const scored = await Promise.all(candidates.map(async (c) => {
+        const [est, off] = await Promise.all([estimate({ ...components, case_id: c.id }, []), bestOffer(c.id)])
+        return est ? {
+          id: c.id, name: c.name, score: est.airflow.score,
+          offerId: off?.id ?? null, price: off?.price_brl ?? null,
+          demo: !!off && off.merchant.name.toLowerCase().includes('amostra'),
+        } : null
+      }))
+      const good = scored.filter((x): x is Suggestion => !!x && x.score >= baseScore + 10)
+      good.sort((a, b) => b.score - a.score || (a.price ?? 1e9) - (b.price ?? 1e9))
+      if (!cancelled) setSuggestion(good[0] ?? null)
+    })()
+    return () => { cancelled = true }
+  }, [baseScore, otherCases, components])
+
+  const priceDelta = suggestion?.price != null && currentPrice != null ? suggestion.price - currentPrice : null
+
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       {/* barra de controlo */}
@@ -179,6 +222,36 @@ export default function GabineteVivoLive({
         )}
       </div>
 
+      {suggestion && compareId !== suggestion.id && (
+        <div style={{
+          display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
+          border: '1px solid var(--fresh-b)', borderRadius: 12, padding: '12px 16px',
+          background: 'color-mix(in srgb, var(--fresh) 6%, var(--card))',
+        }}>
+          <div style={{ flex: '1 1 240px', fontSize: 14, lineHeight: 1.45 }}>
+            <strong style={{ color: 'var(--fresh)' }}>Gabinete que resolve:</strong>{' '}
+            <span style={{ color: 'var(--text)' }}>{suggestion.name}</span>
+            <span className="mono" style={{ display: 'block', fontSize: 12, color: 'var(--dim)', marginTop: 2 }}>
+              fluxo de ar {baseScore} → {suggestion.score}
+              {priceDelta != null && priceDelta !== 0 && (
+                <> · {priceDelta < 0 ? 'R$ ' + Math.abs(priceDelta).toLocaleString('pt-BR') + ' mais barato' : '+R$ ' + priceDelta.toLocaleString('pt-BR')}</>
+              )}
+              {suggestion.demo && ' · preço de amostra'}
+            </span>
+          </div>
+          <button type="button" onClick={() => void pickCase(suggestion.id)} className="mono"
+            style={{ fontSize: 12, padding: '6px 12px', borderRadius: 99, cursor: 'pointer', border: '1px solid var(--line)', background: 'transparent', color: 'var(--text)' }}>
+            comparar lado a lado
+          </button>
+          {suggestion.offerId != null && (
+            <a href={`/go/${suggestion.offerId}?utm_source=build&utm_medium=viewer_sugestao`} className="mono"
+              style={{ fontSize: 12, padding: '6px 12px', borderRadius: 99, background: 'var(--accent)', color: 'var(--accent-ink)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+              ver oferta →
+            </a>
+          )}
+        </div>
+      )}
+
       {/* resumo da comparação */}
       {compare && (
         <div className="mono" style={{
@@ -187,7 +260,7 @@ export default function GabineteVivoLive({
         }}>
           <strong style={{ color: 'var(--text)' }}>comparação</strong>
           <span>fluxo: {interior.airflow.score} vs {compare.airflow.score}</span>
-          <span>pressão: {interior.airflow.pressure_balance} vs {compare.airflow.pressure_balance}</span>
+          <span>pressão: {PRESSAO[interior.airflow.pressure_balance] ?? interior.airflow.pressure_balance} vs {PRESSAO[compare.airflow.pressure_balance] ?? compare.airflow.pressure_balance}</span>
           {interior.clearances.gpu && compare.clearances.gpu && (
             <span>folga GPU: {Math.round(interior.clearances.gpu.remaining_mm)}mm vs {Math.round(compare.clearances.gpu.remaining_mm)}mm</span>
           )}
