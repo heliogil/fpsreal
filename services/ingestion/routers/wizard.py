@@ -28,6 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from compat_core import Part, evaluate
+from fps_math import geomean
 from deps import get_db
 from models import CompatibilityRule, FpsEstimate, Offer, Product, ThermalRule, Variant
 
@@ -171,7 +172,7 @@ async def run_wizard(body: WizardRequest, db: AsyncSession = Depends(get_db)) ->
             figures = fps_map.get((cpu["product_id"], gpu["product_id"]), [])
             if not figures:
                 continue
-            avg_fps = sum(f["fps_estimate"] for f in figures) / len(figures)
+            avg_fps = geomean(f["fps_estimate"] for f in figures)  # média geométrica (ver fps_math.py)
             if avg_fps <= 0:
                 continue
             total_tdp = _fnum(cpu["specs"], "tdp_w") + _fnum(gpu["specs"], "tdp_w")

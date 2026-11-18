@@ -35,7 +35,7 @@ from .performance_data import (
 )
 from .run_seed import _connect
 
-REFERENCE_GAMES = ("valorant", "cs2", "fortnite", "gta-v")  # mesma média do site (apps/web/src/lib/metrics.ts)
+REFERENCE_GAMES = ("valorant", "cs2", "fortnite", "gta-v")  # mesma média GEOMÉTRICA do site (apps/web/src/lib/metrics.ts)
 
 
 def main() -> None:
@@ -92,7 +92,7 @@ def main() -> None:
             cur.execute(
                 """
                 SELECT b.slug, b.total_price_brl,
-                       AVG(f.fps_estimate) FILTER (WHERE f.game_slug = ANY(%s))
+                       EXP(AVG(LN(f.fps_estimate)) FILTER (WHERE f.game_slug = ANY(%s) AND f.fps_estimate > 0))
                 FROM curated_builds b
                 JOIN fps_estimates f
                   ON f.cpu_id = b.cpu_id

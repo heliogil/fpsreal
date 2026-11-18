@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from deps import get_db
+from fps_math import geomean
 from models import FpsEstimate, PerformanceIndex, Product
 
 router = APIRouter(tags=["vs"])
@@ -168,8 +169,9 @@ async def compare_gpus(
             winner=_decide(delta),
         ))
 
-    avg_a = round(sum(r.fps_a for r in rows) / len(rows), 1) if rows else 0.0
-    avg_b = round(sum(r.fps_b for r in rows) / len(rows), 1) if rows else 0.0
+    # média geométrica: cada jogo pesa igual no 'quem ganha' geral (ver fps_math.py)
+    avg_a = round(geomean(r.fps_a for r in rows), 1) if rows else 0.0
+    avg_b = round(geomean(r.fps_b for r in rows), 1) if rows else 0.0
     avg_delta = round((avg_a / avg_b - 1) * 100, 1) if avg_b > 0 else 0.0
 
     return VsResponse(
