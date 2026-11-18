@@ -1,4 +1,21 @@
-name: CI
+# Rei do FPS — CI/CD
+#
+# CI (push to main + PRs to main): sobe a stack Docker real a partir de um
+# checkout limpo, aplica o schema de produção (db/schema.sql), faz seed e
+# corre a suite smoke + contract contra a API a correr. Como arranca do zero,
+# também apanha regressões do tipo "não arranca".
+#
+# CD (push to main, depois da CI verde): SSH à VPS → git reset para origin/main
+# → build → up → health check. Recusa-se a avançar se a VPS tiver alterações
+# locais por commitar (o código só no servidor já se perdeu uma vez).
+#
+# Para ligar o deploy automático (Settings → Secrets and variables → Actions):
+#   VPS_HOST    = IP/hostname da VPS
+#   VPS_SSH_KEY = chave SSH PRIVADA autorizada na VPS (idealmente uma chave só
+#                 para deploy, não a chave pessoal de root)
+# Sem VPS_SSH_KEY o job de deploy termina verde com um aviso — a CI continua útil.
+
+name: CI/CD
 
 on:
   push:
@@ -6,52 +23,72 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   api-tests:
-    name: API smoke tests
+    name: API smoke + contract tests
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: pcb_user
-          POSTGRES_PASSWORD: test_password
-          POSTGRES_DB: pcb_db
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: services/ingestion/requirements.txt
-
-      - name: Install dependencies
+      - name: Write test .env
         run: |
-          cd services/ingestion
-          pip install -r requirements.txt pytest pytest-asyncio httpx
+          cat > .env <<'EOF'
+          POSTGRES_USER=pcb_user
+          POSTGRES_PASSWORD=pcb_test_pw
+          POSTGRES_DB=pcb_db
+          DATABASE_URL=postgresql://pcb_user:pcb_test_pw@pcb_db:5432/pcb_db
+          NODE_ENV=production
+          EOF
 
-      - name: Run Alembic migrations
-        env:
-          DATABASE_URL: postgresql://pcb_user:test_password@localhost:5432/pcb_db
+      - name: Start DB
         run: |
-          cd services/ingestion
-          alembic upgrade head
+          docker compose up -d pcb_db
+          for i in $(seq 1 30); do
+            docker exec pcb_db pg_isready -U pcb_user -d pcb_db && break
+            sleep 2
+          done
 
-      - name: Run smoke tests
-        env:
-          DATABASE_URL: postgresql://pcb_user:test_password@localhost:5432/pcb_db
+      - name: Apply production schema
+        run: docker exec -i pcb_db psql -v ON_ERROR_STOP=1 -U pcb_user -d pcb_db < db/schema.sql
+
+      - name: Build & start API
+        run: docker compose up -d --build pcb_api
+
+      - name: Wait for API health
         run: |
-          cd services/ingestion
-          python -m pytest tests/ -v --tb=short
+          for i in $(seq 1 45); do
+            if curl -sf http://localhost:8100/health | grep -q '"db":"connected"'; then
+              echo "API healthy"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::API did not become healthy in time"
+          docker compose logs pcb_api
+          exit 1
+
+      - name: Migrations are in sync with the schema
+        run: docker exec pcb_api alembic upgrade head
+
+      - name: Seed database (idempotent)
+        run: docker exec pcb_api python -m seed.run_seed
+
+      - name: Run tests
+        run: docker exec pcb_api sh -c "pip install -q -r requirements-dev.txt && cd /app && python -m pytest tests/ -q"
+
+      - name: API logs on failure
+        if: failure()
+        run: docker compose logs pcb_api
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v
 
   typecheck:
     name: TypeScript check
@@ -63,7 +100,63 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: apps/web/package-lock.json
-      - name: Install deps
+      - name: Install dependencies
         run: cd apps/web && npm ci
       - name: Type check
         run: cd apps/web && npx tsc --noEmit
+
+  deploy:
+    name: Deploy to VPS
+    needs: [api-tests, typecheck]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Check for deploy secret
+        id: check
+        env:
+          HAS_KEY: ${{ secrets.VPS_SSH_KEY != '' && secrets.VPS_HOST != '' }}
+        run: |
+          if [ "$HAS_KEY" != "true" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::VPS_HOST/VPS_SSH_KEY not set — skipping deploy."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy over SSH
+        if: steps.check.outputs.enabled == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          command_timeout: 40m
+          script: |
+            set -e
+            cd /opt/pc-builder-br
+            if [ -n "$(git status --porcelain)" ]; then
+              echo "VPS has uncommitted changes — refusing to deploy over them:"
+              git status --short
+              exit 1
+            fi
+            TS=$(date +%Y%m%d-%H%M%S)
+            docker tag pc-builder-br-pcb_web "pcb-web-rollback:$TS" || true
+            docker tag pc-builder-br-pcb_api "pcb-api-rollback:$TS" || true
+            git fetch origin main
+            git checkout -q -B main origin/main
+            docker compose build pcb_api pcb_web
+            docker compose up -d --no-deps pcb_api pcb_web
+            for i in $(seq 1 60); do
+              if curl -sf http://127.0.0.1:8100/health | grep -q '"db":"connected"' \
+                 && curl -sf -o /dev/null http://127.0.0.1:3100/; then
+                echo "deploy healthy ($(git log --oneline -1))"; exit 0
+              fi
+              sleep 3
+            done
+            echo "health check failed after deploy — rollback images tagged pcb-*-rollback:$TS"
+            docker compose logs --tail=50 pcb_api pcb_web
+            exit 1
