@@ -64,3 +64,13 @@ A escala de resolução só entra no lado da GPU (o teto da CPU não cai com a r
 **Impacto nos tronos (R$/FPS, média Valorant/CS2/Fortnite/GTA V em 1080p):** r3k 69,70 → 36,94 · r5k 73,72 → 46,44 · r8k 42,63 → 40,93 · r12k 51,10 → 44,97. O melhor custo/FPS passa a ser o de R$ 3k.
 
 **Continua heurístico:** fator do Valorant e de 7 outros jogos; fator do 9700X e do i5-13400F (com gargalo pesam menos, mas seguem sem fonte).
+
+## 2026-11-18 — Valorant calibrado (2,6 → 7,45)
+
+**Fonte:** ComputerBase, "Valorant mit Unreal Engine 5 im Benchmark-Test", 05/08/2025 (a troca para UE5 foi a 29/07/2025, o que invalida benchmarks anteriores). 16 GPUs na **mesma bancada**: Ryzen 7 9800X3D, DDR5-6000, gráficos no máximo + 4xMSAA, sequência de 20 s no Icebox.
+
+**Método** (igual aos outros jogos): fator = FPS médio em WQHD ÷ (`fps_1080p_agg` × escala 1440p 0,70), em média sobre as 11 GPUs do catálogo testadas. Resultado **7,44** (mediana 7,46, dispersão ~4%). Conferência em 4K (escala 0,37): **7,48**. Sem o RDNA 4 (que a ComputerBase aponta como anómalo neste jogo): 7,48. Usado **7,45**.
+
+**Ressalvas:** medido em 1440p e extrapolado para 1080p; é uma sequência de teste, partidas reais podem dar menos; o teto de CPU do Valorant usa o fator de CPU geral (17 jogos), e o Valorant é mais sensível à CPU do que a média. Por isso a banda de confiança só aperta 2 pontos (como o GTA V), não 6.
+
+**Impacto (R$/FPS):** r3k 36,94 → 23,37 · r8k 40,93 → 25,89 · r12k 44,97 → 28,45 · r5k 46,44 → 29,38 · absoluto 56,24 → 35,58. A ordem não muda.

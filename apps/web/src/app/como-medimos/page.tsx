@@ -62,9 +62,10 @@ export default function ComoMedimosPage() {
             média de 11 jogos em 1080p Ultra.
           </li>
           <li>
-            <strong>Jogo:</strong> 5 dos 13 jogos calibrados nos gráficos por jogo do mesmo
-            Tom&apos;s Hardware; os outros 8 ainda usam um fator estimado, e isso vem marcado na
-            fonte de cada número.
+            <strong>Jogo:</strong> 6 dos 13 jogos calibrados com medição real — 5 nos gráficos
+            por jogo do mesmo Tom&apos;s Hardware e o Valorant no teste da ComputerBase já com a
+            Unreal Engine 5 (16 placas, mesma bancada). Os outros 7 ainda usam um fator estimado,
+            e isso vem marcado na fonte de cada número.
           </li>
           <li>
             <strong>CPU:</strong> 5 dos 7 processadores calibrados no CPU Benchmarks Hierarchy
