@@ -46,6 +46,10 @@ def _build_sync_url() -> str:
         raise RuntimeError("DATABASE_URL is not set; cannot run Alembic.")
     if raw.startswith("postgresql+asyncpg://"):
         return raw.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+    # URL sem driver: o SQLAlchemy 2.1 passou a assumir psycopg (v3), que não
+    # está instalado — fixar o psycopg2 que já está nas dependências.
+    if raw.startswith("postgresql://"):
+        return raw.replace("postgresql://", "postgresql+psycopg2://", 1)
     return raw
 
 
