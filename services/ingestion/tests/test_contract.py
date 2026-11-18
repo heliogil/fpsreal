@@ -107,6 +107,16 @@ def test_vs_reference_cpu_does_not_hide_the_gpu_gap(client: httpx.Client):
     assert b["avg_delta_pct"] > 10
 
 
+def test_vs_every_gpu_pair_with_the_anchor_works(client: httpx.Client):
+    # Regression (2026-11-18): decimal string specs ("358.5") made /vs 500 for
+    # the RTX 4090, RX 7900 XTX and RX 7700 XT. Every GPU must compare cleanly.
+    gpus = client.get("/products/", params={"category": "gpu", "limit": 200}).json()
+    skus = [g["sku"] for g in gpus if g["sku"] != "gpu-rtx-5090"]
+    for sku in skus:
+        r = client.get(f"/vs/gpu-rtx-5090/{sku}", params={"res": "1080p"})
+        assert r.status_code in (200, 404), f"/vs 5090 vs {sku} -> {r.status_code}"
+
+
 def test_vs_unknown_sku_404(client: httpx.Client, ids: dict):
     r = client.get(f"/vs/gpu-nao-existe/{ids['gpu_sku']}")
     assert r.status_code == 404
