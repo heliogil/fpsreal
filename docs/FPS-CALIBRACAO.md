@@ -44,3 +44,23 @@ Fonte: `services/ingestion/seed/performance_data.py`. Nenhum número é medido e
 ## Como continuar isso no futuro
 
 Se for retomar a calibração por jogo, o padrão que funcionou aqui é o caminho: achar uma fonte de **metodologia única, mesma bancada para todas as comparações** (não misturar reviews de sites/CPUs diferentes). Tom's Hardware também publica gráficos por jogo individual dentro da mesma hierarquia — vale checar se dá pra extrair o fator por jogo de lá antes de procurar em outro lugar.
+
+## 2026-11-18 — Modelo com gargalo (CPU deixa de cortar GPU-bound)
+
+**Problema:** a fórmula multiplicava o fator de CPU em todas as linhas. Esse fator vem do CPU Benchmarks Hierarchy do Tom's Hardware, medido com **RTX 5090 em 1080p** — o cenário em que a CPU é o gargalo. Numa placa de entrada (RTX 4060, RX 6600) quem limita é a GPU, então o corte de 0,53–0,63 dos Ryzen 5 tirava FPS que não existe: os tronos baratos saíam ~40% abaixo e o de R$ 8k (9700X, fator heurístico 0,96) ganhava sempre.
+
+**Fórmula nova** (`estimate_fps` em `seed/performance_data.py`, a única fonte):
+
+```
+limite_gpu = fps_1080p_agg(gpu) × fator_jogo × escala_resolução
+limite_cpu = fps_1080p_agg(RTX 5090) × fator_jogo × fator_cpu
+fps        = min(limite_gpu, limite_cpu, cap_do_motor)
+```
+
+A escala de resolução só entra no lado da GPU (o teto da CPU não cai com a resolução).
+
+**Aplicado na produção** com `python -m seed.recompute_fps --apply`, que atualiza no sítio as linhas existentes (19 GPUs, incluindo RTX 5050 e RX 9070 GRE que não estão no seed) usando o `fps_1080p_agg` do próprio banco. Backup da BD feito antes.
+
+**Impacto nos tronos (R$/FPS, média Valorant/CS2/Fortnite/GTA V em 1080p):** r3k 69,70 → 36,94 · r5k 73,72 → 46,44 · r8k 42,63 → 40,93 · r12k 51,10 → 44,97. O melhor custo/FPS passa a ser o de R$ 3k.
+
+**Continua heurístico:** fator do Valorant e de 7 outros jogos; fator do 9700X e do i5-13400F (com gargalo pesam menos, mas seguem sem fonte).

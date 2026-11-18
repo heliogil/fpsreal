@@ -7,11 +7,19 @@ INTEGRITY CONTRACT (non-negotiable, per project rules):
 - ``performance_index`` carries an explicit source, source_url, source_date
   and confidence so every number is auditable.
 
-Method (cold-start strategy #1 — âncora + escala):
-    fps(gpu, game, cpu) = gpu_1080p_aggregate_fps
-                          * game_demand_factor
-                          * cpu_scale_factor
-    bounded by an optional per-game engine FPS cap.
+Method (cold-start strategy #1 — âncora + escala, com gargalo):
+    gpu_limit = gpu_1080p_aggregate_fps * game_demand_factor * res_scale
+    cpu_limit = anchor_gpu_1080p_aggregate_fps * game_demand_factor * cpu_scale_factor
+    fps       = min(gpu_limit, cpu_limit, engine_fps_cap)
+
+The CPU factor comes from Tom's Hardware's CPU hierarchy, measured with an
+RTX 5090 at 1080p — i.e. the CPU-BOUND ceiling. Until 2026-11-18 it was
+multiplied into every row, so a GPU-bound card (RTX 4060, RX 6600) was cut by
+the CPU factor as if it were the bottleneck: the cheap tronos came out ~40%
+below reality and the R$ 8k build always won. Now the CPU only caps FPS when
+it is actually the limit (the ceiling it reaches on the fastest GPU), and the
+resolution scale only applies to the GPU side (the CPU ceiling doesn't drop
+with resolution).
 
 The aggregate 1080p signal is sourced. The per-game demand factors, CPU
 scale factors, and resolution scale are all calibrated against real data
@@ -351,10 +359,39 @@ def _cpu_factor_and_sources(cpu_sku: str, tier: str) -> tuple[float, list[str], 
     )
 
 
+BOTTLENECK_NOTE = (
+    "bottleneck model (2026-11-18): fps = min(GPU limit = gpu_agg x game x res, "
+    "CPU ceiling = RTX 5090 agg x game x cpu_factor, engine cap)"
+)
+
+
+def estimate_fps(
+    gpu_agg: float,
+    anchor_agg: float,
+    demand: float,
+    cpu_factor: float,
+    res_mult: float,
+    cap: float | None = None,
+) -> float:
+    """FPS estimate for one GPU x CPU x game x resolution — the single formula.
+
+    The GPU side scales with resolution; the CPU ceiling (what this CPU delivers
+    when paired with the anchor GPU, the scenario its factor was measured in)
+    does not. Whichever is lower wins, then the engine cap applies.
+    """
+    gpu_limit = gpu_agg * demand * res_mult
+    cpu_limit = anchor_agg * demand * cpu_factor
+    fps = min(gpu_limit, cpu_limit)
+    if cap is not None:
+        fps = min(fps, cap)
+    return fps
+
+
 def build_fps_estimates() -> list[dict]:
     """Anchor+scale FPS matrix: GPU x game x representative CPU x resolution, high preset."""
     gpus = _gpu_by_sku()
     cpus = _cpu_by_sku()
+    anchor_agg = gpus[ANCHOR_GPU_SKU]["fps_1080p_agg"]
     rows: list[dict] = []
     for gpu_sku, g in gpus.items():
         base = g["fps_1080p_agg"]
@@ -366,13 +403,9 @@ def build_fps_estimates() -> list[dict]:
             for cpu_sku in FPS_MATRIX_CPUS:
                 tier = cpus[cpu_sku]["tier"]
                 cpu_factor, cpu_sources, cpu_band_delta = _cpu_factor_and_sources(cpu_sku, tier)
-                base_fps = base * demand * cpu_factor
                 for resolution, (res_mult, base_band) in RES_SCALE.items():
                     band = base_band + game_band_delta + cpu_band_delta
-                    fps = base_fps * res_mult
-                    if cap is not None:
-                        fps = min(fps, cap)  # engine FPS caps apply at every resolution
-                    fps = round(fps, 1)
+                    fps = round(estimate_fps(base, anchor_agg, demand, cpu_factor, res_mult, cap), 1)
                     fps_low = round(fps * (1 - band / 100.0), 1)
                     res_note = RES_CALIBRATION_NOTE.get(resolution)
                     rows.append({
@@ -387,6 +420,7 @@ def build_fps_estimates() -> list[dict]:
                         "method": "anchor_scale",
                         "sources": [
                             PERF_SOURCE_URL,
+                            BOTTLENECK_NOTE,
                             calibration_note,
                         ] + cpu_sources + ([res_note] if res_note else []),
                         "is_crowdsourced": False,
