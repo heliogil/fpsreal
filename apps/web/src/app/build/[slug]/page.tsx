@@ -277,6 +277,7 @@ export default async function BuildDetailPage(props: PageProps) {
                 components={components}
                 cases={caseOptions}
                 totalBrl={build.total_price_brl}
+                modelHref={`/build/${build.slug}/modelo.gltf`}
               />
               {/* T-20: o /interior/model.gltf já gera o gabinete em 3D a partir
                   da mesma geometria em mm da vista 2D (sem gerador paralelo,
