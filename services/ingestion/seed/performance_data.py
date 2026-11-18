@@ -83,7 +83,7 @@ ANCHOR_GPU_SKU = "gpu-rtx-5090"  # index 100
 GAMES = [
     # slug,                    demand_factor, engine_fps_cap
     ("cs2",                    3.8,  None),   # was 1.9 (heuristic) — real data ~2x higher
-    ("valorant",               2.6,  None),
+    ("valorant",               7.45, None),   # was 2.6 (heuristic) — ComputerBase UE5 test, see GAME_CALIBRATION
     ("league-of-legends",      3.0,  None),
     ("fortnite",               1.0,  None),   # was 1.4 (heuristic)
     ("apex-legends",           2.8,  300),    # was 1.5 (heuristic); cap confirmed by real data
@@ -317,6 +317,15 @@ RES_CALIBRATION_NOTE = {
 # band for calibrated games (real per-game data narrows the uncertainty);
 # gta-v gets a smaller tightening since its source chart is CPU-bound/noisy.
 GAME_CALIBRATION = {
+    "valorant": (
+        "ComputerBase, 'Valorant mit Unreal Engine 5 im Benchmark-Test' (05/08/2025, after the "
+        "29/07/2025 UE5 switch): 16 GPUs on ONE rig (Ryzen 7 9800X3D, DDR5-6000), max details + "
+        "4xMSAA, 20 s sequence on Icebox. Factor = WQHD avg FPS / (fps_1080p_agg x RES_SCALE 1440p "
+        "0.70), averaged over the 11 catalog GPUs tested (spread ~4%; 4K cross-check gives 7.48). "
+        "Measured at 1440p and extrapolated to 1080p; a test sequence, real matches can run lower; "
+        "RDNA 4 runs notably slower in this game per the authors (kept in the average, ~0.5% effect).",
+        -2,
+    ),
     "cs2": (
         "Tom's Hardware individual game chart (Counter-Strike 2, DX11, High) — "
         "avg. ratio to the 11-game raster aggregate across 15 current-gen GPUs.",
