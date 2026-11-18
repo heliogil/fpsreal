@@ -32,11 +32,11 @@ export default function HarpiaVerdict({ build }: HarpiaVerdictProps) {
           <p className="text-base leading-relaxed">
             {build.description}
           </p>
-          {!build.is_rei_absoluto && build.rs_per_fps_top_game > 0 && (
+          {!build.is_rei_absoluto && build.rs_per_fps > 0 && (
             <p className="text-sm text-secondary mt-3">
               Veredito: este build decreta{' '}
               <span className="num-mono font-semibold">
-                R$ {build.rs_per_fps_top_game.toFixed(2)} por FPS
+                R$ {build.rs_per_fps.toFixed(2)} por FPS
               </span>{' '}
               no jogo-referência. Nada mau.
             </p>

@@ -103,7 +103,7 @@ export default async function SeoCatchAllPage(props: PageProps) {
               <div>
                 <div className="text-xs text-secondary uppercase">R$/FPS</div>
                 <div className="num-mono text-2xl font-bold" style={{ color: 'var(--text-mono)' }}>
-                  {formatBRL(rei.rs_per_fps_top_game)}
+                  {formatBRL(rei.rs_per_fps)}
                 </div>
               </div>
             </div>

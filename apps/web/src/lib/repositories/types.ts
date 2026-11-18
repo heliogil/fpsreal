@@ -93,7 +93,11 @@ export interface CuratedBuild {
   description: string
   components: BuildComponents
   total_price_brl: number
-  rs_per_fps_top_game: number
+  /** Custo por FPS: total ÷ FPS médio nos jogos de referência em 1080p (ver lib/metrics.ts). */
+  rs_per_fps: number
+  /** FPS médio nos jogos de referência em 1080p — o "FPS médios" do site. */
+  avg_fps: number
+  /** FPS de um jogo de destaque (hoje CS2) — só para mostrar esse jogo, nunca para custo/FPS. */
   fps_top_game: number
   top_game_slug: GameSlug
   is_rei_absoluto: boolean

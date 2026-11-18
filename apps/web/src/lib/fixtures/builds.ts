@@ -29,7 +29,8 @@ export const builds: CuratedBuild[] = [
       cooler_id: 80,
     },
     total_price_brl: 2950,
-    rs_per_fps_top_game: 20.34, // 2950 / 145
+    rs_per_fps: 20.34, // 2950 / 145
+    avg_fps: 145,
     fps_top_game: 145,
     top_game_slug: 'cs2',
     is_rei_absoluto: false,
@@ -59,7 +60,8 @@ export const builds: CuratedBuild[] = [
       cooler_id: 80,
     },
     total_price_brl: 4890,
-    rs_per_fps_top_game: 23.29, // 4890 / 210
+    rs_per_fps: 23.29, // 4890 / 210
+    avg_fps: 210,
     fps_top_game: 210,
     top_game_slug: 'cs2',
     is_rei_absoluto: false,
@@ -89,7 +91,8 @@ export const builds: CuratedBuild[] = [
       cooler_id: 81,
     },
     total_price_brl: 7750,
-    rs_per_fps_top_game: 27.19, // 7750 / 285
+    rs_per_fps: 27.19, // 7750 / 285
+    avg_fps: 285,
     fps_top_game: 285,
     top_game_slug: 'cs2',
     is_rei_absoluto: false,
@@ -119,7 +122,8 @@ export const builds: CuratedBuild[] = [
       cooler_id: 82,
     },
     total_price_brl: 11900,
-    rs_per_fps_top_game: 31.32, // 11900 / 380
+    rs_per_fps: 31.32, // 11900 / 380
+    avg_fps: 380,
     fps_top_game: 380,
     top_game_slug: 'cs2',
     is_rei_absoluto: false,
@@ -149,7 +153,8 @@ export const builds: CuratedBuild[] = [
       cooler_id: 83,
     },
     total_price_brl: 24500,
-    rs_per_fps_top_game: 0, // não é critério
+    rs_per_fps: 0, // não é critério
+    avg_fps: 420,
     fps_top_game: 420,
     top_game_slug: 'cs2',
     is_rei_absoluto: true,

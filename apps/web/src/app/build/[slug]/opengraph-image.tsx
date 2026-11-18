@@ -57,8 +57,8 @@ export default async function Image(props: { params: Promise<{ slug: string }> }
   const interior = await getLiveInterior(build.components as unknown as Record<string, number>).catch(() => null)
   const score = interior?.airflow.score ?? 0
   const tone = scoreTone(score)
-  const rsPerFps = build.rs_per_fps_top_game > 0
-    ? build.rs_per_fps_top_game.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const rsPerFps = build.rs_per_fps > 0
+    ? build.rs_per_fps.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : '—'
   const caseName = interior?.case.name ?? ''
   const pressao = interior?.airflow.pressure_balance === 'positive' ? 'positiva'
@@ -96,7 +96,7 @@ export default async function Image(props: { params: Promise<{ slug: string }> }
               </div>
               <div style={{ display: 'flex', alignItems: 'center', fontSize: 24, color: C.dim,
                 border: `1px solid ${C.line}`, borderRadius: 99, padding: '8px 18px' }}>
-                {build.fps_top_game} FPS médios
+                {Math.round(build.avg_fps)} FPS médios
               </div>
               <div style={{ display: 'flex', alignItems: 'center', fontSize: 24, color: C.dim,
                 border: `1px solid ${C.line}`, borderRadius: 99, padding: '8px 18px' }}>

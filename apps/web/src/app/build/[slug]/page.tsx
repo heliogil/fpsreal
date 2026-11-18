@@ -12,7 +12,7 @@ import {
 import type { LiveProduct } from '@/lib/live-server'
 import GabineteVivoLive from '@/components/interior/GabineteVivoLive'
 import FpsBadge from '@/components/FpsBadge'
-import type { BuildComponents, CuratedBuild, GameSlug } from '@/lib/repositories/types'
+import type { BuildComponents } from '@/lib/repositories/types'
 import { gameLabel } from '@/lib/labels'
 
 export const revalidate = 3600  // ISR: renderiza na 1a request, cacheia por 1h
@@ -25,7 +25,6 @@ interface PageProps {
   searchParams: Promise<{ res?: string }>
 }
 
-const RANK: GameSlug[] = ['valorant', 'cs2', 'fortnite', 'gta-v'] as GameSlug[]
 const TIER_LABEL: Record<string, string> = { r3k: 'R$ 3k', r5k: 'R$ 5k', r8k: 'R$ 8k', r12k_plus: 'R$ 12k+' }
 
 const fmtR = (v: number) => 'R$ ' + Math.round(v).toLocaleString('pt-BR')
@@ -64,14 +63,6 @@ export async function generateMetadata(props: PageProps) {
   }
 }
 
-async function cpfOf(b: CuratedBuild): Promise<number> {
-  const rows = await getLiveFpsByBuild(b.components.cpu_id, b.components.gpu_id, '1080p')
-  const picked = rows.filter((r) => RANK.includes(r.game_slug))
-  if (!picked.length || b.total_price_brl <= 0) return 0
-  const avg = picked.reduce((s, r) => s + r.fps, 0) / picked.length
-  return avg > 0 ? b.total_price_brl / avg : 0
-}
-
 export default async function BuildDetailPage(props: PageProps) {
   const [params, searchParams] = await Promise.all([props.params, props.searchParams])
   const builds = await getLiveBuilds()
@@ -87,7 +78,7 @@ export default async function BuildDetailPage(props: PageProps) {
     checkLiveCompatibility(components),
     getLiveInterior(components),
     getLiveCases(),
-    Promise.all((builds ?? []).map(async (b) => ({ slug: b.slug, cpf: await cpfOf(b), absoluto: b.is_rei_absoluto }))),
+    Promise.resolve((builds ?? []).map((b) => ({ slug: b.slug, cpf: b.rs_per_fps, absoluto: b.is_rei_absoluto }))),
     Promise.all(
       SLOTS.map(async ({ key, slot, label }) => {
         const productId = build.components[key]
@@ -107,7 +98,7 @@ export default async function BuildDetailPage(props: PageProps) {
   const rei = contenders.length ? contenders.reduce((a, b) => (a.cpf <= b.cpf ? a : b)) : null
   const souORei = rei?.slug === build.slug
   const reiBuild = rei ? builds?.find((b) => b.slug === rei.slug) : null
-  const avgFps = mine > 0 ? build.total_price_brl / mine : 0
+  const avgFps = build.avg_fps
 
   const checks = compat.checks ?? []
   const allOk = compat.errors.length === 0 && compat.warnings.length === 0

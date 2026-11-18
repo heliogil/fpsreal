@@ -62,8 +62,9 @@ async function enrich(b: CuratedBuild): Promise<Enriched> {
     }
   }).filter((g) => g.fps > 0)
   const maxFps = Math.max(...games.map((g) => g.fps), 1)
-  const avg = games.length ? games.reduce((s, g) => s + g.fps, 0) / games.length : b.fps_top_game || 1
-  const cpf = b.total_price_brl > 0 && avg > 0 ? b.total_price_brl / avg : 0
+  // custo/FPS e média vêm da fonte única (lib/metrics.ts via live-server) — iguais à página da build
+  const avg = b.avg_fps
+  const cpf = b.rs_per_fps
   return { b, avg, cpf, games: games.map((g) => ({ ...g, pct: `${Math.round((g.fps / maxFps) * 100)}%` })) }
 }
 
