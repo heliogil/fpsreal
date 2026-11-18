@@ -61,7 +61,7 @@ function eddyArc(cx: number, cy: number, r: number): string {
 }
 
 export default function GabineteVivo({
-  interior, products, offers, whatIfFans = [], onToggleFan, onFanDelta, onClearWhatIf, pending = false, compact = false,
+  interior, products, offers, whatIfFans = [], onToggleFan, onFanDelta, onClearWhatIf, onSwapGpu, pending = false, compact = false,
 }: {
   interior: LiveInterior
   products: Products
@@ -74,6 +74,8 @@ export default function GabineteVivo({
   /** +1/−1 ventoinha num mount (empilhamento em baias largas) */
   onFanDelta?: (mountId: string, delta: number) => void
   onClearWhatIf?: () => void
+  /** passo 6: a ficha da GPU oferece "trocar" (abre a lista no GabineteVivoLive) */
+  onSwapGpu?: () => void
   pending?: boolean
   /** modo comparação lado a lado: esconde inset/legenda p/ caber */
   compact?: boolean
@@ -1108,6 +1110,16 @@ export default function GabineteVivo({
                   ver oferta →
                 </a>
               </div>
+            )}
+            {focused === 'gpu' && onSwapGpu && (
+              <button type="button" data-umami-event="viewer-trocar-ficha"
+                onClick={() => { setFocused(null); onSwapGpu() }}
+                style={{
+                  marginTop: 8, width: '100%', fontSize: 12, padding: '6px 10px', borderRadius: 8, cursor: 'pointer',
+                  border: '1px solid var(--accent-dim)', background: 'var(--accent-soft)', color: 'var(--accent)', fontWeight: 600,
+                }}>
+                ↻ trocar esta placa
+              </button>
             )}
             <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--dim2)' }}>estimativa · Esc ou fundo p/ sair</div>
           </div>
