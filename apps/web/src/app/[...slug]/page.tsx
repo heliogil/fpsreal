@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { REI_NAME } from '@/lib/tiers'
 import { notFound, permanentRedirect } from 'next/navigation'
 import { getLiveBuilds } from '@/lib/live-server'
 import { getMockRepository } from '@/lib/repositories'
@@ -20,11 +21,12 @@ interface PageProps {
 
 const VS_REI = /^[a-z0-9-]+-vs-rei-dos-(r-?3k|r-?5k|r-?8k|r-?12k)$/
 
+// a URL antiga ("…-vs-rei-dos-r5k") continua a valer; o texto usa o nome novo
 const TIERS = {
-  r3k: { tier: 'r3k', label: 'R$ 3k' },
-  r5k: { tier: 'r5k', label: 'R$ 5k' },
-  r8k: { tier: 'r8k', label: 'R$ 8k' },
-  r12k: { tier: 'r12k_plus', label: 'R$ 12k+' },
+  r3k: { tier: 'r3k', label: REI_NAME.r3k },
+  r5k: { tier: 'r5k', label: REI_NAME.r5k },
+  r8k: { tier: 'r8k', label: REI_NAME.r8k },
+  r12k: { tier: 'r12k_plus', label: REI_NAME.r12k_plus },
 } as const
 
 function parseSlug(slug: string[] | undefined) {
@@ -81,7 +83,7 @@ export default async function SeoCatchAllPage(props: PageProps) {
           className="text-4xl mb-2"
           style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}
         >
-          {contenderName || slugStr} vs Rei dos {tierLabel || '?'}
+          {contenderName || slugStr} vs {tierLabel || 'Rei'}
         </h1>
         <p className="text-secondary">
           A Harpia mediu os dois. Spoiler: o trono quase nunca cai.
@@ -125,7 +127,7 @@ export default async function SeoCatchAllPage(props: PageProps) {
 
           <div className="text-center pt-4">
             <Link href={`/build/${rei.slug}`} className="btn-ghost">
-              Ver detalhes do Rei dos {tierLabel} →
+              Ver detalhes do {tierLabel} →
             </Link>
           </div>
         </section>

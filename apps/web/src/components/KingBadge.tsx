@@ -1,4 +1,5 @@
 import type { CuratedBuild, BudgetTier } from '@/lib/repositories/types'
+import { REI_NAME } from '@/lib/tiers'
 
 interface KingBadgeProps {
   build?: CuratedBuild
@@ -6,12 +7,7 @@ interface KingBadgeProps {
   size?: 'sm' | 'md' | 'lg'
 }
 
-const tierLabel: Record<BudgetTier, string> = {
-  r3k: 'Rei dos R$ 3k',
-  r5k: 'Rei dos R$ 5k',
-  r8k: 'Rei dos R$ 8k',
-  r12k_plus: 'Rei dos R$ 12k+',
-}
+const tierLabel: Record<BudgetTier, string> = REI_NAME
 
 export default function KingBadge({ build, tier, size = 'md' }: KingBadgeProps) {
   const isAbsoluto = build?.is_rei_absoluto ?? false

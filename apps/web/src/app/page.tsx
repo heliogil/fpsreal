@@ -32,9 +32,8 @@ const RANK: { slug: GameSlug; name: string }[] = [
   { slug: 'gta-v' as GameSlug, name: 'GTA V' },
 ]
 
-const TIER_LABEL: Record<string, string> = {
-  r3k: 'R$ 3k', r5k: 'R$ 5k', r8k: 'R$ 8k', r12k_plus: 'R$ 12k+',
-}
+import { TIER_LABEL as TIER_LABEL_BY_KEY } from '@/lib/tiers'
+const TIER_LABEL: Record<string, string> = TIER_LABEL_BY_KEY
 
 const fmtR = (n: number) => 'R$ ' + Math.round(n).toLocaleString('pt-BR')
 const fmtCpf = (n: number) =>

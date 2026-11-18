@@ -27,23 +27,26 @@ FPS_CPU_FOR = {
 }
 
 # slug, name, tier, is_rei, {slot: sku}, seo
+# As 3 primeiras = resultado de seed/crown_reis.py em 2026-11-18 (preços de
+# amostra). Em produção quem decide o Rei é o crown_reis (cron); isto só deixa um
+# ambiente novo (CI, dev) igual ao que a produção mostra hoje.
 BUILDS = [
-    ("rei-r3k", "Rei dos R$ 3k", "r3k", True, {
-        "cpu": "cpu-r5-5600", "gpu": "gpu-rx-6600", "ram": "ram-ddr4-3600-16",
+    ("rei-r3k", "Rei até R$ 4,5k", "r3k", True, {
+        "cpu": "cpu-r5-5600", "gpu": "gpu-rtx-3060", "ram": "ram-ddr4-3600-16",
         "motherboard": "mb-b550-steel", "storage": "ssd-nv2-1tb", "psu": "psu-cx550",
         "case": "case-air-903", "cooler": "cooler-stock-amd",
-    }, "O melhor custo por FPS na faixa de entrada — 1080p sem drama."),
-    ("rei-r5k", "Rei dos R$ 5k", "r5k", True, {
-        "cpu": "cpu-r5-7600", "gpu": "gpu-rtx-4060", "ram": "ram-ddr5-6000-16",
-        "motherboard": "mb-b650-tuf", "storage": "ssd-nv2-1tb", "psu": "psu-rm650",
-        "case": "case-4000d", "cooler": "cooler-ak400",
-    }, "1080p alto com folga e caminho de upgrade AM5."),
-    ("rei-r8k", "Rei dos R$ 8k", "r8k", True, {
-        "cpu": "cpu-r7-9700x", "gpu": "gpu-rtx-4070-super", "ram": "ram-ddr5-6000-32",
-        "motherboard": "mb-b650-tomahawk", "storage": "ssd-sn770-1tb", "psu": "psu-rm750e",
-        "case": "case-lancool-216", "cooler": "cooler-pa120",
-    }, "1440p confortável mantendo o melhor R$/FPS da faixa."),
-    ("rei-r12k", "Rei dos R$ 12k+", "r12k_plus", True, {
+    }, "O máximo de FPS até R$ 4,5k em 1080p: Ryzen 5 5600 + GeForce RTX 3060 12GB (estimativa)."),
+    ("rei-r5k", "Rei até R$ 7k", "r5k", True, {
+        "cpu": "cpu-r5-5600", "gpu": "gpu-rx-7800-xt", "ram": "ram-ddr4-3600-16",
+        "motherboard": "mb-b550-steel", "storage": "ssd-nv2-1tb", "psu": "psu-cx550",
+        "case": "case-lancool-216", "cooler": "cooler-stock-amd",
+    }, "O máximo de FPS até R$ 7k em 1080p: Ryzen 5 5600 + Radeon RX 7800 XT (estimativa)."),
+    ("rei-r8k", "Rei até R$ 11k", "r8k", True, {
+        "cpu": "cpu-r5-7600", "gpu": "gpu-rtx-5070", "ram": "ram-ddr5-6000-16",
+        "motherboard": "mb-b650-tuf", "storage": "ssd-nv2-1tb", "psu": "psu-rm750e",
+        "case": "case-lancool-216", "cooler": "cooler-stock-amd",
+    }, "O máximo de FPS até R$ 11k em 1080p: Ryzen 5 7600 + GeForce RTX 5070 (estimativa)."),
+    ("rei-r12k", "Rei dos R$ 11k+", "r12k_plus", True, {
         "cpu": "cpu-r7-7800x3d", "gpu": "gpu-rtx-5070-ti", "ram": "ram-ddr5-6000-32",
         "motherboard": "mb-b650-tomahawk", "storage": "ssd-990pro-2tb", "psu": "psu-rm850",
         "case": "case-lancool-216", "cooler": "cooler-lf3-360",

@@ -25,7 +25,8 @@ interface PageProps {
   searchParams: Promise<{ res?: string }>
 }
 
-const TIER_LABEL: Record<string, string> = { r3k: 'R$ 3k', r5k: 'R$ 5k', r8k: 'R$ 8k', r12k_plus: 'R$ 12k+' }
+import { TIER_LABEL as TIER_LABEL_BY_KEY } from '@/lib/tiers'
+const TIER_LABEL: Record<string, string> = TIER_LABEL_BY_KEY
 
 const fmtR = (v: number) => 'R$ ' + Math.round(v).toLocaleString('pt-BR')
 const fmtCpf = (v: number) => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })

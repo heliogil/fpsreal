@@ -47,10 +47,9 @@ async function jget<T>(path: string, fallback: T): Promise<T> {
 const syne = { fontFamily: 'var(--font-syne), Syne, sans-serif' }
 const mono = { fontFamily: 'var(--font-plex-mono), monospace' }
 
-const TIER_LABEL: Record<string, string> = {
-  r3k: 'R$ 3k', r5k: 'R$ 5k', r8k: 'R$ 8k', r12k_plus: 'R$ 12k+',
-}
-const TIER_ORDER: Record<string, number> = { r3k: 0, r5k: 1, r8k: 2, r12k_plus: 3 }
+import { TIER_LABEL as TIER_LABEL_BY_KEY, TIER_ORDER as TIER_ORDER_BY_KEY } from '@/lib/tiers'
+const TIER_LABEL: Record<string, string> = TIER_LABEL_BY_KEY
+const TIER_ORDER: Record<string, number> = TIER_ORDER_BY_KEY
 function brl(n: number | null): string {
   if (n === null || n === undefined) return '—'
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
