@@ -144,7 +144,7 @@ export default async function SeoCatchAllPage(props: PageProps) {
 
       <footer className="text-xs text-secondary pt-4 border-t border-border">
         <p>
-          Comparativo editorial. Estimativas via modelo anchor_scale v1 (±15%).{' '}
+          Comparativo editorial. Estimativas via modelo anchor_scale, com banda de confiança.{' '}
           <Link href="/como-medimos" style={{ color: 'var(--accent-gold)' }}>
             Ver metodologia
           </Link>

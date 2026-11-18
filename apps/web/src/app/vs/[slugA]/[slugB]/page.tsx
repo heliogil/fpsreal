@@ -229,7 +229,7 @@ export default async function VsPage(props: PageProps) {
           </tbody>
         </table>
         <p className="text-xs p-3 text-secondary">
-          FPS estimado · anchor+scale · {reference_cpu_name} · preset High · ±15–25% estimativa
+          FPS estimado · anchor+scale · {reference_cpu_name} · preset High · estimativa com banda de confiança
         </p>
       </div>
 

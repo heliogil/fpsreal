@@ -69,7 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <a href="/"><CrownWordmark /></a>
               <div className="mono" style={{ fontSize: 11, lineHeight: 1.6, color: 'var(--dim2)', maxWidth: 460 }}>
-                Estimativas anchor+scale · fonte: TechPowerUp + GamersNexus · preço com selo de frescura.
+                Estimativas anchor+scale calibradas no Tom&apos;s Hardware · preços de amostra até os feeds oficiais das lojas.
                 <br />
                 🤝 Alguns links são de afiliado — se você comprar por eles, a gente ganha comissão da loja.
                 O preço para você <strong style={{ color: 'var(--dim)' }}>não muda</strong>, e isso nunca reordena o ranking.

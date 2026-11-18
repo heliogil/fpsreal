@@ -58,6 +58,8 @@ services:
       # segredo da folha de revisão do ingestor (/modelos). Vazio ⇒ página 404.
       # Server-only (sem NEXT_PUBLIC_): nunca vai ao bundle do cliente.
       VISUALS_REVIEW_TOKEN: ${VISUALS_REVIEW_TOKEN:-}
+      # e-mail público (privacidade/LGPD + "avisa a gente"). Vazio ⇒ link escondido.
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-}
     networks:
       - pcb_net
     depends_on:

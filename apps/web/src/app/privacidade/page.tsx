@@ -1,4 +1,8 @@
 import Link from 'next/link'
+import { contactEmail } from '@/lib/contact'
+
+// Lê CONTACT_EMAIL em tempo de execução (ver lib/contact.ts).
+export const dynamic = 'force-dynamic'
 
 export const metadata = {
   title: 'Política de privacidade — Rei do FPS',
@@ -7,9 +11,9 @@ export const metadata = {
 }
 
 const H2 = { fontFamily: 'var(--font-syne), Syne, sans-serif' }
-const CONTACT = process.env.CONTACT_EMAIL
 
 export default function PrivacidadePage() {
+  const CONTACT = contactEmail()
   return (
     <article className="max-w-3xl mx-auto space-y-8" style={{ padding: '40px 16px' }}>
       <header className="pb-6 border-b border-border">
