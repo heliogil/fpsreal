@@ -13,16 +13,17 @@ FPS is always an estimate. (POST /upgrade/gpu kept for backward-compat.)
 from __future__ import annotations
 
 import re
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from compat_core import Part, evaluate
 from deps import get_db
 from fps_math import geomean
-from models import FpsEstimate, Offer, Product, Variant
+from models import CompatibilityRule, FpsEstimate, Merchant, Offer, Product, Variant
 
 router = APIRouter(tags=["upgrade"])
 
@@ -181,4 +182,152 @@ async def upgrade_gpu(body: AdviseRequest, db: AsyncSession = Depends(get_db)):
         "matched": r.get("matched_gpu"),
         "current": {"name": cur["gpu"]["name"], "avg_fps": cur["gpu"]["avg_fps"]} if cur else None,
         "upgrades": r.get("gpu_upgrades", []),
+    }
+
+
+# ── Passo 6 do visualizador: "e se eu trocar a placa de vídeo?" ──────────────
+#
+# POST /upgrade/swap
+#   { "components": {cpu_id, gpu_id, case_id, psu_id, ...},
+#     "total_brl"?: preço total da build como a página mostra,
+#     "current_price_brl"?: preço da GPU atual nessa conta }
+#
+# Para CADA placa ativa do catálogo, com a MESMA build em volta:
+#   - cabe/liga? → compat_core.evaluate() com a GPU trocada (comprimento no
+#     gabinete, margem da fonte, conector de força) — a mesma regra da página;
+#   - FPS → média geométrica nos MESMOS jogos de referência do custo/FPS do site
+#     (lib/metrics.ts REFERENCE_GAMES, 1080p), com esta CPU (o gargalo conta);
+#   - preço → oferta disponível mais barata; custo/FPS da build com a troca.
+# Só entram placas com FPS nos mesmos jogos da atual (comparação justa) e com
+# oferta. Tudo é estimativa; nada é calculado no cliente.
+
+SWAP_GAMES = ["valorant", "cs2", "fortnite", "gta-v"]
+
+
+class SwapRequest(BaseModel):
+    components: Dict[str, Optional[int]]
+    slot: str = Field("gpu", pattern="^gpu$")
+    total_brl: Optional[float] = Field(None, gt=0, lt=1_000_000)
+    current_price_brl: Optional[float] = Field(None, gt=0, lt=1_000_000)
+    resolution: str = Field("1080p", pattern="^(1080p|1440p|4k)$")
+
+
+async def _cheapest_with_merchant(db: AsyncSession, pids: List[int]) -> dict[int, dict]:
+    rows = (
+        await db.execute(
+            select(Variant.product_id, Offer.id, Offer.price_brl, Merchant.name)
+            .join(Offer, Offer.variant_id == Variant.id)
+            .join(Merchant, Merchant.id == Offer.merchant_id)
+            .where(Variant.product_id.in_(pids), Offer.is_available.is_(True))
+            .order_by(Variant.product_id, Offer.price_brl.asc())
+        )
+    ).all()
+    out: dict[int, dict] = {}
+    for pid, oid, price, mname in rows:
+        if pid not in out:
+            out[pid] = {"offer_id": oid, "price": float(price),
+                        "demo": "amostra" in (mname or "").lower()}
+    return out
+
+
+def _cat(key: str) -> str:
+    return key[:-3] if key.endswith("_id") else key
+
+
+@router.post("/swap", response_model=None)
+async def swap(body: SwapRequest, db: AsyncSession = Depends(get_db)):
+    ids = [v for v in body.components.values() if v]
+    rows = (await db.execute(select(Product).where(Product.id.in_(ids)))).scalars().all() if ids else []
+    by_id = {p.id: p for p in rows}
+    build = {_cat(k): by_id[v] for k, v in body.components.items() if v and v in by_id}
+    cur_gpu, cpu = build.get("gpu"), build.get("cpu")
+    empty = {"slot": body.slot, "current": None, "alternatives": [], "games": SWAP_GAMES,
+             "resolution": body.resolution, "method": "anchor_scale_estimate"}
+    if cur_gpu is None or cpu is None:
+        return empty
+
+    gpus = (await db.execute(
+        select(Product).where(Product.category == "gpu", Product.is_active.is_(True))
+    )).scalars().all()
+    gpu_by_id = {g.id: g for g in gpus}
+    gpu_by_id.setdefault(cur_gpu.id, cur_gpu)
+
+    # FPS por jogo (esta CPU × cada GPU) — média só sobre o mesmo conjunto de jogos
+    fps_rows = (await db.execute(
+        select(FpsEstimate.gpu_id, FpsEstimate.game_slug, FpsEstimate.fps_estimate).where(
+            FpsEstimate.cpu_id == cpu.id,
+            FpsEstimate.gpu_id.in_(list(gpu_by_id)),
+            FpsEstimate.resolution == body.resolution,
+            FpsEstimate.preset == "high",
+            FpsEstimate.game_slug.in_(SWAP_GAMES),
+        )
+    )).all()
+    per_gpu: dict[int, dict[str, float]] = {}
+    for gid, game, fps in fps_rows:
+        per_gpu.setdefault(gid, {})[game] = float(fps)
+    cur_games = set(per_gpu.get(cur_gpu.id, {}))
+    if not cur_games:
+        return empty
+
+    def avg(gid: int) -> Optional[float]:
+        g = per_gpu.get(gid, {})
+        if set(g) != cur_games:
+            return None
+        return geomean(g[k] for k in cur_games)
+
+    prices = await _cheapest_with_merchant(db, list(gpu_by_id))
+    cur_offer = prices.get(cur_gpu.id)
+    cur_price = body.current_price_brl or (cur_offer["price"] if cur_offer else None)
+    cur_fps = avg(cur_gpu.id)
+    total = body.total_brl
+    cur_cpf = (total / cur_fps) if (total and cur_fps) else None
+
+    rules = (await db.execute(
+        select(CompatibilityRule).where(CompatibilityRule.is_active.is_(True))
+    )).scalars().all()
+    base_parts = {k: Part(name=p.name, specs=p.specs or {}) for k, p in build.items()}
+
+    alternatives = []
+    for g in gpus:
+        if g.id == cur_gpu.id:
+            continue
+        fps, offer = avg(g.id), prices.get(g.id)
+        if fps is None or offer is None or not cur_fps:
+            continue
+        res = evaluate({**base_parts, "gpu": Part(name=g.name, specs=g.specs or {})}, rules)
+        # só o que a troca da GPU pode mudar: checagens com a GPU + margem da fonte
+        mine = [c for c in res["checks"] if "gpu" in (c["a"], c["b"]) or c["label"] == "potência"]
+        gpu_errors = [c["message"] for c in mine if c["status"] == "error"]
+        gpu_warns = [c["message"] for c in mine if c["status"] == "warning"]
+        d_price = round(offer["price"] - cur_price, 2) if cur_price is not None else None
+        new_total = round(total + d_price, 2) if (total and d_price is not None) else None
+        cpf = (new_total / fps) if new_total else None
+        gs = g.specs or {}
+        alternatives.append({
+            "product_id": g.id, "sku": g.sku, "name": g.name, "brand": g.brand,
+            "length_mm": gs.get("length_mm"), "tdp_w": gs.get("tdp_w"),
+            "offer_id": offer["offer_id"], "price_brl": offer["price"], "demo": offer["demo"],
+            "avg_fps": round(fps, 1),
+            "delta_fps": round(fps - cur_fps, 1),
+            "delta_pct": round((fps / cur_fps - 1) * 100),
+            "delta_price_brl": d_price,
+            "total_brl": new_total,
+            "rs_per_fps": round(cpf, 2) if cpf else None,
+            "delta_rs_per_fps": round(cpf - cur_cpf, 2) if (cpf and cur_cpf) else None,
+            "fits": not gpu_errors,
+            "blocker": gpu_errors[0] if gpu_errors else None,
+            "warning": gpu_warns[0] if gpu_warns else None,
+        })
+    # cabem primeiro; depois o melhor custo/FPS (ou mais FPS, sem total)
+    alternatives.sort(key=lambda a: (not a["fits"], a["rs_per_fps"] if a["rs_per_fps"] is not None else -a["avg_fps"]))
+
+    return {
+        **empty,
+        "current": {
+            "product_id": cur_gpu.id, "name": cur_gpu.name,
+            "price_brl": cur_price, "avg_fps": round(cur_fps, 1) if cur_fps else None,
+            "total_brl": total, "rs_per_fps": round(cur_cpf, 2) if cur_cpf else None,
+        },
+        "games": sorted(cur_games, key=SWAP_GAMES.index),
+        "alternatives": alternatives,
     }

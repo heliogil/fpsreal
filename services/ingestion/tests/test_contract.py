@@ -190,6 +190,38 @@ def test_upgrade_advise(client: httpx.Client):
     assert isinstance(b["cpu_upgrades"], list)
 
 
+
+def test_upgrade_swap_gpu(client: httpx.Client):
+    """Passo 6 do viewer: trocar a GPU da build mantendo o resto."""
+    builds = client.get("/builds/").json()
+    assert builds, "seed sem builds"
+    b = builds[0]
+    comps = {f"{k}_id": v["id"] for k, v in b["components"].items() if v}
+    r = client.post("/upgrade/swap", json={"components": comps, "total_brl": b["total_price_brl"]})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["method"] == "anchor_scale_estimate"
+    cur = body["current"]
+    assert cur and cur["product_id"] == comps["gpu_id"]
+    alts = body["alternatives"]
+    assert alts and all(a["product_id"] != comps["gpu_id"] for a in alts)
+    for a in alts:
+        for key in ("avg_fps", "delta_fps", "price_brl", "offer_id", "fits", "rs_per_fps", "delta_price_brl"):
+            assert key in a
+        # custo/FPS da build trocada = total trocado ÷ FPS médio (mesma conta do site)
+        assert abs(a["total_brl"] - (b["total_price_brl"] + a["delta_price_brl"])) < 0.02
+        assert abs(a["rs_per_fps"] / (a["total_brl"] / a["avg_fps"]) - 1) < 0.005
+        if not a["fits"]:
+            assert a["blocker"]
+    # cabem primeiro
+    fits = [a["fits"] for a in alts]
+    assert fits == sorted(fits, reverse=True)
+
+
+def test_upgrade_swap_rejects_bad_slot(client: httpx.Client):
+    r = client.post("/upgrade/swap", json={"components": {"gpu_id": 1}, "slot": "cpu"})
+    assert r.status_code == 422
+
 # --- wizard (core product) ----------------------------------------------------
 
 def test_wizard_respects_budget(client: httpx.Client):
