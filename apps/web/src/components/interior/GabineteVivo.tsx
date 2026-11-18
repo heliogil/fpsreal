@@ -5,6 +5,7 @@ import type { GeoMount, GeoPlacement, LiveInterior, LiveProduct } from '@/lib/li
 import { MaterialDefs, bevel, pickVariant, renderPart, renderFromDescriptor } from './PartMockups'
 import TopDownInset from './TopDownInset'
 import BottleneckNote from './BottleneckNote'
+import Veredicto from './Veredicto'
 import { coolerBand, bandSuffix, sourceTag, type ClearanceSource } from './clearance'
 
 /**
@@ -60,10 +61,12 @@ function eddyArc(cx: number, cy: number, r: number): string {
 }
 
 export default function GabineteVivo({
-  interior, products, whatIfFans = [], onToggleFan, onFanDelta, onClearWhatIf, pending = false, compact = false,
+  interior, products, offers, whatIfFans = [], onToggleFan, onFanDelta, onClearWhatIf, pending = false, compact = false,
 }: {
   interior: LiveInterior
   products: Products
+  /** oferta por peça (slot) — a ficha em foco mostra preço e link */
+  offers?: Record<string, { id: number; price_brl: number; demo: boolean }>
   /** ids de mounts simulados (estado visual dos botões) */
   whatIfFans?: string[]
   /** clicar num mount livre pede a simulação ao motor */
@@ -104,28 +107,28 @@ export default function GabineteVivo({
 
   const header = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', flexWrap: 'wrap' }}>
-      <span className="mono" style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--dim)', border: '1px solid var(--line)', padding: '3px 10px', borderRadius: 99 }}>
+      <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--dim)', border: '1px solid var(--line)', padding: '3px 10px', borderRadius: 99 }}>
         visualização 2D · estimativa
       </span>
-      <span className="mono" style={{ fontSize: 10.5, color: 'var(--dim2)' }}>{interior.case.name ?? 'gabinete'}</span>
+      <span className="mono" style={{ fontSize: 12, color: 'var(--dim2)' }}>{interior.case.name ?? 'gabinete'}</span>
       {simulated && (
-        <span className="mono" style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', border: '1px solid var(--accent-dim)', background: 'var(--accent-soft)', padding: '2px 8px', borderRadius: 99 }}>
+        <span className="mono" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--accent)', border: '1px solid var(--accent-dim)', background: 'var(--accent-soft)', padding: '2px 8px', borderRadius: 99 }}>
           simulado
         </span>
       )}
-      {pending && <span className="mono" style={{ fontSize: 10, color: 'var(--dim2)' }}>recalculando…</span>}
+      {pending && <span className="mono" style={{ fontSize: 11.5, color: 'var(--dim2)' }}>recalculando…</span>}
       {g && (
         <button type="button" onClick={() => setAsmRun((n) => n + 1)} className="mono"
           title="ver as peças assentarem na ordem de instalação"
-          style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--dim)', background: 'transparent',
+          style={{ fontSize: 12, fontWeight: 600, color: 'var(--dim)', background: 'transparent',
             border: '1px solid var(--line)', borderRadius: 99, padding: '3px 10px', cursor: 'pointer' }}>
           montar
         </button>
       )}
       <span style={{ flex: 1 }} />
-      <span className="mono" style={{ fontSize: 11, color: 'var(--dim2)' }}>fluxo</span>
+      <span className="mono" style={{ fontSize: 12, color: 'var(--dim2)' }}>fluxo de ar</span>
       <span className="mono" style={{ fontSize: 18, fontWeight: 600, color: scoreTone }}>{score}</span>
-      <span className="mono" style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 99, border: `1px solid ${scoreTone}`, color: scoreTone }}>
+      <span className="mono" style={{ fontSize: 12, padding: '2px 8px', borderRadius: 99, border: `1px solid ${scoreTone}`, color: scoreTone }}>
         {score >= 70 ? 'saudável' : score >= 45 ? 'apertado' : 'crítico'}
       </span>
     </div>
@@ -278,6 +281,9 @@ export default function GabineteVivo({
   }
 
   const ft = focused ? focusTargets[focused] : undefined
+  // peça em foco -> slot do catálogo (p/ achar a oferta)
+  const FOCUS_SLOT: Record<string, string> = { gpu: 'gpu', cooler: 'cooler', pump: 'cooler', rad: 'cooler', psu: 'psu', mobo: 'motherboard', ram: 'ram' }
+  const ftOffer = focused && offers ? offers[FOCUS_SLOT[focused] ?? ''] : undefined
   // enquadra a caixa no centro do viewBox (720×430), com limite de ampliação
   const focusTransform = (() => {
     if (!ft) return undefined
@@ -517,8 +523,9 @@ export default function GabineteVivo({
     .filter((e): e is { z: typeof e.z; pt: { x: number; y: number }; tone: string } => e.pt != null)
 
   return (
-    <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', boxShadow: 'var(--shadow-sm)', opacity: pending ? 0.65 : 1, transition: 'opacity .15s ease' }}>
+    <div className="gv-card" style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', boxShadow: 'var(--shadow-sm)', opacity: pending ? 0.65 : 1, transition: 'opacity .15s ease' }}>
       {header}
+      <Veredicto interior={interior} compact={compact} />
 
       <div style={{ position: 'relative' }}>
         <svg viewBox="0 0 720 430" role="img" className={compact ? 'gv-compact' : undefined}
@@ -1062,27 +1069,27 @@ export default function GabineteVivo({
           })()}
 
           <text x={ox + 8} y={bottomY - 8} className="gv-note" fill="var(--dim2)" fontFamily="var(--font-plex-mono), monospace" pointerEvents="none">
-            estimativa · zone_graph v2 · não é medição
+            estimativa — não é medição
           </text>
         </svg>
 
         {/* ficha da peça em foco — no telemóvel é o que substitui o hover */}
         {ft && (
           <div className="mono" style={{
-            position: 'absolute', left: 12, top: 12, zIndex: 6, maxWidth: 260,
+            position: 'absolute', left: 12, top: 12, zIndex: 6, maxWidth: 'min(320px, calc(100% - 24px))',
             background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 10,
             padding: '10px 12px', boxShadow: 'var(--shadow-sm)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <strong style={{ fontSize: 11.5, color: 'var(--text)' }}>{ft.label}</strong>
+              <strong style={{ fontSize: 13, color: 'var(--text)' }}>{ft.label}</strong>
               <span style={{ flex: 1 }} />
               <button type="button" onClick={() => setFocused(null)} aria-label="Sair do foco"
                 style={{
-                  fontSize: 10.5, padding: '2px 8px', borderRadius: 99, cursor: 'pointer',
+                  fontSize: 12, padding: '2px 8px', borderRadius: 99, cursor: 'pointer',
                   border: '1px solid var(--line)', background: 'transparent', color: 'var(--dim)',
                 }}>voltar</button>
             </div>
-            <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '3px 10px', fontSize: 10.5 }}>
+            <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '3px 10px', fontSize: 12 }}>
               {ft.specs.map(([k, v]) => (
                 <div key={k} style={{ display: 'contents' }}>
                   <dt style={{ color: 'var(--dim2)' }}>{k}</dt>
@@ -1090,7 +1097,19 @@ export default function GabineteVivo({
                 </div>
               ))}
             </dl>
-            <div style={{ marginTop: 6, fontSize: 9, color: 'var(--dim2)' }}>estimativa · Esc ou fundo p/ sair</div>
+            {ftOffer && (
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--line2)' }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+                  {ftOffer.price_brl.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+                {ftOffer.demo && <span style={{ fontSize: 10.5, color: 'var(--dim2)' }}>amostra</span>}
+                <span style={{ flex: 1 }} />
+                <a href={`/go/${ftOffer.id}?utm_source=build&utm_medium=viewer`} style={{ fontSize: 12, color: 'var(--accent-2)', whiteSpace: 'nowrap' }}>
+                  ver oferta →
+                </a>
+              </div>
+            )}
+            <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--dim2)' }}>estimativa · Esc ou fundo p/ sair</div>
           </div>
         )}
 
@@ -1099,7 +1118,7 @@ export default function GabineteVivo({
           <div className="mono" role="status" style={{
             position: 'absolute', left: Math.max(6, Math.min(tip.x + 14, 620)), top: Math.max(6, tip.y - 34),
             pointerEvents: 'none', zIndex: 5, background: 'var(--panel2)', color: 'var(--text)',
-            border: '1px solid var(--line)', borderRadius: 8, padding: '6px 9px', fontSize: 11,
+            border: '1px solid var(--line)', borderRadius: 8, padding: '6px 9px', fontSize: 12.5,
             boxShadow: 'var(--shadow-sm)', maxWidth: 280,
           }}>{tip.text}</div>
         )}
@@ -1126,7 +1145,7 @@ export default function GabineteVivo({
 
       {/* legenda */}
       {!compact && (
-        <div className="mono" style={{ display: 'flex', flexWrap: 'wrap', gap: 14, padding: '10px 16px 2px', alignItems: 'center', fontSize: 9.5, color: 'var(--dim2)', borderTop: '1px solid var(--line2)' }}>
+        <div className="mono" style={{ display: 'flex', flexWrap: 'wrap', gap: 14, padding: '10px 16px 2px', alignItems: 'center', fontSize: 11, color: 'var(--dim2)', borderTop: '1px solid var(--line2)' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 3, borderRadius: 2, background: 'var(--fresh)' }} /> entra</span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 3, borderRadius: 2, background: 'var(--warn)' }} /> sai</span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 0, borderTop: '2px dashed var(--dim2)' }} /> previsão livre (clique)</span>
@@ -1138,17 +1157,60 @@ export default function GabineteVivo({
         </div>
       )}
 
-      {/* chips de estado + simulação */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '10px 16px 14px', alignItems: 'center' }}>
+      {/* chips — à vista só o que pede atenção e as ações; o detalhe técnico
+          (CFM por ventoinha, pressão, todas as zonas) fica recolhido */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '10px 16px 6px', alignItems: 'center' }}>
+        {(() => {
+          const issues = interior.airflow.zones.filter((z) => z.status !== 'ok')
+          if (!issues.length) {
+            return (
+              <span className="mono" style={{ fontSize: 12, padding: '3px 9px', borderRadius: 99, border: `1px solid ${STATUS_PT.ok.border}`, color: STATUS_PT.ok.color }}>
+                ar a circular bem em todas as zonas
+              </span>
+            )
+          }
+          return issues.map((z) => {
+            const st = STATUS_PT[z.status] ?? STATUS_PT.ok
+            return (
+              <span key={z.zone} className="mono" style={{ fontSize: 12, padding: '3px 9px', borderRadius: 99, border: `1px solid ${st.border}`, color: st.color }}>
+                {ZONE_LABEL[z.zone] ?? z.zone}: {st.label}
+              </span>
+            )
+          })
+        })()}
+        {g.mounts.filter((m) => m.occupied_by === null).map((m) => (
+          <button key={m.id} type="button" className="mono"
+            onClick={onToggleFan ? () => onToggleFan(m.id) : undefined}
+            disabled={!onToggleFan}
+            style={{
+              fontSize: 12, padding: '3px 9px', borderRadius: 99, border: '1px dashed var(--dim2)',
+              color: 'var(--dim2)', background: 'transparent',
+              cursor: onToggleFan ? 'pointer' : 'default',
+            }}>
+            + ventoinha na {mountLabel(m.id)}
+          </button>
+        ))}
+        {whatIfFans.length > 0 && onClearWhatIf && (
+          <button type="button" className="mono" onClick={onClearWhatIf}
+            style={{ fontSize: 12, padding: '3px 9px', borderRadius: 99, border: '1px solid var(--line)', color: 'var(--dim)', background: 'transparent', cursor: 'pointer' }}>
+            limpar simulação
+          </button>
+        )}
+      </div>
+      <details style={{ padding: '0 16px 14px' }}>
+        <summary className="mono" style={{ fontSize: 12, color: 'var(--dim2)', cursor: 'pointer', padding: '4px 0' }}>
+          detalhes do fluxo de ar
+        </summary>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 6, alignItems: 'center' }}>
         {interior.airflow.zones.map((z) => {
           const st = STATUS_PT[z.status] ?? STATUS_PT.ok
           return (
-            <span key={z.zone} className="mono" style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 99, border: `1px solid ${st.border}`, color: st.color }}>
+            <span key={z.zone} className="mono" style={{ fontSize: 12, padding: '3px 9px', borderRadius: 99, border: `1px solid ${st.border}`, color: st.color }}>
               {ZONE_LABEL[z.zone] ?? z.zone}: {st.label}
             </span>
           )
         })}
-        <span className="mono" style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 99, border: '1px solid var(--line)', color: 'var(--dim)' }}>
+        <span className="mono" style={{ fontSize: 12, padding: '3px 9px', borderRadius: 99, border: '1px solid var(--line)', color: 'var(--dim)' }}>
           pressão {pressao}
         </span>
         {g.mounts.filter((m) => m.cfm > 0).map((m) => {
@@ -1159,7 +1221,7 @@ export default function GabineteVivo({
           return (
             <span key={m.id} className="mono" style={{
               display: 'inline-flex', alignItems: 'center', gap: 5,
-              fontSize: 10.5, padding: '3px 9px', borderRadius: 99,
+              fontSize: 12, padding: '3px 9px', borderRadius: 99,
               border: `1px solid ${isSim ? 'var(--accent-dim)' : 'var(--line)'}`,
               color: isSim ? 'var(--accent)' : 'var(--dim)',
               background: isSim ? 'var(--accent-soft)' : 'transparent',
@@ -1178,25 +1240,8 @@ export default function GabineteVivo({
             </span>
           )
         })}
-        {g.mounts.filter((m) => m.occupied_by === null).map((m) => (
-          <button key={m.id} type="button" className="mono"
-            onClick={onToggleFan ? () => onToggleFan(m.id) : undefined}
-            disabled={!onToggleFan}
-            style={{
-              fontSize: 10.5, padding: '3px 9px', borderRadius: 99, border: '1px dashed var(--dim2)',
-              color: 'var(--dim2)', background: 'transparent',
-              cursor: onToggleFan ? 'pointer' : 'default',
-            }}>
-            + ventoinha na {mountLabel(m.id)}
-          </button>
-        ))}
-        {whatIfFans.length > 0 && onClearWhatIf && (
-          <button type="button" className="mono" onClick={onClearWhatIf}
-            style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 99, border: '1px solid var(--line)', color: 'var(--dim)', background: 'transparent', cursor: 'pointer' }}>
-            limpar simulação
-          </button>
-        )}
-      </div>
+        </div>
+      </details>
     </div>
   )
 }

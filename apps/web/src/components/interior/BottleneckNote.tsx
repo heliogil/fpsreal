@@ -58,7 +58,7 @@ export default function BottleneckNote({
       display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap',
       padding: compact ? '8px 12px' : '10px 16px',
       borderTop: '1px solid var(--line2)',
-      fontSize: compact ? 10 : 11, color: 'var(--dim)', lineHeight: 1.45,
+      fontSize: compact ? 11 : 12.5, color: 'var(--dim)', lineHeight: 1.45,
     }}>
       <span aria-hidden style={{ color: msg.tone, fontWeight: 700 }}>▸</span>
       <span style={{ flex: 1, minWidth: 180 }}>
@@ -72,9 +72,9 @@ export default function BottleneckNote({
       {diagnosis.suggest_mount && onSimulate && (
         <button type="button" onClick={() => onSimulate(diagnosis.suggest_mount!)}
           style={{
-            fontSize: compact ? 9.5 : 10.5, padding: '3px 9px', borderRadius: 99, cursor: 'pointer',
+            fontSize: compact ? 11 : 12, padding: '3px 9px', borderRadius: 99, cursor: 'pointer',
             border: '1px solid var(--accent-dim)', background: 'var(--accent-soft)', color: 'var(--accent)',
-            whiteSpace: 'nowrap',
+            maxWidth: '100%', textAlign: 'left',
           }}>
           {/* QUANTIFICADO: o motor já rodou o what-if e devolveu o ganho */}
           simular ventoinha em {diagnosis.suggest_mount.replace(/_/g, ' ')}

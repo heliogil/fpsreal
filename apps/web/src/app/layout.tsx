@@ -36,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <div style={{ minHeight: '100vh', background: 'var(--grad)', backgroundAttachment: 'fixed' }}>
           <header
+            className="site-header"
             style={{
               position: 'sticky', top: 0, zIndex: 40, display: 'flex', alignItems: 'center',
               justifyContent: 'space-between', padding: '16px clamp(16px,4vw,40px)',
@@ -46,7 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <a href="/" style={{ fontSize: 19 }}>
               <CrownWordmark />
             </a>
-            <nav style={{ display: 'flex', gap: 24, alignItems: 'center', fontSize: 13.5, fontWeight: 500, color: 'var(--dim)' }}>
+            <nav className="site-nav" style={{ display: 'flex', gap: 24, alignItems: 'center', fontSize: 13.5, fontWeight: 500, color: 'var(--dim)' }}>
               <a className="navlink" href="/#challengers" style={{ color: 'inherit' }}>Builds curadas</a>
               <a className="navlink" href="/pecas" style={{ color: 'inherit' }}>Peças & FPS</a>
               <a className="navlink" href="/como-medimos" style={{ color: 'inherit' }}>Como medimos o FPS</a>

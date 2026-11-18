@@ -40,11 +40,14 @@ async function estimate(
   }
 }
 
+export type ViewerOffers = Record<string, { id: number; price_brl: number; demo: boolean }>
+
 export default function GabineteVivoLive({
-  initial, products, components, cases = [],
+  initial, products, offers, components, cases = [],
 }: {
   initial: LiveInterior
   products: Products
+  offers?: ViewerOffers
   components: Record<string, number>
   cases?: LiveCaseOption[]
 }) {
@@ -111,7 +114,7 @@ export default function GabineteVivoLive({
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       {/* barra de controlo */}
-      <div className="mono" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, color: 'var(--dim2)' }}>
+      <div className="mono" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12, color: 'var(--dim2)' }}>
         {whatIf.length > 0 && (
           <span style={{
             padding: '3px 10px', borderRadius: 99, border: '1px solid var(--accent-dim)',
@@ -132,7 +135,7 @@ export default function GabineteVivoLive({
               className="mono"
               style={{
                 background: 'var(--panel)', color: 'var(--text)', border: '1px solid var(--line)',
-                borderRadius: 8, padding: '4px 8px', fontSize: 11,
+                borderRadius: 8, padding: '4px 8px', fontSize: 12,
               }}>
               <option value="">— nenhum —</option>
               {otherCases.some((c) => c.fits) && (
@@ -158,6 +161,7 @@ export default function GabineteVivoLive({
         <GabineteVivo
           interior={interior}
           products={products}
+          offers={offers}
           whatIfFans={whatIf}
           onToggleFan={toggleFan}
           onFanDelta={fanDelta}
@@ -178,7 +182,7 @@ export default function GabineteVivoLive({
       {/* resumo da comparação */}
       {compare && (
         <div className="mono" style={{
-          display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11, color: 'var(--dim)',
+          display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12, color: 'var(--dim)',
           border: '1px solid var(--line)', borderRadius: 10, padding: '10px 14px', background: 'var(--card)',
         }}>
           <strong style={{ color: 'var(--text)' }}>comparação</strong>
