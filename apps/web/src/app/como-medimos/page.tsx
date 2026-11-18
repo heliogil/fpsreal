@@ -73,6 +73,11 @@ export default function ComoMedimosPage() {
           </li>
         </ul>
         <p className="mt-3">
+          <strong>Custo por FPS:</strong> preço total ÷ FPS médio em Valorant, CS2, Fortnite e
+          GTA V em 1080p. A média é <strong>geométrica</strong>: cada jogo pesa igual, mesmo os
+          eSports que passam das centenas de FPS (é a mesma média que o Tom&apos;s Hardware usa).
+        </p>
+        <p className="mt-3">
           <strong>Gargalo:</strong> o limite da placa é o desempenho dela no jogo e na
           resolução escolhidos. O limite do processador é o FPS que ele entrega com a placa
           mais rápida do catálogo (é assim que a tabela de CPUs do Tom&apos;s Hardware mede).

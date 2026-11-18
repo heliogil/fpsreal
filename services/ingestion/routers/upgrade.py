@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from deps import get_db
+from fps_math import geomean
 from models import FpsEstimate, Offer, Product, Variant
 
 router = APIRouter(tags=["upgrade"])
@@ -70,7 +71,7 @@ async def _cheapest(db: AsyncSession, pids: List[int]) -> dict[int, dict]:
 async def _avg_fps(
     db: AsyncSession, *, cpu_ids: List[int], gpu_ids: List[int], games, resolution, key: str
 ) -> dict[int, float]:
-    """Average FPS keyed by 'gpu' (vary GPU) or 'cpu' (vary CPU)."""
+    """Geometric-mean FPS keyed by 'gpu' (vary GPU) or 'cpu' (vary CPU)."""
     stmt = select(FpsEstimate.cpu_id, FpsEstimate.gpu_id, FpsEstimate.fps_estimate).where(
         FpsEstimate.cpu_id.in_(cpu_ids),
         FpsEstimate.gpu_id.in_(gpu_ids),
@@ -83,7 +84,7 @@ async def _avg_fps(
     for cid, gid, fps in rows:
         k = gid if key == "gpu" else cid
         acc.setdefault(k, []).append(float(fps))
-    return {k: round(sum(v) / len(v), 1) for k, v in acc.items() if v}
+    return {k: round(geomean(v), 1) for k, v in acc.items() if v}
 
 
 def _rank(items, current_fps, budget, price_map, id_key):
