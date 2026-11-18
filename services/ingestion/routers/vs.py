@@ -83,6 +83,16 @@ class VsResponse(BaseModel):
     rows: list[GameRow]
 
 
+def _int(v) -> int:
+    """specs JSONB guarda números como int, float ou string ("358.5" vindo dos
+    adapters de AIB) — int("358.5") rebentava o /vs com 500 para a RTX 4090,
+    RX 7900 XTX e RX 7700 XT. Arredonda; vazio/inválido vira 0."""
+    try:
+        return int(round(float(v)))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _to_spec(p: Product, index_value: float) -> GpuSpec:
     s = p.specs or {}
     return GpuSpec(
@@ -90,10 +100,10 @@ def _to_spec(p: Product, index_value: float) -> GpuSpec:
         sku=p.sku,
         name=p.name,
         brand=p.brand or "",
-        tdp_w=int(s.get("tdp_w", 0)),
-        vram_gb=int(s.get("vram_gb", 0)),
-        length_mm=int(s.get("length_mm", 0)),
-        fps_1080p_agg=int(s.get("fps_1080p_agg", 0)),
+        tdp_w=_int(s.get("tdp_w")),
+        vram_gb=_int(s.get("vram_gb")),
+        length_mm=_int(s.get("length_mm")),
+        fps_1080p_agg=_int(s.get("fps_1080p_agg")),
         index_value=float(index_value),
     )
 
