@@ -166,6 +166,15 @@ CASES = [
     ("case-h5-flow",     "NZXT H5 Flow",            "NZXT",    "ATX", 365, 165, "medium",  70, 65, 200),
     ("case-4000d",       "Corsair 4000D Airflow",   "Corsair", "ATX", 360, 170, "high",    75, 65, 220),
     ("case-air-903",     "Montech Air 903 MAX",     "Montech", "ATX", 400, 175, "high",   170, 62, 240),
+    # Antec Flux Pro (2026-11-18) — ficha oficial antec.com/product/case/flux-pro:
+    # GPU ≤ 455mm, cooler ≤ 190mm, fonte ≤ 180mm (com cabo, com gaiola de HD).
+    # Ventoinhas de fábrica: 3×140 "Tranquil PWM" frente + 1×140 traseira e
+    # 2×120 "P12R PWM reverse" na cobertura da fonte. A Antec não publica o CFM
+    # na página do gabinete; usado o máximo da ficha do modelo correspondente
+    # (antec.com/product/cooling/tranquil-140.php: 85.96 CFM) → entrada 3×85.96,
+    # saída 1×85.96. As 2 ventoinhas da cobertura da fonte NÃO entram (o corte 2D
+    # ainda não representa ventoinha horizontal em baixo) — erra para menos.
+    ("case-flux-pro",    "Antec Flux Pro",          "Antec",   "ATX", 455, 190, "high",   258, 86, 180),
 ]
 
 # tdp_rating_w (auditoria 2026-08-12, alimenta a regra ativa cooler_tdp_headroom):

@@ -72,6 +72,25 @@ CASE_GEOMETRY: dict[str, dict] = {
              "x": 15, "y": 367, "w": 400, "h": 28, "orient": "exhaust", "stock": False},
         ],
     },
+    # Antec Flux Pro: externo 530 (D) × 545 (H) mm; interior estimado pela mesma
+    # proporção dos outros gabinetes. 3×140 na frente, 1×140 atrás, topo livre
+    # (aceita 3×120/3×140 ou radiador até 420). As 2×120 da cobertura da fonte
+    # ficam de fora (ver catalog_data).
+    "case-flux-pro": {
+        "interior_mm": {"depth": 470, "height": 440},
+        "mounts": [
+            {"id": "front_bottom", "kind": "fan140", "accepts": ["fan120", "fan140"],
+             "x": 0, "y": 15, "w": 28, "h": 140, "orient": "intake", "stock": True},
+            {"id": "front_mid", "kind": "fan140", "accepts": ["fan120", "fan140"],
+             "x": 0, "y": 155, "w": 28, "h": 140, "orient": "intake", "stock": True},
+            {"id": "front_top", "kind": "fan140", "accepts": ["fan120", "fan140"],
+             "x": 0, "y": 295, "w": 28, "h": 140, "orient": "intake", "stock": True},
+            {"id": "rear", "kind": "fan140", "accepts": ["fan120", "fan140"],
+             "x": 442, "y": 270, "w": 28, "h": 140, "orient": "exhaust", "stock": True},
+            {"id": "top_bay", "kind": "rad_bay", "accepts": ["fan120", "fan140", "rad240", "rad360"],
+             "x": 30, "y": 412, "w": 420, "h": 28, "orient": "exhaust", "stock": False},
+        ],
+    },
 }
 
 # Dimensões visuais/físicas por tipo de cooler (complementa specs do catálogo).
