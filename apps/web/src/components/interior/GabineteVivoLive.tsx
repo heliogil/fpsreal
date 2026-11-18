@@ -1,8 +1,19 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import type { LiveCaseOption, LiveInterior, LiveProduct } from '@/lib/live-server'
 import GabineteVivo from './GabineteVivo'
+// passo 7: o three.js só é baixado quando o visitante abre o 3D
+const Viewer3D = dynamic(() => import('./Viewer3D'), {
+  ssr: false,
+  loading: () => (
+    <div className="mono" style={{
+      height: 'clamp(280px, 62vw, 440px)', display: 'grid', placeItems: 'center', fontSize: 12.5,
+      color: 'var(--dim)', border: '1px solid var(--line)', borderRadius: 12, background: 'var(--card)',
+    }}>carregando o 3D…</div>
+  ),
+})
 import TrocaPeca, { brl, cpfFmt, priceDeltaText, type SwapAlt, type SwapResponse } from './TrocaPeca'
 
 /**
@@ -81,7 +92,7 @@ async function fetchSwap(
 }
 
 export default function GabineteVivoLive({
-  initial, products, offers, components: buildComponents, cases = [], totalBrl,
+  initial, products, offers, components: buildComponents, cases = [], totalBrl, modelHref,
 }: {
   initial: LiveInterior
   products: Products
@@ -90,7 +101,10 @@ export default function GabineteVivoLive({
   cases?: LiveCaseOption[]
   /** preço total da build como a página mostra (base do custo/FPS da troca) */
   totalBrl?: number
+  /** GET do .gltf da build original (download) */
+  modelHref?: string
 }) {
+  const [show3d, setShow3d] = useState(false)
   // ── troca de placa (passo 6) ─────────────────────────────────────────────
   const [swapOpen, setSwapOpen] = useState(false)
   const [swapData, setSwapData] = useState<SwapResponse | null>(null)
@@ -321,15 +335,29 @@ export default function GabineteVivoLive({
         )}
       </div>
 
-      {!swapOpen && products.gpu && (
-        <button type="button" onClick={() => void openSwap()} data-umami-event="viewer-trocar-abrir" className="mono"
-          style={{
-            justifySelf: 'start', fontSize: 12.5, padding: '7px 14px', borderRadius: 99, cursor: 'pointer',
-            border: '1px solid var(--line)', background: 'var(--card)', color: 'var(--text)',
-          }}>
-          ↻ trocar a placa de vídeo e ver o FPS e o custo/FPS
-        </button>
+      {show3d && (
+        <Viewer3D components={components} whatIfFans={whatIf} downloadHref={swapped ? undefined : modelHref} />
       )}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => setShow3d((v) => !v)} aria-pressed={show3d}
+          data-umami-event={show3d ? 'viewer-3d-fechar' : 'viewer-3d-abrir'} className="mono"
+          style={{
+            fontSize: 12.5, padding: '7px 14px', borderRadius: 99, cursor: 'pointer',
+            border: `1px solid ${show3d ? 'var(--accent-dim)' : 'var(--line)'}`,
+            background: show3d ? 'var(--accent-soft)' : 'var(--card)', color: show3d ? 'var(--accent)' : 'var(--text)',
+          }}>
+          {show3d ? '✕ fechar o 3D' : '◆ ver em 3D'}
+        </button>
+        {!swapOpen && products.gpu && (
+          <button type="button" onClick={() => void openSwap()} data-umami-event="viewer-trocar-abrir" className="mono"
+            style={{
+              fontSize: 12.5, padding: '7px 14px', borderRadius: 99, cursor: 'pointer',
+              border: '1px solid var(--line)', background: 'var(--card)', color: 'var(--text)',
+            }}>
+            ↻ trocar a placa de vídeo e ver o FPS e o custo/FPS
+          </button>
+        )}
+      </div>
       {swapOpen && (
         <TrocaPeca
           data={swapData} loading={swapLoading} failed={swapFailed}
