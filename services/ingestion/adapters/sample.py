@@ -41,6 +41,10 @@ SAMPLE_PRICES: dict[str, int] = {
     # Case
     "case-lancool-216": 550, "case-h5-flow": 600, "case-4000d": 650,
     "case-air-903": 350,
+    # Flux Pro: preço observado na Amazon BR em 18/11/2026 (à vista). Os outros
+    # valores de amostra são antigos e mais baixos que o mercado — o feed real
+    # de afiliado substitui todos.
+    "case-flux-pro": 2273,
     # Cooler (stock ships with the CPU -> 0)
     "cooler-stock-amd": 0, "cooler-ak400": 180, "cooler-pa120": 250,
     "cooler-lt520": 400, "cooler-lf3-360": 700,
