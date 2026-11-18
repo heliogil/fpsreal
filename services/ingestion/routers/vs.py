@@ -3,7 +3,10 @@
 GET /vs/{sku_a}/{sku_b}?res=1080p
 
 Returns an FPS-by-game comparison of two GPUs using a fixed reference CPU
-(Ryzen 5 7600, mid-tier) so the delta reflects GPU performance alone.
+(Ryzen 7 9800X3D — the fastest gaming CPU in the catalog and the GPU-hierarchy
+test rig) so the delta reflects GPU performance alone. Since the bottleneck FPS
+model (2026-11-18) a mid-tier CPU caps fast GPUs at 1080p and would call e.g.
+RTX 5070 Ti vs 4070 SUPER a tie; GPU reviews use the fastest CPU for this reason.
 All figures are anchor+scale estimates.
 """
 from __future__ import annotations
@@ -21,7 +24,7 @@ from models import FpsEstimate, PerformanceIndex, Product
 
 router = APIRouter(tags=["vs"])
 
-REFERENCE_CPU_SKU = "cpu-r5-7600"
+REFERENCE_CPU_SKU = "cpu-r7-9800x3d"
 
 GAME_LABELS: dict[str, str] = {
     "apex-legends":         "Apex Legends",

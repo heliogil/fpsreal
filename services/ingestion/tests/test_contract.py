@@ -96,6 +96,17 @@ def test_vs_ok(client: httpx.Client, ids: dict):
         assert row["winner"] in ("a", "b", "tie")
 
 
+def test_vs_reference_cpu_does_not_hide_the_gpu_gap(client: httpx.Client):
+    # Regression (2026-11-18): with a mid-tier reference CPU the bottleneck model
+    # capped both cards at 1080p and called this pair a tie. The faster GPU must win.
+    r = client.get("/vs/gpu-rtx-5070-ti/gpu-rtx-4070-super", params={"res": "1080p"})
+    assert r.status_code == 200
+    b = r.json()
+    assert b["reference_cpu_sku"] == "cpu-r7-9800x3d"
+    assert b["overall_winner"] == "a"
+    assert b["avg_delta_pct"] > 10
+
+
 def test_vs_unknown_sku_404(client: httpx.Client, ids: dict):
     r = client.get(f"/vs/gpu-nao-existe/{ids['gpu_sku']}")
     assert r.status_code == 404
