@@ -119,6 +119,28 @@ export default function ComoMedimosPage() {
         </p>
       </section>
 
+      <section>
+        <h2 className="text-2xl mb-3" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+          5. Como o Rei de cada faixa é escolhido
+        </h2>
+        <p>
+          Não é escolha à mão. Um programa testa <strong>todas</strong> as combinações de peças do
+          catálogo e coroa, em cada faixa (até R$ 4,5k, até R$ 7k, até R$ 11k e R$ 11k+), a build com{' '}
+          <strong>mais FPS médio em 1080p</strong> que caiba no teto. Para entrar ela tem de:
+        </p>
+        <ul className="list-disc pl-6 space-y-1 text-secondary mt-2">
+          <li>passar em todas as checagens de compatibilidade da página, sem nenhum aviso;</li>
+          <li>ter fluxo de ar de pelo menos <span className="num-mono">70</span> no mesmo modelo do visualizador;</li>
+          <li>usar só processadores com FPS calibrado em fonte pública (sem palpite);</li>
+          <li>em empate de FPS, ganha a mais barata.</li>
+        </ul>
+        <p className="mt-2">
+          O cálculo roda de novo todos os dias com os preços do momento — se uma peça baixar, o Rei
+          pode mudar. Se nenhuma build passar numa faixa, o Rei anterior fica. O custo por FPS
+          continua a ser a régua que compara as faixas entre si.
+        </p>
+      </section>
+
       <footer className="pt-6 border-t border-border text-sm text-secondary">
         <p>
           A Harpia observa.{' '}
