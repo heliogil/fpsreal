@@ -91,6 +91,13 @@ export default async function BuildDetailPage(props: PageProps) {
 
   const compat = compatRaw ?? { errors: [], warnings: [], clearances: {}, checks: [], airflow: [] }
   const products: Record<string, LiveProduct | null> = Object.fromEntries(slotData.map((s) => [s.slot, s.product]))
+  // oferta por peça p/ a ficha do viewer (tocar na peça → preço + link)
+  const viewerOffers: Record<string, { id: number; price_brl: number; demo: boolean }> = Object.fromEntries(
+    slotData.filter((s) => s.offer).map((s) => [s.slot, {
+      id: s.offer!.id, price_brl: s.offer!.price_brl,
+      demo: s.offer!.merchant.name.toLowerCase().includes('amostra'),
+    }]),
+  )
 
   // custo/FPS desta build + o Rei da arena
   const mine = cpfs.find((c) => c.slug === build.slug)?.cpf ?? 0
@@ -168,7 +175,7 @@ export default async function BuildDetailPage(props: PageProps) {
       </header>
 
       {/* ── grid principal: métricas à esquerda · GABINETE VIVO em destaque à direita ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,.92fr) minmax(0,1.08fr)', gap: 'clamp(18px,3vw,30px)', alignItems: 'start' }}>
+      <div className="build-grid" style={{ gap: 'clamp(18px,3vw,30px)', alignItems: 'start' }}>
         {/* esquerda */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           {/* custo por FPS */}
@@ -266,6 +273,7 @@ export default async function BuildDetailPage(props: PageProps) {
               <GabineteVivoLive
                 initial={interior}
                 products={products}
+                offers={viewerOffers}
                 components={components}
                 cases={caseOptions}
               />
