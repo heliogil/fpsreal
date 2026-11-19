@@ -3,6 +3,10 @@ services:
     image: postgres:16-alpine
     container_name: pcb_db
     restart: unless-stopped
+    # Prioridade de CPU quando o VPS está disputado (o host corre ~15 serviços
+    # de outros projetos). cpu_shares só pesa sob contenção — não limita nada;
+    # 2048 = o dobro do padrão (1024). Ver vault 2026-11-19.
+    cpu_shares: 2048
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-pcb_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -25,6 +29,10 @@ services:
       dockerfile: Dockerfile
     container_name: pcb_api
     restart: unless-stopped
+    # Prioridade de CPU quando o VPS está disputado (o host corre ~15 serviços
+    # de outros projetos). cpu_shares só pesa sob contenção — não limita nada;
+    # 2048 = o dobro do padrão (1024). Ver vault 2026-11-19.
+    cpu_shares: 2048
     env_file: .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pcb_db:5432/${POSTGRES_DB}
@@ -41,7 +49,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    command: uvicorn main:app --host 0.0.0.0 --port 8100 --workers 2
+    # 3 processos: o cálculo de fluxo de ar é CPU puro e prende o processo;
+    # com o cron noturno a ocupar um, sobram 2 para quem visita (8 núcleos,
+    # ~170 MB por processo)
+    command: uvicorn main:app --host 0.0.0.0 --port 8100 --workers 3
 
   pcb_web:
     build:
@@ -52,6 +63,10 @@ services:
         UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
     container_name: pcb_web
     restart: unless-stopped
+    # Prioridade de CPU quando o VPS está disputado (o host corre ~15 serviços
+    # de outros projetos). cpu_shares só pesa sob contenção — não limita nada;
+    # 2048 = o dobro do padrão (1024). Ver vault 2026-11-19.
+    cpu_shares: 2048
     ports:
       - "127.0.0.1:3100:3100"
     environment:
