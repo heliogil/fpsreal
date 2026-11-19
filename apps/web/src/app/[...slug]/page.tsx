@@ -81,7 +81,7 @@ export default async function SeoCatchAllPage(props: PageProps) {
         </p>
         <h1
           className="text-4xl mb-2"
-          style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}
+          style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}
         >
           {contenderName || slugStr} vs {tierLabel || 'Rei'}
         </h1>
@@ -93,7 +93,7 @@ export default async function SeoCatchAllPage(props: PageProps) {
       {rei ? (
         <section className="space-y-3">
           <div className="card">
-            <h2 className="text-xl mb-2" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+            <h2 className="text-xl mb-2" style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}>
               O trono atual
             </h2>
             <p className="text-secondary text-sm mb-3">{rei.subtitle}</p>
@@ -112,7 +112,7 @@ export default async function SeoCatchAllPage(props: PageProps) {
           </div>
 
           <div className="card">
-            <h2 className="text-xl mb-2" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+            <h2 className="text-xl mb-2" style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}>
               E o desafiante?
             </h2>
             <p className="text-sm text-secondary">

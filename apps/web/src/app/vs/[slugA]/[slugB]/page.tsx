@@ -58,7 +58,7 @@ export default async function VsPage(props: PageProps) {
         <p className="text-xs uppercase tracking-widest text-secondary mb-3">Comparação GPU</p>
         <h1
           className="text-3xl md:text-4xl font-bold mb-2"
-          style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}
+          style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}
         >
           {short(gpu_a.name)}{' '}
           <span style={{ color: 'var(--text-secondary)' }}>vs</span>{' '}
@@ -115,7 +115,7 @@ export default async function VsPage(props: PageProps) {
             </div>
             <div
               className="text-lg font-bold mb-3"
-              style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}
+              style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}
             >
               {short(gpu.name)}
             </div>

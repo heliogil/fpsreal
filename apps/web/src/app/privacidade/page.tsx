@@ -10,7 +10,7 @@ export const metadata = {
     'Quais dados o Rei do FPS trata, para quê, por quanto tempo e como exercer seus direitos (LGPD).',
 }
 
-const H2 = { fontFamily: 'var(--font-syne), Syne, sans-serif' }
+const H2 = { fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }
 
 export default function PrivacidadePage() {
   const CONTACT = contactEmail()

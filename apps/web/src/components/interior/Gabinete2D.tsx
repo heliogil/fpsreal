@@ -1,6 +1,7 @@
 'use client'
 
 import type { KeyboardEvent } from 'react'
+import { mountLabel } from '@/lib/viewer-labels'
 import type { GeoMount, InteriorGeometry, LiveInterior } from '@/lib/live-server'
 
 /**
@@ -28,11 +29,6 @@ const PART_NAME: Record<string, string> = {
   aio_fans: 'ventoinhas do radiador', psu: 'fonte', motherboard: 'placa-mãe', ram: 'memória', m2_ssd: 'SSD M.2',
   cpu_socket: 'processador',
 }
-const MOUNT_LABEL: Record<string, string> = {
-  front_bottom: 'frontal inferior', front_top: 'frontal superior', front_mid: 'frontal meio',
-  rear: 'traseira', top_bay: 'baía superior', shroud: 'cobertura da fonte',
-}
-const mountLabel = (id: string) => MOUNT_LABEL[id] ?? id.replace(/_/g, ' ')
 
 function faceOf(m: GeoMount, H: number): string {
   if (m.face) return m.face

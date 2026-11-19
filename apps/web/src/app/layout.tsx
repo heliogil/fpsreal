@@ -9,7 +9,8 @@ import ThemeToggle from '@/components/ThemeToggle'
 // isso o CSP 'self' chega. Vazio ⇒ nada é carregado. Lido no build da imagem.
 const UMAMI_ID = process.env.UMAMI_WEBSITE_ID?.trim()
 
-const syne = Syne({ subsets: ['latin'], weight: ['500', '600', '700', '800'], variable: '--font-syne', display: 'swap' })
+// Syne só no logo (marca); títulos e texto em IBM Plex Sans — menos distorção
+const syne = Syne({ subsets: ['latin'], weight: ['800'], variable: '--font-syne', display: 'swap' })
 const plex = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-plex', display: 'swap' })
 const plexMono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-plex-mono', display: 'swap' })
 
@@ -24,7 +25,7 @@ export const metadata: Metadata = {
 function CrownWordmark() {
   return (
     <span
-      className="disp"
+      className="brand"
       style={{ display: 'inline-flex', alignItems: 'center', gap: '.4em', fontWeight: 800, letterSpacing: '.01em', lineHeight: 1, color: 'var(--strong)' }}
     >
       <svg width="1em" height="1em" viewBox="0 0 24 22" style={{ height: '.84em', width: 'auto', flex: 'none' }} aria-hidden="true">

@@ -106,6 +106,49 @@ def _cylinder(seg: int = 16) -> Tuple[List[float], List[float], List[int]]:
     return pos, nrm, idx
 
 
+def _ring(seg: int = 28, inner: float = 0.41) -> Tuple[List[float], List[float], List[int]]:
+    """Anel (coroa circular com espessura): raio externo .5, interno `inner`,
+    altura 1 em Y, centrado. É a moldura de TODA ventoinha do modelo."""
+    pos: List[float] = []
+    nrm: List[float] = []
+    idx: List[int] = []
+
+    def quad(a, b, c, d, n):
+        base = len(pos) // 3
+        for v in (a, b, c, d):
+            pos.extend(v)
+            nrm.extend(n)
+        idx.extend([base, base + 1, base + 2, base, base + 2, base + 3])
+
+    for i in range(seg):
+        a0 = 2 * math.pi * i / seg
+        a1 = 2 * math.pi * (i + 1) / seg
+        c0, s0, c1, s1 = math.cos(a0), math.sin(a0), math.cos(a1), math.sin(a1)
+        o0, o1 = (0.5 * c0, 0.5 * s0), (0.5 * c1, 0.5 * s1)
+        i0, i1 = (inner * c0, inner * s0), (inner * c1, inner * s1)
+        # face externa e interna (normais radiais), topo e base (±Y)
+        quad((o0[0], -.5, o0[1]), (o1[0], -.5, o1[1]), (o1[0], .5, o1[1]), (o0[0], .5, o0[1]), (c0, 0, s0))
+        quad((i1[0], -.5, i1[1]), (i0[0], -.5, i0[1]), (i0[0], .5, i0[1]), (i1[0], .5, i1[1]), (-c0, 0, -s0))
+        quad((o0[0], .5, o0[1]), (o1[0], .5, o1[1]), (i1[0], .5, i1[1]), (i0[0], .5, i0[1]), (0, 1, 0))
+        quad((i0[0], -.5, i0[1]), (i1[0], -.5, i1[1]), (o1[0], -.5, o1[1]), (o0[0], -.5, o0[1]), (0, -1, 0))
+    return pos, nrm, idx
+
+
+def _qmul(a: List[float], b: List[float]) -> List[float]:
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return [aw * bx + ax * bw + ay * bz - az * by,
+            aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw,
+            aw * bw - ax * bx - ay * by - az * bz]
+
+
+def _qaxis(x: float, y: float, z: float, ang: float) -> List[float]:
+    h = ang / 2
+    sn = math.sin(h)
+    return [x * sn, y * sn, z * sn, math.cos(h)]
+
+
 #: quaterniões para apontar o eixo do cilindro (nativo +Y) noutra direcção
 _ROT = {
     "y": None,                                    # já é +Y
@@ -190,6 +233,8 @@ def build_gltf(est: dict) -> dict:
     cube_p, cube_n, cube_i = buf.add_f32(cp, 3, True), buf.add_f32(cn, 3, False), buf.add_u16(ci)
     yp, yn, yi = _cylinder()
     cyl_p, cyl_n, cyl_i = buf.add_f32(yp, 3, True), buf.add_f32(yn, 3, False), buf.add_u16(yi)
+    rp, rn, ri = _ring()
+    ring_p, ring_n, ring_i = buf.add_f32(rp, 3, True), buf.add_f32(rn, 3, False), buf.add_u16(ri)
 
     meshes: List[dict] = []   # um mesh por (primitiva × material)
 
@@ -206,6 +251,12 @@ def build_gltf(est: dict) -> dict:
     MAT = {n: i for i, n in enumerate(mat_names)}
 
     nodes: List[dict] = []
+    roots: List[int] = []   # nós de topo da cena (filhos de uma ventoinha não entram)
+
+    def _root(n: dict) -> int:
+        nodes.append(n)
+        roots.append(len(nodes) - 1)
+        return len(nodes) - 1
 
     def box(name: str, cx: float, cy: float, cz: float,
             sx: float, sy: float, sz: float, mat: str, fonte: str) -> None:
@@ -213,7 +264,7 @@ def build_gltf(est: dict) -> dict:
             return
         # material por-nó não existe em glTF: o material vive na primitiva,
         # por isso há um mesh (cubo) por material, partilhando os acessores
-        nodes.append({
+        _root({
             "name": name, "mesh": _mesh_for(mat),
             "translation": [round(cx * S, 6), round(cy * S, 6), round(cz * S, 6)],
             "scale": [round(sx * S, 6), round(sy * S, 6), round(sz * S, 6)],
@@ -251,7 +302,51 @@ def build_gltf(est: dict) -> dict:
         }
         if _ROT[axis]:
             n["rotation"] = _ROT[axis]
-        nodes.append(n)
+        _root(n)
+
+    _ring_cache: Dict[str, int] = {}
+
+    def _ring_for(mat: str) -> int:
+        if mat not in _ring_cache:
+            meshes.append({"name": f"anel-{mat}", "primitives": [
+                {"attributes": {"POSITION": ring_p, "NORMAL": ring_n},
+                 "indices": ring_i, "material": MAT[mat]}]})
+            _ring_cache[mat] = len(meshes) - 1
+        return _ring_cache[mat]
+
+    def fan(name: str, cx: float, cy: float, cz: float, size: float, th: float,
+            axis: str, ring_mat: str, fonte: str, blades: int = 7) -> None:
+        """UMA ventoinha, sempre igual: moldura em anel (a cor diz entra/sai),
+        pás inclinadas e cubo central. Gabinete, GPU, cooler e radiador usam
+        esta mesma peça — só mudam tamanho, espessura, eixo e cor da moldura.
+        O nó-pai leva o nome (o 3D da página escolhe a peça por ele)."""
+        q_axis = _ROT[axis] or [0.0, 0.0, 0.0, 1.0]
+        kids: List[int] = []
+
+        def child(mesh: int, t: List[float], sc: List[float], rot: Optional[List[float]] = None) -> None:
+            n: Dict[str, Any] = {"mesh": mesh, "translation": [round(v * S, 6) for v in t],
+                                 "scale": [round(v * S, 6) for v in sc]}
+            if rot:
+                n["rotation"] = [round(v, 6) for v in rot]
+            nodes.append(n)
+            kids.append(len(nodes) - 1)
+
+        # moldura e cubo, no referencial do pai (eixo da ventoinha = +Y)
+        child(_ring_for(ring_mat), [0, 0, 0], [size, th, size])
+        child(_cyl_for("panel"), [0, 0, 0], [size * 0.26, th * 0.92, size * 0.26])
+        pitch = _qaxis(1, 0, 0, math.radians(28))
+        for k in range(blades):
+            a = 2 * math.pi * k / blades
+            q = _qmul(_qaxis(0, 1, 0, -a), pitch)
+            rmid = size * 0.27
+            child(_mesh_for("line"), [rmid * math.cos(a), 0, rmid * math.sin(a)],
+                  [size * 0.27, th * 0.18, size * 0.12], q)
+        _root({
+            "name": name, "children": kids,
+            "translation": [round(cx * S, 6), round(cy * S, 6), round(cz * S, 6)],
+            "rotation": [round(v, 8) for v in q_axis],
+            "extras": {"fonte": fonte},
+        })
 
     # ── casca do gabinete: 5 painéis, lado do vidro aberto para se ver dentro ──
     T = 3.0
@@ -278,8 +373,8 @@ def build_gltf(est: dict) -> dict:
             n_fans = int(d.get("fans") or 0)
             for i in range(n_fans):
                 cx = px + pw * (i + 0.5) / n_fans
-                disc(f"gpu-fan-{i}", cx, py + ph / 2, z0 + zt + 1.5,
-                     min(ph * 0.42, pw / n_fans * 0.42), 3.0, "z", "line", "descritor")
+                fan(f"gpu-fan-{i}", cx, py + ph / 2, z0 + zt + 2.0,
+                    min(ph * 0.86, pw / n_fans * 0.9), 4.0, "z", "line", "descritor")
             if d.get("backplate"):
                 box("gpu-backplate", px + pw / 2, py + ph + 2.0, z0 + zt / 2,
                     pw, 3.0, zt, "line", "descritor")
@@ -292,8 +387,8 @@ def build_gltf(est: dict) -> dict:
             zt = cooler_h if cooler_h > 0 else 120.0
             fz = "spec (altura = vão bandeja→tampa)" if cooler_h > 0 else "form_factor_default"
             box("cooler", px + pw / 2, py + ph / 2, 4.0 + zt / 2, pw, ph, zt, "panel", fz)
-            disc("cooler-fan", px + pw / 2, py + ph / 2, 4.0 + zt + 2.0,
-                 min(pw, ph) * 0.45, 25.0, "z", "line", "form_factor_default")
+            fan("cooler-fan", px - 12.5, py + ph / 2, 4.0 + zt / 2,
+                min(ph, zt) * 0.92, 25.0, "x", "line", "form_factor_default")
             continue
 
         if part == "case_fan":
@@ -303,30 +398,36 @@ def build_gltf(est: dict) -> dict:
             wide = p.get("wide") is True
             n = max(1, int(p.get("fan_count") or 1))
             zc = float(p["z"]) if p.get("z") is not None else W / 2
+            ring = ("accent" if p.get("simulated") else
+                    "fresh" if p.get("orient") == "intake" else
+                    "warn" if p.get("orient") == "exhaust" else
+                    ("fresh" if px < D * 0.3 else "warn"))
+            src = "spec" if not p.get("simulated") else "simulado"
             if face == "side":
-                # na tampa: disco de frente para quem olha pelo vidro
-                r = min(pw, ph) / 2 * 0.9
-                disc(f"fan-{p.get('mount', '')}-0", px + pw / 2, py + ph / 2, zc, r, 25.0,
-                     "z", "fresh" if p.get("orient") == "intake" else "warn",
-                     "spec" if not p.get("simulated") else "simulado")
+                # na tampa: de frente para quem olha pelo vidro
+                fan(f"fan-{p.get('mount', '')}-0", px + pw / 2, py + ph / 2, zc,
+                    min(pw, ph) * 0.9, 25.0, "z", ring, src)
                 continue
-            r = (pw if wide else ph) / n * 0.45
-            r = min(r, (float(p.get("d") or W)) / 2 * 0.95)
-            if p.get("orient") in ("intake", "exhaust"):
-                mat = "fresh" if p["orient"] == "intake" else "warn"
-            else:
-                mat = "fresh" if px < D * 0.3 else "warn"
+            size = min((pw if wide else ph) / n * 0.92, float(p.get("d") or W) * 0.95)
             for i in range(n):
                 t = (i + 0.5) / n
                 cx = px + pw * t if wide else px + pw / 2
                 cy = py + ph / 2 if wide else py + ph * t
                 if face == "bottom" and shroud > 0:
-                    # na cobertura da fonte a ventoinha fica rente à chapa: o
-                    # topo do disco aflora 1,5 mm para não sumir debaixo dela
-                    cy = shroud - 25.0 / 2 + 1.5
-                disc(f"fan-{p.get('mount', '')}-{i}", cx, cy, zc, r, 25.0,
-                     "y" if wide else "x", mat,
-                     "spec" if not p.get("simulated") else "simulado")
+                    # na cobertura da fonte: metade acima da chapa — rente a
+                    # ela a ventoinha sumia debaixo da tampa
+                    cy = shroud
+                fan(f"fan-{p.get('mount', '')}-{i}", cx, cy, zc, size, 25.0,
+                    "y" if wide else "x", ring, src)
+            continue
+
+        if part == "aio_fans":
+            # a fila de ventoinhas do radiador: a mesma ventoinha, deitada
+            n = max(1, int(p.get("fan_count") or 3))
+            size = min(pw / n * 0.94, 120.0)
+            for i in range(n):
+                fan(f"aio_fans-{i}", px + pw * (i + 0.5) / n, py + ph / 2, W / 2, size, ph,
+                    "y", "warn", "form_factor_default")
             continue
 
         zt, fz = _Z_DEFAULT.get(part, (20.0, "form_factor_default"))
@@ -354,7 +455,7 @@ def build_gltf(est: dict) -> dict:
             },
         },
         "scene": 0,
-        "scenes": [{"name": "gabinete", "nodes": list(range(len(nodes)))}],
+        "scenes": [{"name": "gabinete", "nodes": roots}],
         "nodes": nodes,
         "meshes": meshes,
         "materials": materials,

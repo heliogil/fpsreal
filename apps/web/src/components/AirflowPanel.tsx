@@ -22,7 +22,7 @@ export default function AirflowPanel({ airflow }: AirflowPanelProps) {
   return (
     <div className="card">
       <div className="flex items-baseline justify-between mb-3">
-        <h3 className="text-lg" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+        <h3 className="text-lg" style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}>
           Fluxo de ar
         </h3>
         <span className="text-xs uppercase tracking-wider text-secondary">

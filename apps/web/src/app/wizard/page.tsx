@@ -11,7 +11,7 @@ export default function WizardPage() {
       <div className="text-center mb-10">
         <h1
           className="text-4xl mb-2"
-          style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}
+          style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}
         >
           Monte seu build
         </h1>
