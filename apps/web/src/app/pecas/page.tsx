@@ -35,18 +35,21 @@ type Build = {
 }
 
 async function jget<T>(path: string, fallback: T): Promise<T> {
-  try {
-    const r = await fetch(`${API}${path}`, { cache: 'no-store' })
-    if (!r.ok) return fallback
-    return (await r.json()) as T
-  } catch {
-    return fallback
-  }
+  const v = await cached<T>(`GET ${path}`, async () => {
+    try {
+      const r = await fetch(`${API}${path}`, { cache: 'no-store' })
+      return r.ok ? ((await r.json()) as T) : null
+    } catch {
+      return null
+    }
+  })
+  return v ?? fallback
 }
 
 const syne = { fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }
 const mono = { fontFamily: 'var(--font-plex-mono), monospace' }
 
+import { cached } from '@/lib/server-cache'
 import { TIER_LABEL as TIER_LABEL_BY_KEY, TIER_ORDER as TIER_ORDER_BY_KEY } from '@/lib/tiers'
 const TIER_LABEL: Record<string, string> = TIER_LABEL_BY_KEY
 const TIER_ORDER: Record<string, number> = TIER_ORDER_BY_KEY
