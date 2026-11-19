@@ -4,16 +4,34 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import type { LiveCaseOption, LiveInterior, LiveProduct } from '@/lib/live-server'
 import GabineteVivo from './GabineteVivo'
-// passo 7: o three.js só é baixado quando o visitante abre o 3D
+// o three.js só é baixado quando o 3D vai aparecer (desktop ou pedido)
 const Viewer3D = dynamic(() => import('./Viewer3D'), {
   ssr: false,
   loading: () => (
     <div className="mono" style={{
-      height: 'clamp(280px, 62vw, 440px)', display: 'grid', placeItems: 'center', fontSize: 12.5,
-      color: 'var(--dim)', border: '1px solid var(--line)', borderRadius: 12, background: 'var(--card)',
+      aspectRatio: '720 / 430', maxHeight: '70vh', display: 'grid', placeItems: 'center', fontSize: 12.5,
+      color: 'var(--dim)',
     }}>carregando o 3D…</div>
   ),
 })
+
+const VIEW_PREF_KEY = 'reidofps:viewer'
+/** 3D por padrão só onde ele é melhor: tela larga, mouse e WebGL. No celular o
+ *  arrastar do 3D brigaria com a rolagem da página (fase 3 trata disso). */
+function prefers3d(): boolean {
+  try {
+    const saved = window.localStorage.getItem(VIEW_PREF_KEY)
+    if (saved === '2d') return false
+    if (saved === '3d') return true
+  } catch { /* storage bloqueado: segue a regra padrão */ }
+  if (!window.matchMedia?.('(min-width: 900px) and (pointer: fine)').matches) return false
+  try {
+    const c = document.createElement('canvas')
+    return !!(c.getContext('webgl2') || c.getContext('webgl'))
+  } catch {
+    return false
+  }
+}
 import TrocaPeca, { brl, cpfFmt, priceDeltaText, type SwapAlt, type SwapResponse } from './TrocaPeca'
 
 /**
@@ -104,7 +122,13 @@ export default function GabineteVivoLive({
   /** GET do .gltf da build original (download) */
   modelHref?: string
 }) {
+  // o HTML do servidor é sempre o 2D (Google, og, sem JS); o 3D entra depois
   const [show3d, setShow3d] = useState(false)
+  useEffect(() => { if (prefers3d()) setShow3d(true) }, [])
+  const toggle3d = () => setShow3d((v) => {
+    try { window.localStorage.setItem(VIEW_PREF_KEY, v ? '2d' : '3d') } catch { /* sem storage: só nesta visita */ }
+    return !v
+  })
   // ── troca de placa (passo 6) ─────────────────────────────────────────────
   const [swapOpen, setSwapOpen] = useState(false)
   const [swapData, setSwapData] = useState<SwapResponse | null>(null)
@@ -324,6 +348,10 @@ export default function GabineteVivoLive({
           onClearWhatIf={clearWhatIf}
           pending={pending}
           compact={!!compare}
+          scene={show3d && !compare ? (
+            <Viewer3D embedded components={components} whatIfFans={whatIf} interior={interior}
+              onToggleFan={toggleFan} downloadHref={swapped ? undefined : modelHref} />
+          ) : undefined}
         />
         {compare && (
           <GabineteVivo
@@ -335,18 +363,15 @@ export default function GabineteVivoLive({
         )}
       </div>
 
-      {show3d && (
-        <Viewer3D components={components} whatIfFans={whatIf} downloadHref={swapped ? undefined : modelHref} />
-      )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button type="button" onClick={() => setShow3d((v) => !v)} aria-pressed={show3d}
-          data-umami-event={show3d ? 'viewer-3d-fechar' : 'viewer-3d-abrir'} className="mono"
+        <button type="button" onClick={toggle3d} aria-pressed={show3d} disabled={!!compare}
+          title={compare ? 'a comparação lado a lado usa o corte 2D' : undefined}
+          data-umami-event={show3d ? 'viewer-ver-2d' : 'viewer-ver-3d'} className="mono"
           style={{
-            fontSize: 12.5, padding: '7px 14px', borderRadius: 99, cursor: 'pointer',
-            border: `1px solid ${show3d ? 'var(--accent-dim)' : 'var(--line)'}`,
-            background: show3d ? 'var(--accent-soft)' : 'var(--card)', color: show3d ? 'var(--accent)' : 'var(--text)',
+            fontSize: 12.5, padding: '7px 14px', borderRadius: 99, cursor: compare ? 'not-allowed' : 'pointer',
+            border: '1px solid var(--line)', background: 'var(--card)', color: 'var(--text)', opacity: compare ? 0.5 : 1,
           }}>
-          {show3d ? '✕ fechar o 3D' : '◆ ver em 3D'}
+          {show3d ? '▭ ver o corte 2D' : '◆ ver em 3D'}
         </button>
         {!swapOpen && products.gpu && (
           <button type="button" onClick={() => void openSwap()} data-umami-event="viewer-trocar-abrir" className="mono"
