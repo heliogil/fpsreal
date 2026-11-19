@@ -3,6 +3,8 @@
  * (API /melhor, calculada todo dia por seed.best_by_budget com a mesma regra do
  * Rei de cada faixa).
  */
+import { cached } from './server-cache'
+
 const API = process.env.PCB_API_INTERNAL || 'http://pcb_api:8100'
 
 export type BudgetPick = {
@@ -16,12 +18,15 @@ export type BudgetPick = {
 }
 
 export async function getBudgetPicks(): Promise<BudgetPick[]> {
-  try {
-    const r = await fetch(`${API}/melhor/`, { cache: 'no-store', signal: AbortSignal.timeout(5000) })
-    return r.ok ? ((await r.json()) as BudgetPick[]) : []
-  } catch {
-    return []
-  }
+  const rows = await cached<BudgetPick[]>('GET /melhor/', async () => {
+    try {
+      const r = await fetch(`${API}/melhor/`, { cache: 'no-store', signal: AbortSignal.timeout(5000) })
+      return r.ok ? ((await r.json()) as BudgetPick[]) : null
+    } catch {
+      return null
+    }
+  })
+  return rows ?? []
 }
 
 export const budgetSlug = (b: number) => `ate-${b}`

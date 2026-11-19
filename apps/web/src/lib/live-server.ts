@@ -1,3 +1,4 @@
+import { cached } from './server-cache'
 import type { CuratedBuild, FpsEstimate, GameSlug, WizardInput } from './repositories/types'
 import { priorityLabel } from './labels'
 import { REFERENCE_RES, avgReferenceFps, costPerFps } from './metrics'
@@ -70,20 +71,14 @@ function candidateToBuild(
 
 export async function runLiveWizard(input: WizardInput): Promise<CuratedBuild[] | null> {
   try {
-    const res = await fetch(`${API}/wizard/`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        budget_brl: input.budget_brl,
-        games: input.games,
-        resolution: input.resolution,
-        preset: 'high',
-        priority: input.priority,
-      }),
-      cache: 'no-store',
+    const data = await postJson<WizResponse>('/wizard/', {
+      budget_brl: input.budget_brl,
+      games: input.games,
+      resolution: input.resolution,
+      preset: 'high',
+      priority: input.priority,
     })
-    if (!res.ok) return null
-    const data = (await res.json()) as WizResponse
+    if (!data) return null
     return (data.candidates ?? []).map((c, i) =>
       candidateToBuild(c, i, data.priority ?? input.priority, data.resolution ?? input.resolution),
     )
@@ -110,29 +105,37 @@ type BuildOut = {
   components: Record<string, { id: number; name: string; category: string }>
 }
 
+// Leituras com cache em memória de 5 min (ver lib/server-cache.ts). O fetch
+// em si continua no-store: a página renderiza a cada visita, os dados é que
+// não vão à API todas as vezes.
 async function getJson<T>(path: string): Promise<T | null> {
-  try {
-    const r = await fetch(`${API}${path}`, { cache: 'no-store' })
-    if (!r.ok) return null
-    return (await r.json()) as T
-  } catch {
-    return null
-  }
+  return cached<T>(`GET ${path}`, async () => {
+    try {
+      const r = await fetch(`${API}${path}`, { cache: 'no-store' })
+      if (!r.ok) return null
+      return (await r.json()) as T
+    } catch {
+      return null
+    }
+  })
 }
 
 async function postJson<T>(path: string, body: unknown): Promise<T | null> {
-  try {
-    const r = await fetch(`${API}${path}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-      cache: 'no-store',
-    })
-    if (!r.ok) return null
-    return (await r.json()) as T
-  } catch {
-    return null
-  }
+  const payload = JSON.stringify(body)
+  return cached<T>(`POST ${path} ${payload}`, async () => {
+    try {
+      const r = await fetch(`${API}${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: payload,
+        cache: 'no-store',
+      })
+      if (!r.ok) return null
+      return (await r.json()) as T
+    } catch {
+      return null
+    }
+  })
 }
 
 function compId(b: BuildOut, cat: string): number {
