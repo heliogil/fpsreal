@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next'
+import { budgetSlug, getBudgetPicks, groupPicks } from '@/lib/melhor'
 
 const BASE = 'https://reidofps.com.br'
 const API  = process.env.PCB_API_INTERNAL || 'http://pcb_api:8100'
@@ -29,5 +30,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   } catch { /* API indisponível no build — sitemap sem build entries */ }
 
-  return [...statics, ...buildEntries]
+  // "Melhor PC gamer até R$ X": só a página canónica de cada grupo de
+  // orçamentos com a mesma build (as outras apontam para ela)
+  let melhorEntries: MetadataRoute.Sitemap = []
+  try {
+    const groups = groupPicks(await getBudgetPicks())
+    if (groups.length) {
+      melhorEntries = [
+        { url: `${BASE}/melhor-pc-gamer`, lastModified: new Date(), changeFrequency: 'daily' as const, priority: 0.9 },
+        ...groups.map((g) => ({
+          url: `${BASE}/melhor-pc-gamer/${budgetSlug(g.from)}`,
+          lastModified: new Date(), changeFrequency: 'daily' as const, priority: 0.8,
+        })),
+      ]
+    }
+  } catch { /* API indisponível — sitemap sem estas páginas */ }
+
+  return [...statics, ...buildEntries, ...melhorEntries]
 }
