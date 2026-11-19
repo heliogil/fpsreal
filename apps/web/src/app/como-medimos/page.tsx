@@ -103,6 +103,7 @@ export default function ComoMedimosPage() {
           <li>Não inventamos número quando não há referência — a peça fica &quot;em análise&quot;.</li>
           <li>Não dizemos &quot;testamos&quot; quando na verdade estimamos.</li>
           <li>Não deixamos comissão de afiliado mexer no ranking.</li>
+          <li>Anúncios e conteúdo patrocinado aparecem sempre marcados e nunca mudam o ranking nem a escolha do Rei.</li>
         </ul>
       </section>
 

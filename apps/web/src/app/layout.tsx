@@ -3,6 +3,8 @@ import { Syne, IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google'
 import './globals.css'
 import Script from 'next/script'
 import ThemeToggle from '@/components/ThemeToggle'
+import AdsRuntime, { ConsentLink } from '@/components/ads/AdsRuntime'
+import { adsConfig } from '@/lib/ads'
 
 // Analytics próprio (Umami self-hosted na VPS, sem cookies ⇒ sem banner LGPD).
 // O script e o envio passam pelo próprio domínio (nginx /u/ → container), por
@@ -38,12 +40,15 @@ function CrownWordmark() {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // anúncios desligados por padrão: sem ADSENSE_CLIENT no ambiente, nada muda
+  const ads = adsConfig()
   return (
     <html lang="pt-BR" data-theme="dark" className={`${syne.variable} ${plex.variable} ${plexMono.variable}`}>
       <body>
         {UMAMI_ID && (
           <Script src="/u/script.js" data-website-id={UMAMI_ID} data-host-url="/u" strategy="afterInteractive" />
         )}
+        {ads && <AdsRuntime client={ads.client} />}
         <div style={{ minHeight: '100vh', background: 'var(--grad)', backgroundAttachment: 'fixed' }}>
           <header
             className="site-header"
@@ -88,6 +93,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <a href="/privacidade" style={{ color: 'inherit', textDecoration: 'underline' }}>Privacidade</a>
                 {' · '}
                 <a href="/termos" style={{ color: 'inherit', textDecoration: 'underline' }}>Termos de uso</a>
+                {ads && <>{' · '}<ConsentLink /></>}
               </div>
             </div>
           </footer>

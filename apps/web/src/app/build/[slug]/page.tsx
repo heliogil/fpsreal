@@ -26,6 +26,9 @@ interface PageProps {
 }
 
 import { TIER_LABEL as TIER_LABEL_BY_KEY } from '@/lib/tiers'
+import AdSlot from '@/components/ads/AdSlot'
+import Patrocinado from '@/components/ads/Patrocinado'
+import { adsConfig } from '@/lib/ads'
 const TIER_LABEL: Record<string, string> = TIER_LABEL_BY_KEY
 
 const fmtR = (v: number) => 'R$ ' + Math.round(v).toLocaleString('pt-BR')
@@ -66,6 +69,7 @@ export async function generateMetadata(props: PageProps) {
 
 export default async function BuildDetailPage(props: PageProps) {
   const [params, searchParams] = await Promise.all([props.params, props.searchParams])
+  const ads = adsConfig()
   const builds = await getLiveBuilds()
   const build = builds?.find((b) => b.slug === params.slug)
   if (!build) notFound()
@@ -343,6 +347,9 @@ export default async function BuildDetailPage(props: PageProps) {
         })()}
       </section>
 
+      {/* anúncio: depois da lista de FPS — nunca no visualizador nem junto do veredicto */}
+      <AdSlot client={ads?.client} slot={ads?.slots.build_fps} />
+
       {/* ── componentes ── */}
       <section style={{ marginTop: 'clamp(28px,4vw,44px)' }}>
         <h2 className="disp" style={{ fontWeight: 700, fontSize: 'clamp(20px,2.6vw,26px)', margin: '0 0 16px', color: 'var(--strong)' }}>Peças desta build</h2>
@@ -371,6 +378,10 @@ export default async function BuildDetailPage(props: PageProps) {
           })}
         </div>
       </section>
+
+      {/* patrocínio (fora do ranking e do cálculo do Rei) + anúncio */}
+      <Patrocinado placement="build" />
+      <AdSlot client={ads?.client} slot={ads?.slots.build_pecas} />
 
       {/* CTA */}
       <section style={{ textAlign: 'center', padding: '40px 0 8px' }}>
