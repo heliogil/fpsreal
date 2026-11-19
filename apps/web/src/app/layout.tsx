@@ -64,6 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </a>
             <nav className="site-nav" style={{ display: 'flex', gap: 24, alignItems: 'center', fontSize: 13.5, fontWeight: 500, color: 'var(--dim)' }}>
               <a className="navlink" href="/#challengers" style={{ color: 'inherit' }}>Builds curadas</a>
+              <a className="navlink" href="/melhor-pc-gamer" style={{ color: 'inherit' }}>PC por orçamento</a>
               <a className="navlink" href="/pecas" style={{ color: 'inherit' }}>Peças & FPS</a>
               <a className="navlink" href="/como-medimos" style={{ color: 'inherit' }}>Como medimos o FPS</a>
             </nav>
