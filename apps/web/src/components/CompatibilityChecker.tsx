@@ -23,7 +23,6 @@ const STATUS: Record<string, { c: string; icon: string }> = {
   error: { c: 'var(--accent-red, #e63535)', icon: '✗' },
   unknown: { c: 'var(--text-secondary, #8a8a99)', icon: '?' },
 }
-const mono = 'var(--font-plex-mono), monospace'
 
 export default function CompatibilityChecker({
   errors,
@@ -60,9 +59,9 @@ export default function CompatibilityChecker({
                   border: '1px solid var(--border)', borderLeft: `3px solid ${s.c}`,
                 }}
               >
-                <span style={{ fontFamily: mono, fontSize: 12 }}>{NODE[ch.a] ?? ch.a}</span>
+                <span style={{ fontSize: 12.5 }}>{NODE[ch.a] ?? ch.a}</span>
                 <span style={{ color: 'var(--text-secondary)', fontSize: 10.5 }}>┄ {ch.label} ┄</span>
-                <span style={{ fontFamily: mono, fontSize: 12 }}>{NODE[ch.b] ?? ch.b}</span>
+                <span style={{ fontSize: 12.5 }}>{NODE[ch.b] ?? ch.b}</span>
                 <span style={{ color: s.c, fontSize: 13 }}>{s.icon}</span>
               </div>
             )
@@ -79,7 +78,7 @@ export default function CompatibilityChecker({
       ))}
 
       {Object.keys(clearances).length > 0 && (
-        <div className="mt-3 pt-2 border-t border-border text-xs text-secondary" style={{ fontFamily: mono }}>
+        <div className="mt-3 pt-2 border-t border-border text-xs text-secondary">
           {Object.entries(clearances).map(([slot, c]) => (
             <span key={slot} style={{ marginRight: 14 }} title={c.source === 'medido_noctua' ? 'medido pela Noctua, não a ficha do fabricante' : undefined}>
               {slot} folga {c.remaining_mm}mm{c.is_tight ? ' (apertado)' : ''}{c.source === 'medido_noctua' ? ' · medido' : ''}

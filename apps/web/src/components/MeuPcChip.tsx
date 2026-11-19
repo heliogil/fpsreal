@@ -28,7 +28,6 @@ export default function MeuPcChip() {
       className="hover:text-gold"
       title="O teu PC guardado"
       style={{
-        fontFamily: 'var(--font-plex-mono), monospace',
         fontSize: 11,
         border: '1px solid var(--border)',
         borderRadius: 999,

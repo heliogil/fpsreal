@@ -10,7 +10,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
 
   return (
     <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 20, padding: '40px 16px', textAlign: 'center' }}>
-      <div className="mono" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.14em', color: 'var(--warn)' }}>ERRO INESPERADO</div>
+      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.05em', color: 'var(--warn)' }}>ERRO INESPERADO</div>
       <h1 className="disp" style={{ fontSize: 'clamp(28px,4vw,40px)', fontWeight: 700, color: 'var(--strong)', margin: 0 }}>
         Algo deu errado
       </h1>

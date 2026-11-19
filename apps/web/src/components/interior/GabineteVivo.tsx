@@ -96,7 +96,7 @@ export default function GabineteVivo({
       <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
         {header}
         <div style={{ borderTop: '1px solid var(--line2)', padding: 48, textAlign: 'center' }}>
-          <span className="mono" style={{ fontSize: 12, color: 'var(--dim2)' }}>
+          <span style={{ fontSize: 12, color: 'var(--dim2)' }}>
             geometria do gabinete em análise — visualização paramétrica indisponível
           </span>
         </div>
@@ -291,7 +291,7 @@ export default function GabineteVivo({
                 </span>
               )
             })}
-            <span className="mono" style={{ fontSize: 12, padding: '3px 9px', borderRadius: 99, border: '1px solid var(--line)', color: 'var(--dim)' }}>
+            <span style={{ fontSize: 12, padding: '3px 9px', borderRadius: 99, border: '1px solid var(--line)', color: 'var(--dim)' }}>
               pressão {pressao}
             </span>
             {g.mounts.filter((m) => m.cfm > 0).map((m) => {
@@ -300,7 +300,7 @@ export default function GabineteVivo({
               const cap = m.capacity ?? 1
               const stepper = isSim && onFanDelta && cap > 1
               return (
-                <span key={m.id} className="mono" style={{
+                <span key={m.id} style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5,
                   fontSize: 12, padding: '3px 9px', borderRadius: 99,
                   border: `1px solid ${isSim ? 'var(--accent-dim)' : 'var(--line)'}`,

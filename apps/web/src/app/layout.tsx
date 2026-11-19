@@ -79,7 +79,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <footer style={{ borderTop: '1px solid var(--line2)', marginTop: 64, padding: 'clamp(28px,4vw,40px) clamp(16px,4vw,40px)' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <a href="/"><CrownWordmark /></a>
-              <div className="mono" style={{ fontSize: 11, lineHeight: 1.6, color: 'var(--dim2)', maxWidth: 460 }}>
+              <div style={{ fontSize: 11, lineHeight: 1.6, color: 'var(--dim2)', maxWidth: 460 }}>
                 Estimativas anchor+scale calibradas no Tom&apos;s Hardware · preços de amostra até os feeds oficiais das lojas.
                 <br />
                 🤝 Alguns links são de afiliado — se você comprar por eles, a gente ganha comissão da loja.
