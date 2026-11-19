@@ -32,6 +32,8 @@ EXPECTED_ROUTES = {
     "/track/click",
     "/go/{offer_id}",
     "/vs/{sku_a}/{sku_b}",
+    "/melhor/",
+    "/melhor/{budget}",
 }
 
 

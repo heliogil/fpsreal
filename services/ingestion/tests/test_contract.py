@@ -265,3 +265,18 @@ def test_go_unknown_404(client: httpx.Client):
 
 def test_go_invalid_id_422(client: httpx.Client):
     assert client.get("/go/abc").status_code == 422
+
+
+# --- melhor PC até R$ X (seed.best_by_budget) --------------------------------
+def test_melhor_list_is_a_list(client: httpx.Client):
+    r = client.get("/melhor/")
+    assert r.status_code == 200
+    rows = r.json()
+    assert isinstance(rows, list)
+    for row in rows:
+        assert row["total_brl"] <= row["budget_brl"]       # a build cabe no orçamento
+        assert row["avg_fps"] > 0 and "cpu_id" in row["components"]
+
+
+def test_melhor_unknown_budget_404(client: httpx.Client):
+    assert client.get("/melhor/123").status_code == 404
