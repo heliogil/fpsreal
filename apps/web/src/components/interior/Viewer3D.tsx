@@ -117,6 +117,7 @@ function mountSlots(m: GeoMount, W: number): { pts: THREE.Vector3[]; r: number; 
 
 export default function Viewer3D({
   components, whatIfFans = [], downloadHref, interior, onToggleFan, embedded = false, onPick, picked: pickedKey, placeholder,
+  autoRotate = false, minimal = false, aspect = '720 / 430',
 }: {
   components: Record<string, number>
   whatIfFans?: string[]
@@ -133,6 +134,13 @@ export default function Viewer3D({
   picked?: string | null
   /** o que mostrar no lugar do 3D enquanto ele monta (o corte 2D leve) */
   placeholder?: React.ReactNode
+  /** vitrine (home): gira devagar até a pessoa tocar; para fora da tela e
+   *  para quem pediu menos movimento ao sistema */
+  autoRotate?: boolean
+  /** sem botões, dicas nem etiquetas — só o gabinete */
+  minimal?: boolean
+  /** proporção da cena quando `embedded` (padrão: a do corte 2D) */
+  aspect?: string
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const labelsRef = useRef<HTMLDivElement>(null)
@@ -140,6 +148,7 @@ export default function Viewer3D({
   toggleRef.current = onToggleFan
   const whatIfRef = useRef(whatIfFans)
   whatIfRef.current = whatIfFans
+  const autoRotateRef = useRef(autoRotate)
   const pickRef = useRef(onPick)
   pickRef.current = onPick
   const api = useRef<{
@@ -199,6 +208,24 @@ export default function Viewer3D({
     controls.enableZoom = false
     const isTouch = window.matchMedia?.('(pointer: coarse)').matches ?? false
     setTouch(isTouch)
+    // vitrine: giro lento, só enquanto visível e até a primeira interação
+    let spinning = autoRotateRef.current && !(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
+    let onScreen = true
+    const spin = () => renderer.setAnimationLoop(spinning && onScreen ? () => controls.update() : null)
+    if (spinning) {
+      controls.autoRotate = true
+      controls.autoRotateSpeed = 0.9
+    }
+    const stopSpin = () => {
+      if (!spinning) return
+      spinning = false
+      controls.autoRotate = false
+      spin()
+    }
+    controls.addEventListener('start', stopSpin)
+    const spinIo = new IntersectionObserver(([en]) => { onScreen = !!en?.isIntersecting; spin() })
+    spinIo.observe(wrap)
+
     if (isTouch) {
       controls.enableZoom = true          // pinça
       canvas.style.touchAction = 'pan-y'  // vertical = rolar a página
@@ -448,6 +475,8 @@ export default function Viewer3D({
       setModel, setOverlay, setFlowVisible, view, clearLit,
       dispose: () => {
         ro.disconnect()
+        spinIo.disconnect()
+        renderer.setAnimationLoop(null)
         canvas.removeEventListener('pointerleave', onLeave)
         canvas.removeEventListener('pointerdown', onDown)
         canvas.removeEventListener('pointerup', onUp)
@@ -608,14 +637,14 @@ export default function Viewer3D({
   return (
     <div style={embedded ? undefined : { border: '1px solid var(--line)', borderRadius: 12, background: 'var(--card)', overflow: 'hidden' }}>
       <div style={embedded
-        ? { position: 'relative', aspectRatio: '720 / 430', maxHeight: '70vh', width: '100%' }
+        ? { position: 'relative', aspectRatio: aspect, maxHeight: '70vh', width: '100%' }
         : { position: 'relative', height: 'clamp(280px, 62vw, 440px)' }}>
         {/* o 2D leve segura o lugar até o 3D ficar pronto — sem "carregando" */}
         {!ready && placeholder && (
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>{placeholder}</div>
         )}
         <div ref={wrapRef} style={{ position: 'absolute', inset: 0, opacity: ready ? 1 : 0, transition: 'opacity .35s ease' }} />
-        <div ref={labelsRef} aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', opacity: ready ? 1 : 0 }} />
+        <div ref={labelsRef} aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', opacity: ready && !minimal ? 1 : 0 }} />
         {!ready && !placeholder && state === 'loading' && (
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 13, color: 'var(--dim)', pointerEvents: 'none' }}>
             montando o 3D…
@@ -633,7 +662,7 @@ export default function Viewer3D({
             maxWidth: 'calc(100% - 20px)',
           }}>{picked}</div>
         )}
-        {ready && (
+        {ready && !minimal && (
           <div style={{ position: 'absolute', right: 8, top: 8, display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end', zIndex: 2 }}>
             <button type="button" style={btn} onClick={() => api.current?.view('lado')} aria-label="Ver de lado">lado</button>
             <button type="button" style={btn} onClick={() => api.current?.view('frente')} aria-label="Ver de frente">frente</button>
@@ -646,7 +675,7 @@ export default function Viewer3D({
             )}
           </div>
         )}
-        {ready && (
+        {ready && !minimal && (
           <div style={{
             position: 'absolute', left: 10, bottom: 8, right: 10, display: 'flex', gap: 10, alignItems: 'baseline',
             fontSize: 11.5, color: 'var(--dim2)', pointerEvents: 'none',

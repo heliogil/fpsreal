@@ -210,8 +210,29 @@ h1, h2, h3, h4 { font-family: var(--font-plex), 'IBM Plex Sans', sans-serif; fon
 @media (max-width: 720px) {
   /* no telemóvel o cabeçalho tem 3 linhas — fixo comia ~130px do ecrã */
   .site-header { flex-wrap: wrap; row-gap: 10px; position: relative !important; }
+  /* 4 links numa linha só: rolagem lateral em vez de quebrar em 2 linhas */
   .site-nav {
-    order: 3; width: 100%; justify-content: space-between;
-    gap: 12px !important; font-size: 12.5px !important;
+    order: 3; width: 100%; justify-content: flex-start;
+    gap: 18px !important; font-size: 13px !important;
+    overflow-x: auto; white-space: nowrap; scrollbar-width: none; padding-bottom: 2px;
   }
+  .site-nav::-webkit-scrollbar { display: none; }
+}
+
+/* ── Home: o gabinete do Rei como protagonista (2026-11-19) ─────────────── */
+.home-hero { grid-template-columns: minmax(0,.95fr) minmax(0,1.05fr); }
+.home-visual { padding-bottom: 28px; }
+.home-glow {
+  position: absolute; inset: 6% 4% 14% 4%; pointer-events: none; filter: blur(48px);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%);
+}
+.home-card {
+  display: block; position: absolute; left: -8px; bottom: -22px; width: min(300px, 64%); z-index: 2;
+  padding: 14px 16px; border-radius: 12px; border: 1px solid var(--accent-dim);
+  background: color-mix(in srgb, var(--card) 84%, transparent); backdrop-filter: blur(10px);
+  box-shadow: var(--shadow); color: var(--text);
+}
+@media (max-width: 720px) {
+  .home-hero { grid-template-columns: 1fr; }
+  .home-card { position: static; width: auto; margin-top: 8px; }
 }
