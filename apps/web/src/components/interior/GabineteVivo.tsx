@@ -115,7 +115,7 @@ export default function GabineteVivo({
   const header = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', flexWrap: 'wrap' }}>
       <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--dim)', border: '1px solid var(--line)', padding: '3px 10px', borderRadius: 99 }}>
-        visualização 2D · estimativa
+        visualização {scene ? '3D' : '2D'} · estimativa
       </span>
       <span className="mono" style={{ fontSize: 12, color: 'var(--dim2)' }}>{interior.case.name ?? 'gabinete'}</span>
       {simulated && (
