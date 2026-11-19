@@ -34,6 +34,38 @@ TIGHT_MM = 15.0
 PSU_OVERHEAD_W = 60.0
 # Tuning: a high-airflow case (~200 CFM) on a ~345 W build lands ~80 (healthy).
 SCORE_K = 0.75
+# Pressão muito positiva (2026-11-19): acima de POS_RATIO × a exaustão, a
+# entrada a mais não varre calor na mesma medida — sobe a pressão interna e o ar
+# sai pelas frestas/mesh sem passar pelas peças com a mesma força. O excedente
+# conta EXCESS_WEIGHT. Regra explicável, NÃO medida: 3:1 fica acima de todos os
+# gabinetes do catálogo com CFM agregado (o mais alto é 2,7:1), por isso só
+# morde onde a soma por ventoinha dá entrada muito maior que a saída.
+POS_RATIO = 3.0
+EXCESS_WEIGHT = 0.5
+
+
+def _useful_intake(intake_eff: float, exhaust: float) -> float:
+    """Entrada que conta para o fluxo, com o excedente de pressão descontado."""
+    if exhaust <= 0:
+        return intake_eff          # armadilha de calor: o teto de 40 trata disso
+    cap = POS_RATIO * exhaust
+    return intake_eff if intake_eff <= cap else cap + EXCESS_WEIGHT * (intake_eff - cap)
+
+
+def _airflow_score(intake_eff: float, exhaust: float, total_w: float,
+                   gpu_thick_pen: float, side_pen: float) -> int:
+    """Score 0–100 — o MESMO cálculo para a build e para a simulação sugerida."""
+    effective = _useful_intake(intake_eff, exhaust) + 0.5 * exhaust
+    if effective <= 0 or total_w <= 0:
+        return 0
+    score = int(max(0, min(100, round(100 * effective / (total_w * SCORE_K)))))
+    if exhaust <= 0 and intake_eff > 0:  # heat trap: no way out
+        score = min(score, 40)
+    # hit da GPU grossa: pesa sobretudo o aperto lateral (placa gorda em caixa
+    # larga quase não penaliza; colada na tampa penaliza)
+    if gpu_thick_pen > 0 and score > 0:
+        score = int(round(score * (1.0 - 0.18 * gpu_thick_pen * (0.3 + 0.7 * side_pen))))
+    return score
 
 
 class InteriorRequest(BaseModel):
@@ -197,17 +229,13 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
     intake_eff = (intake - intake_nonfront) * front_factor + intake_nonfront
 
     # Fresh cool air over the parts is the driver; exhaust helps evacuate heat.
-    effective = intake_eff + 0.5 * exhaust
+    # A entrada útil desconta o excedente de pressão muito positiva.
+    intake_useful = _useful_intake(intake_eff, exhaust)
+    pressure_discount = round(intake_eff - intake_useful, 1)
+    effective = intake_useful + 0.5 * exhaust
     balance = intake - exhaust
     pressure = "positive" if balance > 30 else ("negative" if balance < -30 else "neutral")
     fans = {"intake": max(0, round(intake / 75)), "exhaust": max(0, round(exhaust / 75))}
-
-    if effective > 0 and total_w > 0:
-        score = int(max(0, min(100, round(100 * effective / (total_w * SCORE_K)))))
-    else:
-        score = 0
-    if exhaust <= 0 and intake > 0:  # heat trap: no way out
-        score = min(score, 40)
 
     # ---- Obstrução da GPU sobre a PRÓPRIA zona (elo que faltava) -------------
     # A placa grossa (nº de slots) tapa a câmara inferior, e pior ainda colada
@@ -224,17 +252,14 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         side_pen = 1.0 if _rem < 8 else (max(0.0, (35.0 - _rem) / 35.0) if _rem < 35 else 0.0)
     # fração do ar de entrada que efetivamente passa pela zona da GPU
     gpu_flow_factor = max(0.5, 1.0 - 0.35 * gpu_thick_pen * (0.7 + 0.6 * side_pen))
-    # hit no score: pesa sobretudo o aperto lateral (placa gorda em caixa larga
-    # quase não penaliza; colada na tampa penaliza)
-    if gpu_thick_pen > 0 and score > 0:
-        score = int(round(score * (1.0 - 0.18 * gpu_thick_pen * (0.3 + 0.7 * side_pen))))
+    score = _airflow_score(intake_eff, exhaust, total_w, gpu_thick_pen, side_pen)
 
     zones = [
         {"zone": "intake_front", "type": "intake", "status": "ok" if intake > 0 else "dead_zone"},
         {"zone": "cpu_zone", "type": "internal", "status": _zone_status(effective, cpu_w, 1.4)},
         # front intake alimenta a GPU direto — o painel frontal restringe e a
         # placa grossa tapa parte do que passa
-        {"zone": "gpu_zone", "type": "internal", "status": _zone_status(intake_eff * gpu_flow_factor, gpu_w, 0.7)},
+        {"zone": "gpu_zone", "type": "internal", "status": _zone_status(intake_useful * gpu_flow_factor, gpu_w, 0.7)},
         {"zone": "exhaust_rear", "type": "exhaust", "status": "ok" if exhaust > 0 else "dead_zone"},
     ]
 
@@ -537,12 +562,8 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
             _add = _what_if_fan_cfm(_sm)
             _ni = intake + (_add if _sm["orient"] == "intake" else 0.0)
             _ne = exhaust + (_add if _sm["orient"] == "exhaust" else 0.0)
-            _eff = (_ni - intake_nonfront) * front_factor + intake_nonfront + 0.5 * _ne
-            _ns = int(max(0, min(100, round(100 * _eff / (total_w * SCORE_K))))) if total_w > 0 else 0
-            if gpu_thick_pen > 0 and _ns > 0:
-                _ns = int(round(_ns * (1.0 - 0.18 * gpu_thick_pen * (0.3 + 0.7 * side_pen))))
-            if _ne <= 0 and _ni > 0:
-                _ns = min(_ns, 40)
+            _ns = _airflow_score((_ni - intake_nonfront) * front_factor + intake_nonfront, _ne,
+                                 total_w, gpu_thick_pen, side_pen)
             suggest_delta = _ns - score
 
     return {
@@ -584,6 +605,8 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
             # "por_mount" = soma das fichas de cada ventoinha; "agregado" = total
             # do catálogo para o gabinete, dividido pelos mounts
             "cfm_method": cfm_method,
+            # CFM de entrada descontado por pressão muito positiva (> POS_RATIO × saída)
+            "pressure_discount_cfm": pressure_discount,
             "fans": fans,
             "heat": {"cpu_w": cpu_w, "gpu_w": gpu_w, "total_w": total_w},
             "zones": zones,
