@@ -171,10 +171,11 @@ CASES = [
     # Ventoinhas de fábrica: 3×140 "Tranquil PWM" frente + 1×140 traseira e
     # 2×120 "P12R PWM reverse" na cobertura da fonte. A Antec não publica o CFM
     # na página do gabinete; usado o máximo da ficha do modelo correspondente
-    # (antec.com/product/cooling/tranquil-140.php: 85.96 CFM) → entrada 3×85.96,
-    # saída 1×85.96. As 2 ventoinhas da cobertura da fonte NÃO entram (o corte 2D
-    # ainda não representa ventoinha horizontal em baixo) — erra para menos.
-    ("case-flux-pro",    "Antec Flux Pro",          "Antec",   "ATX", 455, 190, "high",   258, 86, 180),
+    # (antec.com/product/cooling/tranquil-140.php: 85.96 CFM). Desde 2026-11-18
+    # o motor soma mount a mount (geometry_data: fan_cfm) — entrada 3×85.96 +
+    # 2×55 (cobertura da fonte) = 368, saída 1×85.96. Os totais abaixo são só o
+    # resumo dessa soma (o motor usa a soma quando todos os mounts têm ficha).
+    ("case-flux-pro",    "Antec Flux Pro",          "Antec",   "ATX", 455, 190, "high",   368, 86, 180),
 ]
 
 # tdp_rating_w (auditoria 2026-08-12, alimenta a regra ativa cooler_tdp_headroom):

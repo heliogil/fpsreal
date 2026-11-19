@@ -22,6 +22,8 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from airflow_field import solve_flow_field
+from case_mounts import (FAN_CFM_BY_KIND, fan_capacity as _mount_fan_capacity,  # noqa: F401
+                         normalize_mounts, stock_cfm, what_if_fan_cfm as _what_if_fan_cfm)
 from gltf_builder import build_gltf
 from deps import get_db
 from models import Product
@@ -46,33 +48,6 @@ def _num(v) -> float:
         return float(v)
     except (TypeError, ValueError):
         return 0.0
-
-
-# CFM nominal por classe de ventoinha (estimativa de catálogo, não medição).
-FAN_CFM_BY_KIND = {"fan120": 55.0, "fan140": 70.0, "fan160": 80.0}
-
-
-def _what_if_fan_cfm(mount: dict) -> float:
-    """CFM de UMA ventoinha adicionada neste mount (estimativa)."""
-    kind = str(mount.get("kind") or "")
-    if kind in FAN_CFM_BY_KIND:
-        return FAN_CFM_BY_KIND[kind]
-    # baia genérica: do maior tamanho que a baia aceita
-    accepts = [str(a) for a in (mount.get("accepts") or [])]
-    for k in ("fan160", "fan140", "fan120"):
-        if k in accepts:
-            return FAN_CFM_BY_KIND[k]
-    return FAN_CFM_BY_KIND["fan120"]
-
-
-def _mount_fan_capacity(mount: dict) -> int:
-    """Quantas ventoinhas cabem neste mount. Um bay de fan = 1; um rad_bay
-    (ex.: 360) aceita várias — quantas cabem na largura."""
-    kind = str(mount.get("kind") or "")
-    if kind in FAN_CFM_BY_KIND:
-        return 1
-    w = _num(mount.get("w"))
-    return max(1, int(w // 120)) if w else 1
 
 
 def _zone_status(cfm: float, heat_w: float, need_ratio: float) -> str:
@@ -167,8 +142,24 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
     exhaust = _num(cs.get("exhaust_cfm"))
     if intake <= 0 and exhaust <= 0:  # backward-compat with Phase-1 base_cfm
         intake = exhaust = _num(cs.get("base_cfm"))
+
+    # ---- mounts em 3D (case_mounts): face, posição na largura, nº de fans ----
+    # O CFM de fábrica passa a ser a SOMA mount a mount quando o gabinete traz a
+    # ficha de cada ventoinha; senão continua o agregado do catálogo dividido.
+    _interior_mm = cs.get("interior_mm")
+    _mounts_raw = cs.get("mounts")
+    mounts_norm: List[dict] = []
+    stock_per_mount: Dict[str, float] = {}
+    cfm_method = {"intake": "agregado", "exhaust": "agregado"}
+    if isinstance(_interior_mm, dict) and isinstance(_mounts_raw, list) and _mounts_raw:
+        mounts_norm = normalize_mounts(_mounts_raw, _num(_interior_mm.get("depth")),
+                                       _num(_interior_mm.get("height")), case_width)
+        intake, exhaust, stock_per_mount, cfm_method = stock_cfm(mounts_norm, intake, exhaust)
+    # entrada que NÃO passa pelo painel frontal (cobertura da fonte, lateral,
+    # topo em entrada): a resistência do frontal não se aplica a ela
+    intake_nonfront = sum(stock_per_mount.get(str(m["id"]), 0.0) for m in mounts_norm
+                          if m.get("stock") and m.get("orient") == "intake" and m["face"] != "front")
     # CFM base do gabinete (ventoinhas de fábrica) — guardado antes do what-if
-    # porque a divisão por mount stock usa o valor de fábrica.
     base_intake, base_exhaust = intake, exhaust
 
     # ---- what-if: ventoinhas que o utilizador pediu para simular -------------
@@ -181,9 +172,8 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
     wi_n: Dict[str, int] = {}           # nº efetivo (após cap) por mount
     wi_intake = wi_exhaust = 0.0
     wi_applied: List[str] = []
-    _mounts_raw = cs.get("mounts")
-    if _wi_counts and isinstance(_mounts_raw, list):
-        for _m in _mounts_raw:
+    if _wi_counts and mounts_norm:
+        for _m in mounts_norm:
             mid = str(_m.get("id"))
             if mid in _wi_counts and not _m.get("stock"):
                 n = min(_wi_counts[mid], _mount_fan_capacity(_m))
@@ -204,7 +194,7 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
     # É a entrada EFETIVA (o que passa) que cai; o CFM nominal do fan é o mesmo.
     _aclass = str(cs.get("airflow_class") or "").lower()
     front_factor = 1.0 if _aclass == "high" else (0.9 if _aclass == "medium" else 0.8)
-    intake_eff = intake * front_factor
+    intake_eff = (intake - intake_nonfront) * front_factor + intake_nonfront
 
     # Fresh cool air over the parts is the driver; exhaust helps evacuate heat.
     effective = intake_eff + 0.5 * exhaust
@@ -254,12 +244,10 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
     # (intake/exhaust, stock, o que aceitam), dimensões das peças (specs +
     # padrões de form factor) e composição de fluxo por mount ocupado.
     geometry = None
-    interior_mm = cs.get("interior_mm")
-    mounts_spec = cs.get("mounts")
-    if isinstance(interior_mm, dict) and isinstance(mounts_spec, list) and mounts_spec:
-        D = _num(interior_mm.get("depth"))
-        H = _num(interior_mm.get("height"))
-        mounts = [dict(m) for m in mounts_spec]
+    if mounts_norm:
+        D = _num(_interior_mm.get("depth"))
+        H = _num(_interior_mm.get("height"))
+        mounts = [dict(m) for m in mounts_norm]
 
         cooler_type = str(ks.get("cooler_type") or "")
         is_aio = cooler_type.startswith("aio")
@@ -275,7 +263,6 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         for m in mounts:
             m["occupied_by"] = "stock_fan" if m.get("stock") else None
             m["cfm"] = 0.0
-            m["capacity"] = _mount_fan_capacity(m)  # quantas ventoinhas cabem
         if is_aio:
             for m in mounts:
                 acc = m.get("accepts") or []
@@ -289,16 +276,13 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
             if m["occupied_by"] is None and str(m["id"]) in what_if_ids:
                 m["occupied_by"] = "what_if_fan"
 
-        # CFM por mount: agregado de FÁBRICA dividido pelos fans stock; a
-        # ventoinha simulada leva o CFM dela própria; AIO soma exaustão.
-        stock_in = [m for m in mounts if m["occupied_by"] == "stock_fan" and m["orient"] == "intake"]
-        stock_out = [m for m in mounts if m["occupied_by"] == "stock_fan" and m["orient"] == "exhaust"]
-        if stock_in and base_intake > 0:
-            for m in stock_in:
-                m["cfm"] = round(base_intake / len(stock_in), 1)
-        if stock_out and base_exhaust > 0:
-            for m in stock_out:
-                m["cfm"] = round(base_exhaust / len(stock_out), 1)
+        # CFM por mount: o de fábrica vem de stock_cfm (ficha por mount ou
+        # agregado dividido); a ventoinha simulada leva o CFM dela própria; AIO
+        # soma exaustão.
+        for m in mounts:
+            if m["occupied_by"] == "stock_fan":
+                m["cfm"] = stock_per_mount.get(str(m["id"]), 0.0)
+                m["fan_count"] = m["stock_fans"]
         for m in mounts:
             if m["occupied_by"] == "what_if_fan":
                 m["fan_count"] = wi_n.get(str(m["id"]), 1)
@@ -389,8 +373,10 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
             # ventoinha desenhada: a de fábrica e também a SIMULADA (what-if),
             # marcada com `simulated` p/ o viewer a distinguir visualmente.
             if m["occupied_by"] in ("stock_fan", "what_if_fan"):
-                _wide = _num(m["w"]) > _num(m["h"])   # baia horizontal (topo) vs parede
-                placements.append({"part": "case_fan",
+                # deitada (topo / cobertura da fonte) vs em pé (frente / traseira)
+                _wide = m["face"] in ("top", "bottom") or (m["face"] != "side" and _num(m["w"]) > _num(m["h"]))
+                placements.append({"part": "case_fan", "face": m["face"], "orient": m["orient"],
+                                   "z": m["z"], "d": m["d"],
                                    "x": _num(m["x"]), "y": _num(m["y"]),
                                    "w": (_num(m["w"]) if _wide else FAN_TH),
                                    "h": (FAN_TH if _wide else _num(m["h"])),
@@ -416,8 +402,9 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
         flows: list[dict] = []
         for s_m in sources:
             s_cy = _num(s_m["y"]) + _num(s_m["h"]) / 2
+            s_bottom = s_m["face"] == "bottom"
             for k_m in sinks:
-                is_top = _num(k_m["y"]) > H * 0.8 and _num(k_m["w"]) > _num(k_m["h"])
+                is_top = k_m["face"] == "top"
                 raw = s_m["cfm"] * (k_m["cfm"] / tot_sink)
                 res = 0.0
                 heat: list[float] = []
@@ -439,7 +426,11 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
                     obstr.append({"part": "aio_radiator", "factor": 0.25})
                 eff = raw * (1 - min(0.6, res * 0.6))
                 flows.append({
-                    "from": {"x": _num(s_m["x"]) + _num(s_m["w"]), "y": s_cy, "h": _num(s_m["h"])},
+                    "from": ({"x": _num(s_m["x"]), "y": _num(s_m["y"]) + _num(s_m["h"]), "w": _num(s_m["w"]),
+                              "h": _num(s_m["h"]), "side": "bottom"}
+                             if s_bottom else
+                             {"x": _num(s_m["x"]) + _num(s_m["w"]), "y": s_cy, "h": _num(s_m["h"]),
+                              "side": s_m["face"]}),
                     "to": ({"x": _num(k_m["x"]), "y": H, "w": _num(k_m["w"]), "side": "top"}
                            if is_top else
                            {"x": _num(k_m["x"]), "y": _num(k_m["y"]) + _num(k_m["h"]) / 2, "h": _num(k_m["h"]),
@@ -461,7 +452,7 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
                   "ram", "psu"}
         _obst = [{"x": p["x"], "y": p["y"], "w": p["w"], "h": p["h"]}
                  for p in placements if p["part"] in _SOLID]
-        _open = lambda m: {"x": _num(m["x"]), "y": _num(m["y"]),
+        _open = lambda m: {"x": _num(m["x"]), "y": _num(m["y"]), "face": m["face"],
                            "w": _num(m["w"]), "h": _num(m["h"]), "cfm": m["cfm"]}
         _heat = []
         if gpu_box is not None and gpu_w > 0:
@@ -546,7 +537,7 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
             _add = _what_if_fan_cfm(_sm)
             _ni = intake + (_add if _sm["orient"] == "intake" else 0.0)
             _ne = exhaust + (_add if _sm["orient"] == "exhaust" else 0.0)
-            _eff = _ni * front_factor + 0.5 * _ne
+            _eff = (_ni - intake_nonfront) * front_factor + intake_nonfront + 0.5 * _ne
             _ns = int(max(0, min(100, round(100 * _eff / (total_w * SCORE_K))))) if total_w > 0 else 0
             if gpu_thick_pen > 0 and _ns > 0:
                 _ns = int(round(_ns * (1.0 - 0.18 * gpu_thick_pen * (0.3 + 0.7 * side_pen))))
@@ -590,6 +581,9 @@ async def estimate_interior(body: InteriorRequest, db: AsyncSession = Depends(ge
             "cfm": round(effective),
             "intake_cfm": intake,
             "exhaust_cfm": exhaust,
+            # "por_mount" = soma das fichas de cada ventoinha; "agregado" = total
+            # do catálogo para o gabinete, dividido pelos mounts
+            "cfm_method": cfm_method,
             "fans": fans,
             "heat": {"cpu_w": cpu_w, "gpu_w": gpu_w, "total_w": total_w},
             "zones": zones,

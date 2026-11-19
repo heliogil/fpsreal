@@ -250,6 +250,15 @@ export type GeoMount = {
   stock: boolean
   occupied_by: 'stock_fan' | 'aio_radiator' | 'what_if_fan' | null
   cfm: number
+  /** face em que o mount assenta (motor: case_mounts). Ausente em payload antigo ⇒ deduzir por x/y. */
+  face?: 'front' | 'rear' | 'top' | 'bottom' | 'side'
+  /** centro e extensão ao longo da largura (bandeja→vidro), mm */
+  z?: number
+  d?: number
+  /** ventoinhas de fábrica neste mount */
+  stock_fans?: number
+  /** de onde vem o CFM da ventoinha de fábrica (ficha do fabricante ou classe) */
+  cfm_source?: string
   /** quantas ventoinhas cabem neste mount (rad_bay aceita várias) */
   capacity?: number
   /** nº simulado neste mount (what-if empilhado) */
@@ -264,11 +273,15 @@ export type GeoPlacement = {
   mount?: string
   /** ventoinha desenhada por SIMULAÇÃO (what-if), não de fábrica */
   simulated?: boolean
-  /** baia horizontal (topo): desenha N ventoinhas ao longo da largura */
+  /** baia horizontal (topo / cobertura da fonte): desenha N ventoinhas ao longo da largura */
   wide?: boolean
+  face?: 'front' | 'rear' | 'top' | 'bottom' | 'side'
+  orient?: 'intake' | 'exhaust'
+  z?: number
+  d?: number
 }
 export type GeoFlow = {
-  from: { x: number; y: number; h: number }
+  from: { x: number; y: number; h: number; w?: number; side?: 'front' | 'rear' | 'top' | 'bottom' | 'side' }
   to: { x: number; y: number; w?: number; h?: number; side: 'rear' | 'top' }
   cfm: number
   intensity: number
