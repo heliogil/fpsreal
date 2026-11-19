@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { mountLabel } from '@/lib/viewer-labels'
 import type { GeoMount, LiveInterior } from '@/lib/live-server'
 
 /**
@@ -44,11 +45,6 @@ const SOURCE_LABEL: Record<string, string> = {
   spec: 'medida da ficha', form_factor_default: 'medida padrão do formato', derivado: 'medida estimada',
   simulado: 'simulada — clique para tirar',
 }
-const MOUNT_LABEL: Record<string, string> = {
-  front_bottom: 'frontal inferior', front_top: 'frontal superior', front_mid: 'frontal meio',
-  rear: 'traseira', top_bay: 'baía superior', shroud: 'cobertura da fonte',
-}
-const mountLabel = (id: string) => MOUNT_LABEL[id] ?? id.replace(/_/g, ' ')
 /** nó do glTF → chave da ficha no GabineteVivo (as peças que têm ficha) */
 const FICHA_OF: Array<[RegExp, string]> = [
   [/^gpu/, 'gpu'], [/^cooler/, 'cooler'], [/^aio_pump/, 'pump'], [/^aio_(radiator|fans)/, 'rad'],
@@ -120,7 +116,7 @@ function mountSlots(m: GeoMount, W: number): { pts: THREE.Vector3[]; r: number; 
 }
 
 export default function Viewer3D({
-  components, whatIfFans = [], downloadHref, interior, onToggleFan, embedded = false, onPick, picked: pickedKey,
+  components, whatIfFans = [], downloadHref, interior, onToggleFan, embedded = false, onPick, picked: pickedKey, placeholder,
 }: {
   components: Record<string, number>
   whatIfFans?: string[]
@@ -135,6 +131,8 @@ export default function Viewer3D({
   onPick?: (key: string | null) => void
   /** ficha aberta agora (null = nenhuma): fechar a ficha apaga o realce */
   picked?: string | null
+  /** o que mostrar no lugar do 3D enquanto ele monta (o corte 2D leve) */
+  placeholder?: React.ReactNode
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const labelsRef = useRef<HTMLDivElement>(null)
@@ -148,7 +146,6 @@ export default function Viewer3D({
     setModel: (root: THREE.Object3D) => void
     setOverlay: (g: THREE.Group, labels: Label[]) => void
     setFlowVisible: (v: boolean) => void
-    setActive: (v: boolean) => void
     clearLit: () => void
     view: (v: View) => void
     dispose: () => void
@@ -156,11 +153,11 @@ export default function Viewer3D({
   const [state, setState] = useState<'loading' | 'ok' | 'fail' | 'nogl'>('loading')
   const [picked, setPicked] = useState<string | null>(null)
   const [showFlow, setShowFlow] = useState(true)
-  // Toque (celular/tablet): o 3D começa PARADO — o dedo rola a página, um toque
-  // escolhe peça ou vaga. Girar pede um toque em "girar". Sem isto, o arrastar
-  // do 3D prende a rolagem da página (o problema da fase 3).
+  // Toque (celular/tablet): `touch-action: pan-y` — deslizar para cima/baixo
+  // rola a página (o navegador fica com o gesto), deslizar para o lado gira o
+  // gabinete e a pinça aproxima. Sem botão de "ativar": a cena não prende a
+  // rolagem e não pede um toque a mais.
   const [touch, setTouch] = useState(false)
-  const [active, setActive] = useState(false)
 
   // ── cena (uma vez) ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -202,18 +199,10 @@ export default function Viewer3D({
     controls.enableZoom = false
     const isTouch = window.matchMedia?.('(pointer: coarse)').matches ?? false
     setTouch(isTouch)
-    const setActiveScene = (v: boolean) => {
-      if (!isTouch) return
-      controls.enabled = v
-      controls.enableZoom = v
-      canvas.style.touchAction = v ? 'none' : 'pan-y'
+    if (isTouch) {
+      controls.enableZoom = true          // pinça
+      canvas.style.touchAction = 'pan-y'  // vertical = rolar a página
     }
-    setActiveScene(false)
-    // saiu da tela → volta a parar (o próximo arrastar é rolagem outra vez)
-    const io = new IntersectionObserver(([en]) => {
-      if (en && en.intersectionRatio < 0.35) setActive(false)
-    }, { threshold: [0, 0.35] })
-    io.observe(wrap)
 
     let model: THREE.Object3D | null = null
     let overlay: THREE.Group | null = null
@@ -227,14 +216,48 @@ export default function Viewer3D({
     const placeLabels = () => {
       const w = wrap.clientWidth || 1
       const h = wrap.clientHeight || 1
+      // etiquetas que se sobrepõem no ecrã descem até não se tocarem
+      const placed: Array<{ x0: number; x1: number; y0: number; y1: number }> = []
       for (const l of labels) {
         v3.copy(l.pos).project(camera)
         const vis = v3.z < 1 && Math.abs(v3.x) < 1.05 && Math.abs(v3.y) < 1.05
         l.el.style.display = vis ? 'block' : 'none'
-        if (vis) l.el.style.transform = `translate(${((v3.x + 1) / 2) * w}px, ${((1 - v3.y) / 2) * h}px) translate(-50%, -100%)`
+        if (!vis) continue
+        const lw = l.el.offsetWidth || 120, lh = l.el.offsetHeight || 20
+        const x = ((v3.x + 1) / 2) * w
+        let y = ((1 - v3.y) / 2) * h
+        const box = () => ({ x0: x - lw / 2, x1: x + lw / 2, y0: y - lh, y1: y })
+        for (let k = 0; k < 6; k++) {
+          const b = box()
+          const hit = placed.find((p) => b.x0 < p.x1 && b.x1 > p.x0 && b.y0 < p.y1 && b.y1 > p.y0)
+          if (!hit) break
+          y = hit.y1 + lh + 2
+        }
+        placed.push(box())
+        l.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`
       }
     }
-    const render = () => { renderer.render(scene, camera); placeLabels() }
+    // Paredes: a que está virada para a câmara fica quase invisível (e não se
+    // escolhe com o toque) — de qualquer lado que se olhe, vê-se o interior.
+    const SHELL_NORMAL: Record<string, [number, number, number]> = {
+      'chassi-piso': [0, -1, 0], 'chassi-teto': [0, 1, 0], 'chassi-traseira': [1, 0, 0],
+      'chassi-frente': [-1, 0, 0], bandeja: [0, 0, -1],
+    }
+    let shell: Array<{ mesh: THREE.Mesh; n: THREE.Vector3; edges?: THREE.LineSegments }> = []
+    const camDir = new THREE.Vector3()
+    const updateShell = () => {
+      if (!shell.length) return
+      camDir.copy(camera.position).sub(center).normalize()
+      for (const w of shell) {
+        const facing = camDir.dot(w.n) > 0.2
+        const mat = w.mesh.material as THREE.MeshStandardMaterial
+        mat.opacity = facing ? 0.07 : 1
+        mat.depthWrite = !facing
+        w.mesh.userData.see = facing
+        if (w.edges) (w.edges.material as THREE.LineBasicMaterial).opacity = facing ? 0.18 : 0.45
+      }
+    }
+    const render = () => { updateShell(); renderer.render(scene, camera); placeLabels() }
     controls.addEventListener('change', render)
 
     const resize = () => {
@@ -270,6 +293,7 @@ export default function Viewer3D({
       const first = !model
       if (model) { scene.remove(model); disposeTree(model) }
       model = root
+      shell = []
       root.traverse((c) => {
         const mesh = c as THREE.Mesh
         if (!mesh.isMesh) return
@@ -277,13 +301,24 @@ export default function Viewer3D({
         const mat = (mesh.material as THREE.MeshStandardMaterial).clone()
         mesh.material = mat
         if (mat.transparent) { mat.depthWrite = false; return }
-        // arestas: as cores da marca são muito escuras; o contorno dá a forma
-        const edges = new THREE.LineSegments(
-          new THREE.EdgesGeometry(mesh.geometry, 30),
-          new THREE.LineBasicMaterial({ color: 0x8a8f99, transparent: true, opacity: 0.45 }),
-        )
-        edges.raycast = () => {}
-        mesh.add(edges)
+        // ventoinha: a forma já se lê (anel, pás, cubo) — sem contorno
+        let inFan = false
+        for (let o: THREE.Object3D | null = mesh; o; o = o.parent) if (/fan/.test(o.name)) { inFan = true; break }
+        let edges: THREE.LineSegments | undefined
+        if (!inFan) {
+          // arestas: as cores da marca são muito escuras; o contorno dá a forma
+          edges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(mesh.geometry, 30),
+            new THREE.LineBasicMaterial({ color: 0x8a8f99, transparent: true, opacity: 0.45 }),
+          )
+          edges.raycast = () => {}
+          mesh.add(edges)
+        }
+        const n = SHELL_NORMAL[mesh.name]
+        if (n) {
+          mat.transparent = true
+          shell.push({ mesh, n: new THREE.Vector3(...n), edges })
+        }
       })
       scene.add(root)
       const box = new THREE.Box3().setFromObject(root)
@@ -324,8 +359,10 @@ export default function Viewer3D({
       if (mh) return { mountId: mh.object.userData.mountId as string, sim: false, obj: null as THREE.Mesh | null, name: '', ring: (mh.object.userData.ring as THREE.Mesh | undefined) ?? null }
       if (!model) return null
       const hit = ray.intersectObject(model, true).find((h) => {
-        const mat = (h.object as THREE.Mesh).material as THREE.Material
-        return (h.object as THREE.Mesh).isMesh && !mat.transparent
+        const m = h.object as THREE.Mesh
+        const mat = m.material as THREE.Material
+        if (!m.isMesh || m.userData.see) return false          // parede virada p/ a câmara
+        return !mat.transparent || SHELL_NORMAL[m.name] !== undefined
       })
       if (!hit) return null
       let o: THREE.Object3D | null = hit.object
@@ -408,10 +445,9 @@ export default function Viewer3D({
       if (lit) { (lit.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000); lit = null; render() }
     }
     api.current = {
-      setModel, setOverlay, setFlowVisible, view, clearLit, setActive: setActiveScene,
+      setModel, setOverlay, setFlowVisible, view, clearLit,
       dispose: () => {
         ro.disconnect()
-        io.disconnect()
         canvas.removeEventListener('pointerleave', onLeave)
         canvas.removeEventListener('pointerdown', onDown)
         canvas.removeEventListener('pointerup', onUp)
@@ -471,10 +507,10 @@ export default function Viewer3D({
       const { pts, r, face } = mountSlots(m, W)
       for (const p of pts) {
         const ringMat = new THREE.MeshBasicMaterial({
-          color: C_ACCENT, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false, depthTest: false,
+          color: C_ACCENT, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false,
         })
-        const ring = new THREE.Mesh(new THREE.RingGeometry(r * 0.72, r, 40), ringMat)
-        ring.userData = { mountId: m.id, baseOpacity: 0.7 }
+        const ring = new THREE.Mesh(new THREE.RingGeometry(r * 0.88, r, 48), ringMat)
+        ring.userData = { mountId: m.id, baseOpacity: 0.5 }
         ring.renderOrder = 2
         const pad = new THREE.Mesh(new THREE.CircleGeometry(r * 0.8, 32), new THREE.MeshBasicMaterial({
           color: C_ACCENT, transparent: true, opacity: 0.06, side: THREE.DoubleSide, depthWrite: false,
@@ -530,11 +566,10 @@ export default function Viewer3D({
     // etiquetas com as medidas que decidem compra
     const mk = (text: string, tone: string, pos: THREE.Vector3) => {
       const el = document.createElement('div')
-      el.className = 'mono'
       el.textContent = text
       Object.assign(el.style, {
         position: 'absolute', left: '0', top: '0', whiteSpace: 'nowrap', pointerEvents: 'none',
-        fontSize: '11.5px', padding: '2px 7px', borderRadius: '6px', color: tone,
+        fontSize: '12px', fontWeight: '600', padding: '2px 8px', borderRadius: '6px', color: tone,
         background: 'color-mix(in srgb, var(--panel2) 88%, transparent)', border: '1px solid var(--line)',
       } satisfies Partial<CSSStyleDeclaration>)
       labels.push({ el, pos: pos.multiplyScalar(S) })
@@ -543,14 +578,14 @@ export default function Viewer3D({
     const gClr = interior.clearances.gpu
     if (gpu && interior.parts.gpu.length_mm) {
       const thick = interior.parts.gpu.thickness_mm ?? 41
-      mk(`GPU ${Math.round(interior.parts.gpu.length_mm)}mm${gClr ? ` · folga ${Math.round(gClr.remaining_mm)}mm` : ''}`,
+      mk(gClr ? `GPU · sobram ${Math.round(gClr.remaining_mm)}mm` : `GPU ${Math.round(interior.parts.gpu.length_mm)}mm`,
         gClr?.is_tight ? 'var(--warn)' : 'var(--fresh)',
         new THREE.Vector3(gpu.x + gpu.w / 2, gpu.y + gpu.h + 6, 4 + thick))
     }
     const cooler = g.placements.find((p) => p.part === 'air_cooler')
     const cClr = interior.clearances.cooler
     if (cooler && interior.parts.cooler.height_mm) {
-      mk(`cooler ${Math.round(interior.parts.cooler.height_mm)}mm${cClr ? ` · folga ${Math.round(cClr.remaining_mm)}mm até o vidro` : ''}`,
+      mk(cClr ? `cooler · sobram ${Math.round(cClr.remaining_mm)}mm` : `cooler ${Math.round(interior.parts.cooler.height_mm)}mm`,
         cClr?.is_tight ? 'var(--warn)' : 'var(--fresh)',
         new THREE.Vector3(cooler.x + cooler.w / 2, cooler.y + cooler.h + 6, 4 + interior.parts.cooler.height_mm))
     }
@@ -561,84 +596,69 @@ export default function Viewer3D({
   }, [interior, onToggleFan])
 
   useEffect(() => { api.current?.setFlowVisible(showFlow) }, [showFlow])
-  useEffect(() => { api.current?.setActive(active) }, [active])
   useEffect(() => { if (!pickedKey) api.current?.clearLit() }, [pickedKey])
 
   const btn: React.CSSProperties = {
-    fontSize: 12, padding: '4px 10px', borderRadius: 99, cursor: 'pointer',
-    border: '1px solid var(--line)', background: 'var(--card)', color: 'var(--dim)',
+    fontSize: 12, padding: '4px 9px', borderRadius: 99, cursor: 'pointer', lineHeight: 1.2,
+    border: '1px solid var(--line)', background: 'color-mix(in srgb, var(--card) 88%, transparent)', color: 'var(--dim)',
   }
   const hasFree = !!onToggleFan && !!interior?.geometry?.mounts.some((m) => m.occupied_by === null)
+  const ready = state === 'ok'
 
   return (
     <div style={embedded ? undefined : { border: '1px solid var(--line)', borderRadius: 12, background: 'var(--card)', overflow: 'hidden' }}>
       <div style={embedded
         ? { position: 'relative', aspectRatio: '720 / 430', maxHeight: '70vh', width: '100%' }
         : { position: 'relative', height: 'clamp(280px, 62vw, 440px)' }}>
-        <div ref={wrapRef} style={{ position: 'absolute', inset: 0 }} />
-        <div ref={labelsRef} aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }} />
-        {state !== 'ok' && (
-          <div className="mono" style={{
-            position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', textAlign: 'center',
-            padding: 16, fontSize: 12.5, color: state === 'loading' ? 'var(--dim)' : 'var(--warn)', pointerEvents: 'none',
-          }}>
-            {state === 'loading' && 'montando o gabinete em 3D…'}
-            {state === 'fail' && 'não deu para gerar o 3D agora.'}
-            {state === 'nogl' && 'este navegador não mostra 3D (WebGL desligado).'}
+        {/* o 2D leve segura o lugar até o 3D ficar pronto — sem "carregando" */}
+        {!ready && placeholder && (
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>{placeholder}</div>
+        )}
+        <div ref={wrapRef} style={{ position: 'absolute', inset: 0, opacity: ready ? 1 : 0, transition: 'opacity .35s ease' }} />
+        <div ref={labelsRef} aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', opacity: ready ? 1 : 0 }} />
+        {!ready && !placeholder && state === 'loading' && (
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 13, color: 'var(--dim)', pointerEvents: 'none' }}>
+            montando o 3D…
+          </div>
+        )}
+        {(state === 'fail' || state === 'nogl') && !placeholder && (
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 13, color: 'var(--warn)', pointerEvents: 'none' }}>
+            {state === 'fail' ? 'não deu para mostrar o 3D agora' : 'este navegador não mostra 3D'}
           </div>
         )}
         {picked && (
-          <div className="mono" role="status" style={{
-            position: 'absolute', left: 10, top: 10, padding: '4px 10px', borderRadius: 8, fontSize: 12,
+          <div role="status" style={{
+            position: 'absolute', left: 10, top: 10, padding: '4px 10px', borderRadius: 8, fontSize: 12.5,
             background: 'var(--panel2)', color: 'var(--text)', border: '1px solid var(--line)', pointerEvents: 'none',
             maxWidth: 'calc(100% - 20px)',
           }}>{picked}</div>
         )}
-        {touch && state === 'ok' && !active && (
-          <button type="button" onClick={() => setActive(true)} data-umami-event="viewer-3d-girar" className="mono"
-            style={{
-              position: 'absolute', left: '50%', bottom: 12, transform: 'translateX(-50%)', zIndex: 3,
-              fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 99, cursor: 'pointer',
-              border: '1px solid var(--accent-dim)', background: 'var(--card)', color: 'var(--accent)',
-              boxShadow: 'var(--shadow-sm)', whiteSpace: 'nowrap',
-            }}>
-            ⟳ toque para girar em 3D
-          </button>
+        {ready && (
+          <div style={{ position: 'absolute', right: 8, top: 8, display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end', zIndex: 2 }}>
+            <button type="button" style={btn} onClick={() => api.current?.view('lado')} aria-label="Ver de lado">lado</button>
+            <button type="button" style={btn} onClick={() => api.current?.view('frente')} aria-label="Ver de frente">frente</button>
+            <button type="button" style={btn} onClick={() => api.current?.view('cima')} aria-label="Ver de cima">cima</button>
+            {interior?.geometry?.flow_field && (
+              <button type="button" style={{ ...btn, color: showFlow ? 'var(--fresh)' : 'var(--dim)' }}
+                aria-pressed={showFlow} onClick={() => setShowFlow((v) => !v)} data-umami-event="viewer-3d-fluxo">
+                ar
+              </button>
+            )}
+          </div>
         )}
-        {touch && active && (
-          <button type="button" onClick={() => setActive(false)} className="mono"
-            style={{
-              position: 'absolute', right: 10, top: 10, zIndex: 3, fontSize: 12, padding: '5px 12px', borderRadius: 99,
-              cursor: 'pointer', border: '1px solid var(--line)', background: 'var(--card)', color: 'var(--text)',
-            }}>
-            ✓ pronto
-          </button>
+        {ready && (
+          <div style={{
+            position: 'absolute', left: 10, bottom: 8, right: 10, display: 'flex', gap: 10, alignItems: 'baseline',
+            fontSize: 11.5, color: 'var(--dim2)', pointerEvents: 'none',
+          }}>
+            <span>{touch ? 'deslize para o lado para girar' : 'arraste para girar'}{hasFree ? ' · ◯ vaga livre' : ''}</span>
+            <span style={{ flex: 1 }} />
+            {downloadHref && (
+              <a href={downloadHref} download data-umami-event="baixar-3d" style={{ color: 'var(--dim2)', pointerEvents: 'auto' }}
+                title="baixar o modelo 3D (.gltf)">⬇ 3D</a>
+            )}
+          </div>
         )}
-      </div>
-      <div className="mono" style={{
-        display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '8px 12px',
-        borderTop: '1px solid var(--line2)', fontSize: 11.5, color: 'var(--dim2)',
-      }}>
-        <button type="button" style={btn} onClick={() => api.current?.view('lado')}>lado</button>
-        <button type="button" style={btn} onClick={() => api.current?.view('frente')}>frente</button>
-        <button type="button" style={btn} onClick={() => api.current?.view('cima')}>cima</button>
-        {interior?.geometry?.flow_field && (
-          <button type="button" style={{ ...btn, color: showFlow ? 'var(--fresh)' : 'var(--dim)' }}
-            aria-pressed={showFlow} onClick={() => setShowFlow((v) => !v)} data-umami-event="viewer-3d-fluxo">
-            {showFlow ? '◉' : '○'} fluxo de ar
-          </button>
-        )}
-        <span style={{ flex: '1 1 160px' }}>
-          {touch
-            ? `toque numa peça para ver a ficha${hasFree ? ' · anel dourado = vaga livre, toque para simular' : ''}`
-            : `arraste para girar · clique e use a roda para aproximar · clique numa peça para ver a ficha${hasFree ? ' · anel dourado = vaga livre' : ''}`}
-        </span>
-        {downloadHref && (
-          <a href={downloadHref} download data-umami-event="baixar-3d" style={{ color: 'var(--dim)' }}>⬇ .gltf</a>
-        )}
-      </div>
-      <div className="mono" style={{ padding: '0 12px 8px', fontSize: 10.5, color: 'var(--dim2)' }}>
-        3D gerado pelo motor, da geometria em mm · linhas de fluxo: corte no meio da largura · estimativa, não medição
       </div>
     </div>
   )

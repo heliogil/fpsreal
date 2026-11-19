@@ -1,24 +1,17 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import dynamic from 'next/dynamic'
 import type { LiveCaseOption, LiveInterior, LiveProduct } from '@/lib/live-server'
 import GabineteVivo from './GabineteVivo'
-// o three.js só é baixado quando o 3D vai aparecer (cartão perto da tela)
-const Viewer3D = dynamic(() => import('./Viewer3D'), {
-  ssr: false,
-  loading: () => (
-    <div className="mono" style={{
-      aspectRatio: '720 / 430', maxHeight: '70vh', display: 'grid', placeItems: 'center', fontSize: 12.5,
-      color: 'var(--dim)',
-    }}>carregando o 3D…</div>
-  ),
-})
+
+// O three.js vem num pedaço à parte, baixado assim que a página fica ociosa
+// (não espera o visitante chegar ao cartão): quando o cartão aparece, o 3D já
+// está pronto. Até lá o cartão mostra o corte 2D leve — nunca "carregando".
+type Viewer3DType = typeof import('./Viewer3D').default
 
 const VIEW_PREF_KEY = 'reidofps:viewer'
-/** 3D por padrão onde houver WebGL — no celular ele abre PARADO (o dedo rola
- *  a página; girar pede um toque), por isso já não precisa de ficar no 2D.
- *  O visitante que escolheu o 2D fica com o 2D. */
+/** 3D por padrão onde houver WebGL (no toque, deslizar na vertical continua a
+ *  rolar a página). O visitante que escolheu o 2D fica com o 2D. */
 function prefers3d(): boolean {
   try {
     const saved = window.localStorage.getItem(VIEW_PREF_KEY)
@@ -125,7 +118,16 @@ export default function GabineteVivoLive({
   // o HTML do servidor é sempre o 2D (Google, og, sem JS); o 3D entra depois
   const [show3d, setShow3d] = useState(false)
   useEffect(() => { if (prefers3d()) setShow3d(true) }, [])
-  // só monta o 3D (e baixa o three.js) quando o cartão chega perto da tela
+  const [V3D, setV3D] = useState<Viewer3DType | null>(null)
+  useEffect(() => {
+    if (!show3d || V3D) return
+    let off = false
+    const load = () => { void import('./Viewer3D').then((m) => { if (!off) setV3D(() => m.default) }) }
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }
+    if (w.requestIdleCallback) w.requestIdleCallback(load, { timeout: 1500 }); else setTimeout(load, 300)
+    return () => { off = true }
+  }, [show3d, V3D])
+  // a cena 3D (WebGL) só é criada quando o cartão chega perto da tela
   const [near, setNear] = useState(false)
   const nearRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -133,7 +135,7 @@ export default function GabineteVivoLive({
     if (!el || near) return
     if (typeof IntersectionObserver === 'undefined') { setNear(true); return }
     const io = new IntersectionObserver(([en]) => { if (en?.isIntersecting) { setNear(true); io.disconnect() } },
-      { rootMargin: '300px 0px' })
+      { rootMargin: '800px 0px' })
     io.observe(el)
     return () => io.disconnect()
   }, [near])
@@ -287,15 +289,14 @@ export default function GabineteVivoLive({
   return (
     <div ref={topRef} style={{ display: 'grid', gap: 12, scrollMarginTop: 12 }}>
       {/* barra de controlo */}
-      <div className="mono" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12, color: 'var(--dim2)' }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12, color: 'var(--dim2)' }}>
         {whatIf.length > 0 && (
           <span style={{
             padding: '3px 10px', borderRadius: 99, border: '1px solid var(--accent-dim)',
             background: 'var(--accent-soft)', color: 'var(--accent)', fontWeight: 600,
           }}>
-            simulação: {whatIf.length} ventoinha{whatIf.length > 1 ? 's' : ''} ·{' '}
-            {delta > 0 ? `fluxo +${delta}` : delta < 0 ? `fluxo ${delta}` : 'fluxo igual'}
-            {' '}(de {baseScore} p/ {interior.airflow.score})
+            simulação: fluxo {baseScore} → {interior.airflow.score}
+            {delta !== 0 && ` (${delta > 0 ? '+' : ''}${delta})`}
           </span>
         )}
         {swapped && (
@@ -310,7 +311,7 @@ export default function GabineteVivoLive({
               {cur?.rs_per_fps != null && swapped.rs_per_fps != null && <> · {cpfFmt(cur.rs_per_fps)} → {cpfFmt(swapped.rs_per_fps)}/FPS</>}
               {swapped.total_brl != null && <> · build {brl(swapped.total_brl)}</>}
             </span>
-            <button type="button" onClick={undoSwap} data-umami-event="viewer-trocar-desfazer" className="mono"
+            <button type="button" onClick={undoSwap} data-umami-event="viewer-trocar-desfazer"
               style={{ fontSize: 11.5, padding: '1px 8px', borderRadius: 99, cursor: 'pointer', border: '1px solid var(--accent-dim)', background: 'transparent', color: 'var(--accent)' }}>
               desfazer
             </button>
@@ -323,7 +324,7 @@ export default function GabineteVivoLive({
             <label htmlFor="cmp-case">comparar com:</label>
             <select id="cmp-case" data-umami-event="viewer-comparar-gabinete" value={compareId ?? ''}
               onChange={(e) => void pickCase(e.target.value ? Number(e.target.value) : null)}
-              className="mono"
+             
               style={{
                 background: 'var(--panel)', color: 'var(--text)', border: '1px solid var(--line)',
                 borderRadius: 8, padding: '4px 8px', fontSize: 12,
@@ -360,9 +361,9 @@ export default function GabineteVivoLive({
           onClearWhatIf={clearWhatIf}
           pending={pending}
           compact={!!compare}
-          scene={show3d && near && !compare ? ({ picked, onPick }) => (
-            <Viewer3D embedded components={components} whatIfFans={whatIf} interior={interior}
-              onToggleFan={toggleFan} downloadHref={swapped ? undefined : modelHref}
+          scene={show3d && near && V3D && !compare ? ({ picked, onPick, placeholder }) => (
+            <V3D embedded components={components} whatIfFans={whatIf} interior={interior}
+              onToggleFan={toggleFan} downloadHref={swapped ? undefined : modelHref} placeholder={placeholder}
               onPick={onPick} picked={picked} />
           ) : undefined}
         />
@@ -379,20 +380,20 @@ export default function GabineteVivoLive({
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button type="button" onClick={toggle3d} aria-pressed={show3d} disabled={!!compare}
           title={compare ? 'a comparação lado a lado usa o corte 2D' : undefined}
-          data-umami-event={show3d ? 'viewer-ver-2d' : 'viewer-ver-3d'} className="mono"
+          data-umami-event={show3d ? 'viewer-ver-2d' : 'viewer-ver-3d'}
           style={{
             fontSize: 12.5, padding: '7px 14px', borderRadius: 99, cursor: compare ? 'not-allowed' : 'pointer',
             border: '1px solid var(--line)', background: 'var(--card)', color: 'var(--text)', opacity: compare ? 0.5 : 1,
           }}>
-          {show3d ? '▭ ver o corte 2D' : '◆ ver em 3D'}
+          {show3d ? 'ver em 2D' : 'ver em 3D'}
         </button>
         {!swapOpen && products.gpu && (
-          <button type="button" onClick={() => void openSwap()} data-umami-event="viewer-trocar-abrir" className="mono"
+          <button type="button" onClick={() => void openSwap()} data-umami-event="viewer-trocar-abrir"
             style={{
               fontSize: 12.5, padding: '7px 14px', borderRadius: 99, cursor: 'pointer',
               border: '1px solid var(--line)', background: 'var(--card)', color: 'var(--text)',
             }}>
-            ↻ trocar a placa de vídeo e ver o FPS e o custo/FPS
+            ↻ trocar a placa de vídeo
           </button>
         )}
       </div>
@@ -405,7 +406,7 @@ export default function GabineteVivoLive({
         />
       )}
       {swapped && (
-        <div className="mono" style={{
+        <div style={{
           display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5,
           border: '1px solid var(--line)', borderRadius: 12, padding: '10px 16px', background: 'var(--card)',
         }}>
@@ -430,7 +431,7 @@ export default function GabineteVivoLive({
           <div style={{ flex: '1 1 240px', fontSize: 14, lineHeight: 1.45 }}>
             <strong style={{ color: 'var(--fresh)' }}>Gabinete que resolve:</strong>{' '}
             <span style={{ color: 'var(--text)' }}>{suggestion.name}</span>
-            <span className="mono" style={{ display: 'block', fontSize: 12, color: 'var(--dim)', marginTop: 2 }}>
+            <span style={{ display: 'block', fontSize: 12, color: 'var(--dim)', marginTop: 2 }}>
               fluxo de ar {baseScore} → {suggestion.score}
               {priceDelta != null && priceDelta !== 0 && (
                 <> · {priceDelta < 0 ? 'R$ ' + Math.abs(priceDelta).toLocaleString('pt-BR') + ' mais barato' : '+R$ ' + priceDelta.toLocaleString('pt-BR')}</>
@@ -438,12 +439,12 @@ export default function GabineteVivoLive({
               {suggestion.demo && ' · preço de amostra'}
             </span>
           </div>
-          <button type="button" data-umami-event="viewer-sugestao-comparar" onClick={() => void pickCase(suggestion.id)} className="mono"
+          <button type="button" data-umami-event="viewer-sugestao-comparar" onClick={() => void pickCase(suggestion.id)}
             style={{ fontSize: 12, padding: '6px 12px', borderRadius: 99, cursor: 'pointer', border: '1px solid var(--line)', background: 'transparent', color: 'var(--text)' }}>
             comparar lado a lado
           </button>
           {suggestion.offerId != null && (
-            <a data-umami-event="viewer-sugestao-oferta" href={`/go/${suggestion.offerId}?utm_source=build&utm_medium=viewer_sugestao`} className="mono"
+            <a data-umami-event="viewer-sugestao-oferta" href={`/go/${suggestion.offerId}?utm_source=build&utm_medium=viewer_sugestao`}
               style={{ fontSize: 12, padding: '6px 12px', borderRadius: 99, background: 'var(--accent)', color: 'var(--accent-ink)', fontWeight: 600, whiteSpace: 'nowrap' }}>
               ver oferta →
             </a>
@@ -453,7 +454,7 @@ export default function GabineteVivoLive({
 
       {/* resumo da comparação */}
       {compare && (
-        <div className="mono" style={{
+        <div style={{
           display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12, color: 'var(--dim)',
           border: '1px solid var(--line)', borderRadius: 10, padding: '10px 14px', background: 'var(--card)',
         }}>

@@ -43,7 +43,7 @@ export default function BuildCard({ build, variant = 'default', detailHref, reso
         </div>
       )}
 
-      <h3 className="text-xl mb-1" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+      <h3 className="text-xl mb-1" style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}>
         {build.title}
       </h3>
       <p className="text-sm text-secondary mb-4">{build.subtitle}</p>

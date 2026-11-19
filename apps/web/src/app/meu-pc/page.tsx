@@ -25,7 +25,7 @@ type Result = {
   cpu_upgrades: Upg[]
 }
 
-const syne = { fontFamily: 'var(--font-syne), Syne, sans-serif' }
+const syne = { fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }
 const mono = { fontFamily: 'var(--font-plex-mono), monospace' }
 function brl(n: number): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })

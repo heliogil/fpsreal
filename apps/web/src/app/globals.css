@@ -55,7 +55,9 @@ a:hover { color: var(--accent); }
 
 /* Type roles */
 .mono { font-family: var(--font-plex-mono), 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
-.disp { font-family: var(--font-syne), 'Syne', sans-serif; }
+.disp { font-family: var(--font-plex), 'IBM Plex Sans', sans-serif; letter-spacing: -0.015em; }
+/* o logo é o único sítio que mantém a Syne (marca) */
+.brand { font-family: var(--font-syne), 'Syne', sans-serif; }
 
 /* Motion */
 @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
@@ -162,15 +164,15 @@ a:hover { color: var(--accent); }
   --text-primary:#1b1c1f; --text-secondary:#6b6d72; --text-mono:#7f6522;
   --accent-gold:#9A7B2C; --accent-red:#8B1A1A; --accent-blue:#4A6741; --accent-orange:#8a6414;
 }
-h1, h2, h3, h4 { font-family: var(--font-syne), 'Syne', sans-serif; font-weight: 700; letter-spacing: -0.01em; }
+h1, h2, h3, h4 { font-family: var(--font-plex), 'IBM Plex Sans', sans-serif; font-weight: 700; letter-spacing: -0.01em; }
 .font-mono, .num { font-family: var(--font-plex-mono), 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
 .num-mono { color: var(--text-mono); font-family: var(--font-plex-mono), 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
-.btn-gold { background-color: var(--accent-gold); color: #0E0E10; font-family: var(--font-syne), 'Syne', sans-serif; font-weight: 700; padding: .75rem 1.5rem; border-radius: 6px; display: inline-block; transition: filter .15s ease; }
+.btn-gold { background-color: var(--accent-gold); color: #0E0E10; font-family: var(--font-plex), 'IBM Plex Sans', sans-serif; font-weight: 700; padding: .75rem 1.5rem; border-radius: 6px; display: inline-block; transition: filter .15s ease; }
 .btn-gold:hover { filter: brightness(1.08); }
 .btn-ghost { background: transparent; color: var(--text-primary); border: 1px solid var(--border); padding: .75rem 1.5rem; border-radius: 6px; display: inline-block; transition: border-color .15s ease; }
 .btn-ghost:hover { border-color: var(--accent-gold); }
 .card { background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
-.king-badge { display: inline-flex; align-items: center; gap: .5rem; background: linear-gradient(135deg, #C9A24B 0%, #a8842f 100%); color: #0E0E10; font-family: var(--font-syne), 'Syne', sans-serif; font-weight: 700; padding: .35rem .75rem; border-radius: 999px; font-size: .85rem; }
+.king-badge { display: inline-flex; align-items: center; gap: .5rem; background: linear-gradient(135deg, #C9A24B 0%, #a8842f 100%); color: #0E0E10; font-family: var(--font-plex), 'IBM Plex Sans', sans-serif; font-weight: 700; padding: .35rem .75rem; border-radius: 999px; font-size: .85rem; }
 .king-badge-absoluto { background: linear-gradient(135deg, #C9A24B 0%, #6e1f8a 50%, #C9A24B 100%); color: #fff; }
 .airflow-ok { color: var(--accent-blue); } .airflow-tight { color: var(--accent-orange); } .airflow-critical { color: var(--accent-red); }
 .skeleton-line { border-radius: 6px; background: linear-gradient(90deg, var(--bg-elevated) 25%, #23233200 50%, var(--bg-elevated) 75%); background-size: 200% 100%; animation: skeleton-shimmer 1.3s ease-in-out infinite; }

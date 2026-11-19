@@ -16,7 +16,7 @@ export default function ComoMedimosPage() {
       <header className="text-center pb-6 border-b border-border">
         <h1
           className="text-4xl mb-3"
-          style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}
+          style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}
         >
           Como medimos
         </h1>
@@ -26,7 +26,7 @@ export default function ComoMedimosPage() {
       </header>
 
       <section>
-        <h2 className="text-2xl mb-3" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+        <h2 className="text-2xl mb-3" style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}>
           1. Preços: o que é real hoje
         </h2>
         <p>
@@ -44,7 +44,7 @@ export default function ComoMedimosPage() {
       </section>
 
       <section>
-        <h2 className="text-2xl mb-3" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+        <h2 className="text-2xl mb-3" style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}>
           2. O que estimamos
         </h2>
         <p>
@@ -94,7 +94,7 @@ export default function ComoMedimosPage() {
       </section>
 
       <section>
-        <h2 className="text-2xl mb-3" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+        <h2 className="text-2xl mb-3" style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}>
           3. O que não fazemos
         </h2>
         <ul className="list-disc pl-6 space-y-1 text-secondary">
@@ -107,7 +107,7 @@ export default function ComoMedimosPage() {
       </section>
 
       <section>
-        <h2 className="text-2xl mb-3" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+        <h2 className="text-2xl mb-3" style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}>
           4. Airflow
         </h2>
         <p>
@@ -126,7 +126,7 @@ export default function ComoMedimosPage() {
       </section>
 
       <section>
-        <h2 className="text-2xl mb-3" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+        <h2 className="text-2xl mb-3" style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}>
           5. Como o Rei de cada faixa é escolhido
         </h2>
         <p>

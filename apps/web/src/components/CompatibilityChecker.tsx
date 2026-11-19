@@ -37,7 +37,7 @@ export default function CompatibilityChecker({
 
   return (
     <div className="card">
-      <h3 className="text-lg mb-3" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+      <h3 className="text-lg mb-3" style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}>
         Compatibilidade
       </h3>
 

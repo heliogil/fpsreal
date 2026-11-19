@@ -5,7 +5,7 @@ export const metadata = {
   description: 'Condições de uso do Rei do FPS: estimativas, preços, links de afiliado e responsabilidades.',
 }
 
-const H2 = { fontFamily: 'var(--font-syne), Syne, sans-serif' }
+const H2 = { fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }
 
 export default function TermosPage() {
   return (

@@ -44,7 +44,7 @@ async function jget<T>(path: string, fallback: T): Promise<T> {
   }
 }
 
-const syne = { fontFamily: 'var(--font-syne), Syne, sans-serif' }
+const syne = { fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }
 const mono = { fontFamily: 'var(--font-plex-mono), monospace' }
 
 import { TIER_LABEL as TIER_LABEL_BY_KEY, TIER_ORDER as TIER_ORDER_BY_KEY } from '@/lib/tiers'

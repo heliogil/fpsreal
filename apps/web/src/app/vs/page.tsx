@@ -95,7 +95,7 @@ export default function VsIndexPage() {
         <p className="text-xs uppercase tracking-widest text-secondary mb-3">Comparações GPU</p>
         <h1
           className="text-3xl font-bold mb-3"
-          style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}
+          style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}
         >
           Qual GPU entrega mais FPS?
         </h1>

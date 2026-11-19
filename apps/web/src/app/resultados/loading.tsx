@@ -3,7 +3,7 @@ export default function Loading() {
   return (
     <div>
       <div className="text-center mb-8">
-        <h1 className="text-4xl mb-2" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+        <h1 className="text-4xl mb-2" style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}>
           A Harpia observa…
         </h1>
         <p className="text-secondary">Cruzando preços com o banco de FPS.</p>

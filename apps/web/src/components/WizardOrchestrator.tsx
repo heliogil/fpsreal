@@ -145,7 +145,7 @@ export default function WizardOrchestrator() {
       {/* Step 1 — Orçamento */}
       {step === 'budget' && (
         <div className="card">
-          <h2 className="text-2xl mb-4" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+          <h2 className="text-2xl mb-4" style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}>
             Quanto quer gastar?
           </h2>
           <div className="mb-6">
@@ -206,7 +206,7 @@ export default function WizardOrchestrator() {
       {/* Step 2 — Jogos */}
       {step === 'games' && (
         <div className="card">
-          <h2 className="text-2xl mb-4" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+          <h2 className="text-2xl mb-4" style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}>
             O que você joga?
           </h2>
           <p className="text-sm text-secondary mb-4">
@@ -240,7 +240,7 @@ export default function WizardOrchestrator() {
       {/* Step 3 — Prioridade */}
       {step === 'priority' && (
         <div className="card">
-          <h2 className="text-2xl mb-4" style={{ fontFamily: 'var(--font-syne), Syne, sans-serif' }}>
+          <h2 className="text-2xl mb-4" style={{ fontFamily: 'var(--font-plex), "IBM Plex Sans", sans-serif' }}>
             O que importa mais?
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

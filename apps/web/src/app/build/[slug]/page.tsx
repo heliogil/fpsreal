@@ -11,7 +11,7 @@ import {
 } from '@/lib/live-server'
 import type { LiveProduct } from '@/lib/live-server'
 import GabineteVivoLive from '@/components/interior/GabineteVivoLive'
-import FpsBadge from '@/components/FpsBadge'
+import { REFERENCE_GAMES } from '@/lib/metrics'
 import type { BuildComponents } from '@/lib/repositories/types'
 import { gameLabel } from '@/lib/labels'
 
@@ -152,13 +152,13 @@ export default async function BuildDetailPage(props: PageProps) {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
     <main style={{ padding: '28px clamp(16px,4vw,40px) 0' }}>
-      <Link href="/#challengers" className="mono navlink" style={{ fontSize: 12, color: 'var(--dim2)' }}>
+      <Link href="/#challengers" className="navlink" style={{ fontSize: 12, color: 'var(--dim2)' }}>
         ← voltar às builds
       </Link>
 
       {/* header editorial */}
       <header style={{ margin: '18px 0 26px' }}>
-        <div className="mono" style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 11.5, fontWeight: 600, letterSpacing: '.12em', color: 'var(--dim)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 11.5, fontWeight: 600, letterSpacing: '.05em', color: 'var(--dim)' }}>
           {souORei && (
             <span style={{ background: 'var(--accent)', color: 'var(--accent-ink)', padding: '3px 10px', borderRadius: 99, letterSpacing: '.06em' }}>♛ O REI</span>
           )}
@@ -181,7 +181,7 @@ export default async function BuildDetailPage(props: PageProps) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           {/* custo por FPS */}
           <div className="rv" style={{ background: 'var(--card)', border: '1px solid var(--accent-dim)', borderRadius: 12, padding: '22px 24px', boxShadow: 'var(--shadow-sm)' }}>
-            <div className="mono" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.12em', color: 'var(--dim)', marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.05em', color: 'var(--dim)', marginBottom: 10 }}>
               CUSTO POR FPS · MÉDIA 1080p
             </div>
             <div className="mono metric" style={{ fontSize: 'clamp(40px,5vw,56px)', fontWeight: 600, lineHeight: 1, letterSpacing: '-2px', color: 'var(--accent)' }}>
@@ -193,13 +193,13 @@ export default async function BuildDetailPage(props: PageProps) {
               {avgFps > 0 && <span className="mono" style={{ fontSize: 12, color: 'var(--dim2)' }}>{Math.round(avgFps)} FPS médios</span>}
             </div>
             {allDemo && (
-              <div className="mono" style={{ marginTop: 10, fontSize: 10.5, color: 'var(--dim2)' }}>preço de amostra · afiliados em breve</div>
+              <div style={{ marginTop: 10, fontSize: 10.5, color: 'var(--dim2)' }}>preço de amostra · afiliados em breve</div>
             )}
           </div>
 
           {/* esta build vs o Rei */}
           <div className="rv" style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 12, padding: '20px 24px', animationDelay: '.08s' }}>
-            <div className="mono" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.12em', color: 'var(--accent-2)', marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.05em', color: 'var(--accent-2)', marginBottom: 14 }}>
               ♛ ESTA BUILD vs O REI
             </div>
             {souORei ? (
@@ -210,21 +210,21 @@ export default async function BuildDetailPage(props: PageProps) {
               <div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '12px 14px' }}>
-                    <div className="mono" style={{ fontSize: 10, color: 'var(--dim2)', marginBottom: 6 }}>ESTA BUILD</div>
+                    <div style={{ fontSize: 10, color: 'var(--dim2)', marginBottom: 6 }}>ESTA BUILD</div>
                     <div className="mono" style={{ fontSize: 22, fontWeight: 600, color: 'var(--text)' }}>{fmtCpf(mine)}<span style={{ fontSize: 11, color: 'var(--dim)' }}>/FPS</span></div>
                   </div>
                   <div style={{ border: '1px solid var(--accent-dim)', borderRadius: 8, padding: '12px 14px', background: 'var(--accent-soft)' }}>
-                    <div className="mono" style={{ fontSize: 10, color: 'var(--accent-2)', marginBottom: 6 }}>♛ {reiBuild.title.toUpperCase()}</div>
+                    <div style={{ fontSize: 10, color: 'var(--accent-2)', marginBottom: 6 }}>♛ {reiBuild.title.toUpperCase()}</div>
                     <div className="mono" style={{ fontSize: 22, fontWeight: 600, color: 'var(--accent)' }}>{fmtCpf(rei.cpf)}<span style={{ fontSize: 11, color: 'var(--dim)' }}>/FPS</span></div>
                   </div>
                 </div>
-                <p className="mono" style={{ margin: '12px 0 0', fontSize: 11.5, lineHeight: 1.5, color: 'var(--dim)' }}>
+                <p style={{ margin: '12px 0 0', fontSize: 11.5, lineHeight: 1.5, color: 'var(--dim)' }}>
                   o Rei entrega {Math.round((mine / rei.cpf - 1) * 100)}% mais FPS por real ·{' '}
                   <Link href={`/build/${rei.slug}`} style={{ color: 'var(--accent-2)' }}>ver o Rei →</Link>
                 </p>
               </div>
             ) : (
-              <p className="mono" style={{ margin: 0, fontSize: 12, color: 'var(--dim2)' }}>comparação indisponível</p>
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--dim2)' }}>comparação indisponível</p>
             )}
           </div>
 
@@ -232,7 +232,7 @@ export default async function BuildDetailPage(props: PageProps) {
           <div className="rv" style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 12, padding: '20px 24px', animationDelay: '.16s' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--strong)' }}>Compatibilidade</span>
-              <span className="mono" style={{ fontSize: 10.5, fontWeight: 600, padding: '3px 10px', borderRadius: 99, color: allOk ? 'var(--fresh)' : 'var(--warn)', border: `1px solid ${allOk ? 'var(--fresh-b)' : 'var(--warn-b)'}` }}>
+              <span style={{ fontSize: 10.5, fontWeight: 600, padding: '3px 10px', borderRadius: 99, color: allOk ? 'var(--fresh)' : 'var(--warn)', border: `1px solid ${allOk ? 'var(--fresh-b)' : 'var(--warn-b)'}` }}>
                 {allOk ? '✓ tudo certo' : `⚠ ${compat.errors.length + compat.warnings.length} aviso(s)`}
               </span>
             </div>
@@ -243,7 +243,7 @@ export default async function BuildDetailPage(props: PageProps) {
                   <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '8px 0', borderTop: i === 0 ? 'none' : '1px solid var(--line2)' }}>
                     <span style={{ color: t.color, fontSize: 12, flex: 'none' }}>{t.icon}</span>
                     <span style={{ fontSize: 13, color: 'var(--text)', flex: 1 }}>{c.label}</span>
-                    {c.message && <span className="mono" style={{ fontSize: 10.5, color: 'var(--dim)', textAlign: 'right' }}>{c.message}</span>}
+                    {c.message && <span style={{ fontSize: 10.5, color: 'var(--dim)', textAlign: 'right' }}>{c.message}</span>}
                   </div>
                 )
               })}
@@ -251,14 +251,14 @@ export default async function BuildDetailPage(props: PageProps) {
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line2)' }}>
                   <span style={{ color: compat.clearances.gpu.is_tight ? 'var(--warn)' : 'var(--fresh)', fontSize: 12 }}>{compat.clearances.gpu.is_tight ? '⚠' : '✓'}</span>
                   <span style={{ fontSize: 13, color: 'var(--text)', flex: 1 }}>Folga da GPU no gabinete</span>
-                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--dim)' }}>{Math.round(compat.clearances.gpu.remaining_mm)}mm restantes</span>
+                  <span style={{ fontSize: 10.5, color: 'var(--dim)' }}>{Math.round(compat.clearances.gpu.remaining_mm)}mm restantes</span>
                 </div>
               )}
               {compat.clearances.cooler && (
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line2)' }}>
                   <span style={{ color: compat.clearances.cooler.is_tight ? 'var(--warn)' : 'var(--fresh)', fontSize: 12 }}>{compat.clearances.cooler.is_tight ? '⚠' : '✓'}</span>
                   <span style={{ fontSize: 13, color: 'var(--text)', flex: 1 }}>Altura do cooler</span>
-                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--dim)' }} title={compat.clearances.cooler.source === 'medido_noctua' ? 'medido pela Noctua, não a ficha do fabricante' : undefined}>
+                  <span style={{ fontSize: 10.5, color: 'var(--dim)' }} title={compat.clearances.cooler.source === 'medido_noctua' ? 'medido pela Noctua, não a ficha do fabricante' : undefined}>
                     {Math.round(compat.clearances.cooler.remaining_mm)}mm restantes{compat.clearances.cooler.source === 'medido_noctua' ? ' · medido' : ''}
                   </span>
                 </div>
@@ -280,26 +280,10 @@ export default async function BuildDetailPage(props: PageProps) {
                 totalBrl={build.total_price_brl}
                 modelHref={`/build/${build.slug}/modelo.gltf`}
               />
-              {/* T-20: o /interior/model.gltf já gera o gabinete em 3D a partir
-                  da mesma geometria em mm da vista 2D (sem gerador paralelo,
-                  não pode divergir) — só faltava um link até agora. */}
-              <a
-                data-umami-event="baixar-3d"
-                href={`/build/${build.slug}/modelo.gltf`}
-                download
-                className="mono"
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10,
-                  fontSize: 11.5, color: 'var(--dim)', textDecoration: 'none',
-                }}
-                title="Abre em Blender ou no Visualizador 3D do Windows"
-              >
-                ⬇ baixar modelo 3D do gabinete (.gltf) — estimativa, não medição
-              </a>
             </>
           ) : (
             <div style={{ background: 'var(--card)', border: '1px dashed var(--line)', borderRadius: 12, padding: 40, textAlign: 'center' }}>
-              <span className="mono" style={{ fontSize: 12, color: 'var(--dim2)' }}>interior em análise — sem dados do gabinete</span>
+              <span style={{ fontSize: 12, color: 'var(--dim2)' }}>interior em análise — sem dados do gabinete</span>
             </div>
           )}
         </div>
@@ -311,39 +295,52 @@ export default async function BuildDetailPage(props: PageProps) {
           <h2 className="disp" style={{ fontWeight: 700, fontSize: 'clamp(20px,2.6vw,26px)', margin: 0, color: 'var(--strong)' }}>FPS estimado</h2>
           <div style={{ display: 'flex', gap: 8 }} role="group" aria-label="Resolução">
             {VALID_RES.map((r) => (
-              <a key={r} href={`?res=${r}`} className="mono seg" aria-current={r === res ? 'true' : undefined} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, border: `1px solid ${r === res ? 'var(--accent-dim)' : 'var(--line)'}`, color: r === res ? 'var(--accent-2)' : 'var(--dim)', background: r === res ? 'var(--accent-soft)' : 'transparent' }}>
+              <a key={r} href={`?res=${r}`} className="seg" aria-current={r === res ? 'true' : undefined} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, border: `1px solid ${r === res ? 'var(--accent-dim)' : 'var(--line)'}`, color: r === res ? 'var(--accent-2)' : 'var(--dim)', background: r === res ? 'var(--accent-soft)' : 'transparent' }}>
                 {r}
               </a>
             ))}
           </div>
         </div>
-        <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 12, padding: '6px 20px 14px', overflowX: 'auto' }}>
-          <table style={{ width: '100%', fontSize: 13.5, borderCollapse: 'collapse' }}>
-            <thead>
-              <tr className="mono" style={{ textAlign: 'left', fontSize: 10.5, letterSpacing: '.1em', color: 'var(--dim2)' }}>
-                <th style={{ padding: '12px 16px 8px 0', fontWeight: 600 }}>JOGO</th>
-                <th style={{ padding: '12px 16px 8px 0', fontWeight: 600 }}>PRESET</th>
-                <th style={{ padding: '12px 0 8px' }}>FPS ESTIMADO · BANDA</th>
-              </tr>
-            </thead>
-            <tbody>
+        {(() => {
+          // A média do custo/FPS usa estes 4 jogos (lib/metrics) — são os que
+          // decidem. O resto fica a um toque, para quem procura o seu jogo.
+          const ref = REFERENCE_GAMES as string[]
+          const main = ref.map((g) => fpsEstimates.find((e) => e.game_slug === g)).filter((e): e is (typeof fpsEstimates)[number] => !!e)
+          const rest = fpsEstimates.filter((e) => !ref.includes(e.game_slug)).sort((x, y) => gameLabel(x.game_slug).localeCompare(gameLabel(y.game_slug)))
+          const row = (e: (typeof fpsEstimates)[number]) => {
+            const lo = Math.round(e.fps * (1 - e.confidence_band_pct / 100))
+            const hi = Math.round(e.fps * (1 + e.confidence_band_pct / 100))
+            return (
+              <div key={e.id} style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '10px 0', borderTop: '1px solid var(--line2)' }}>
+                <span style={{ flex: 1, minWidth: 0, color: 'var(--text)', fontSize: 14.5 }}>{gameLabel(e.game_slug)}</span>
+                <span className="mono" style={{ fontSize: 17, fontWeight: 600, color: 'var(--strong)' }}>{Math.round(e.fps)}</span>
+                <span style={{ fontSize: 12, color: 'var(--dim2)', minWidth: 92, textAlign: 'right' }}>
+                  <span className="mono">{lo}–{hi}</span> fps
+                </span>
+              </div>
+            )
+          }
+          return (
+            <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 12, padding: '4px 20px 14px' }}>
               {fpsEstimates.length === 0 && (
-                <tr><td colSpan={3} style={{ padding: 18, textAlign: 'center', color: 'var(--dim)' }}>Sem estimativas para este par CPU+GPU em {res}.</td></tr>
+                <p style={{ padding: 18, textAlign: 'center', color: 'var(--dim)', margin: 0 }}>Sem estimativas para este par CPU+GPU em {res}.</p>
               )}
-              {fpsEstimates.map((e) => (
-                <tr key={e.id} className="rowh" style={{ borderTop: '1px solid var(--line2)' }}>
-                  <td style={{ padding: '10px 16px 10px 0', color: 'var(--text)' }}>{gameLabel(e.game_slug)}</td>
-                  <td className="mono" style={{ padding: '10px 16px 10px 0', fontSize: 11.5, color: 'var(--dim)' }}>{e.preset}</td>
-                  <td style={{ padding: '10px 0' }}><FpsBadge estimate={e} showBand size="sm" /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="mono" style={{ fontSize: 10.5, lineHeight: 1.6, color: 'var(--dim2)', margin: '12px 0 4px' }}>
-            estimativas anchor_scale v1 · benchmarks públicos cruzados · sem bancada própria — a gente não inventa FPS ·{' '}
-            <Link href="/como-medimos" style={{ color: 'var(--accent-2)' }}>a conta aberta →</Link>
-          </p>
-        </div>
+              {main.map(row)}
+              {rest.length > 0 && (
+                <details style={{ borderTop: '1px solid var(--line2)' }}>
+                  <summary data-umami-event="fps-ver-todos" style={{ cursor: 'pointer', padding: '10px 0', fontSize: 13.5, color: 'var(--accent-2)' }}>
+                    ver mais {rest.length} jogos
+                  </summary>
+                  {rest.map(row)}
+                </details>
+              )}
+              <p style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--dim2)', margin: '12px 0 4px' }}>
+                estimativa a partir de testes públicos, preset alto · a faixa é a margem de erro ·{' '}
+                <Link href="/como-medimos" style={{ color: 'var(--accent-2)' }}>como medimos →</Link>
+              </p>
+            </div>
+          )
+        })()}
       </section>
 
       {/* ── componentes ── */}
@@ -356,15 +353,15 @@ export default async function BuildDetailPage(props: PageProps) {
             return (
               <div key={slot} className="hovcard" style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 10, padding: '14px 18px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="mono" style={{ fontSize: 10, letterSpacing: '.1em', color: 'var(--dim2)', marginBottom: 3 }}>{label.toUpperCase()}</div>
+                  <div style={{ fontSize: 10, letterSpacing: '.05em', color: 'var(--dim2)', marginBottom: 3 }}>{label.toUpperCase()}</div>
                   <div style={{ fontWeight: 600, fontSize: 14.5, color: 'var(--strong)' }}>{product.name}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div className="mono" style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)' }}>{offer ? fmtR(offer.price_brl) : '—'}</div>
                   {demo ? (
-                    <span className="mono" style={{ fontSize: 10, color: 'var(--dim2)', border: '1px solid var(--line)', padding: '1px 7px', borderRadius: 99 }}>amostra</span>
+                    <span style={{ fontSize: 10, color: 'var(--dim2)', border: '1px solid var(--line)', padding: '1px 7px', borderRadius: 99 }}>amostra</span>
                   ) : (
-                    <a data-umami-event="lista-comprar" href={`/go/${offer!.id}?utm_source=build&utm_medium=detalhe&utm_campaign=${build.slug}`} className="mono" style={{ fontSize: 11, color: 'var(--accent-2)' }}>
+                    <a data-umami-event="lista-comprar" href={`/go/${offer!.id}?utm_source=build&utm_medium=detalhe&utm_campaign=${build.slug}`} style={{ fontSize: 11, color: 'var(--accent-2)' }}>
                       comprar → {offer!.merchant.name}
                     </a>
                   )}

@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { LiveInterior, LiveProduct } from '@/lib/live-server'
 import Gabinete2D from './Gabinete2D'
+import { mountLabel } from '@/lib/viewer-labels'
 import BottleneckNote from './BottleneckNote'
 import Veredicto from './Veredicto'
 import { coolerBand, bandSuffix, sourceTag, type ClearanceSource } from './clearance'
@@ -26,11 +27,6 @@ type Products = Partial<Record<'gpu' | 'cooler' | 'ram' | 'psu' | 'storage' | 'm
 const ZONE_LABEL: Record<string, string> = {
   intake_front: 'entrada', cpu_zone: 'CPU', gpu_zone: 'GPU', exhaust_rear: 'saída', exhaust_top: 'topo',
 }
-const MOUNT_LABEL: Record<string, string> = {
-  front_bottom: 'frontal inferior', front_top: 'frontal superior', front_mid: 'frontal meio',
-  rear: 'traseira', top_bay: 'baía superior', shroud: 'cobertura da fonte',
-}
-const mountLabel = (id: string) => MOUNT_LABEL[id] ?? id.replace(/_/g, ' ')
 const STATUS_PT: Record<string, { label: string; color: string; border: string }> = {
   ok: { label: 'ok', color: 'var(--fresh)', border: 'var(--fresh-b)' },
   tight: { label: 'apertado', color: 'var(--warn)', border: 'var(--warn-b)' },
@@ -41,7 +37,7 @@ const STATUS_PT: Record<string, { label: string; color: string; border: string }
 const FOCUS_SLOT: Record<string, string> = { gpu: 'gpu', cooler: 'cooler', pump: 'cooler', rad: 'cooler', psu: 'psu', mobo: 'motherboard', ram: 'ram' }
 
 /** O que a cena recebe para abrir a ficha de uma peça (3D ou 2D). */
-export type ScenePick = { picked: string | null; onPick: (key: string | null) => void }
+export type ScenePick = { picked: string | null; onPick: (key: string | null) => void; placeholder: ReactNode }
 
 export default function GabineteVivo({
   interior, products, offers, whatIfFans = [], onToggleFan, onFanDelta, onClearWhatIf, onSwapGpu, pending = false, compact = false,
@@ -84,21 +80,13 @@ export default function GabineteVivo({
 
   const header = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', flexWrap: 'wrap' }}>
-      <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--dim)', border: '1px solid var(--line)', padding: '3px 10px', borderRadius: 99 }}>
-        visualização {scene ? '3D' : '2D'} · estimativa
-      </span>
-      <span className="mono" style={{ fontSize: 12, color: 'var(--dim2)' }}>{interior.case.name ?? 'gabinete'}</span>
-      {simulated && (
-        <span className="mono" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--accent)', border: '1px solid var(--accent-dim)', background: 'var(--accent-soft)', padding: '2px 8px', borderRadius: 99 }}>
-          simulado
-        </span>
-      )}
-      {pending && <span className="mono" style={{ fontSize: 11.5, color: 'var(--dim2)' }}>recalculando…</span>}
+      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--strong)' }}>{interior.case.name ?? 'gabinete'}</span>
+      {pending && <span style={{ fontSize: 12, color: 'var(--dim2)' }}>recalculando…</span>}
       <span style={{ flex: 1 }} />
-      <span className="mono" style={{ fontSize: 12, color: 'var(--dim2)' }}>fluxo de ar</span>
+      <span style={{ fontSize: 13, color: 'var(--dim)' }}>fluxo de ar{simulated ? ' (simulado)' : ''}</span>
       <span className="mono" style={{ fontSize: 18, fontWeight: 600, color: scoreTone }}>{score}</span>
-      <span className="mono" style={{ fontSize: 12, padding: '2px 8px', borderRadius: 99, border: `1px solid ${scoreTone}`, color: scoreTone }}>
-        {score >= 70 ? 'saudável' : score >= 45 ? 'apertado' : 'crítico'}
+      <span style={{ fontSize: 12.5, fontWeight: 600, padding: '2px 9px', borderRadius: 99, border: `1px solid ${scoreTone}`, color: scoreTone }}>
+        {score >= 70 ? 'bom' : score >= 45 ? 'apertado' : 'fraco'}
       </span>
     </div>
   )
@@ -171,7 +159,10 @@ export default function GabineteVivo({
 
   const ft = focused ? fichas[focused] : undefined
   const ftOffer = focused && offers ? offers[FOCUS_SLOT[focused] ?? ''] : undefined
-  const pick: ScenePick = { picked: focused, onPick: (k) => setFocused(k && fichas[k] ? k : null) }
+  const onPick = (k: string | null) => setFocused(k && fichas[k] ? k : null)
+  const flat = <Gabinete2D interior={interior} onPick={compact ? undefined : onPick} picked={focused}
+    onToggleFan={onToggleFan} compact={compact} />
+  const pick: ScenePick = { picked: focused, onPick, placeholder: flat }
 
   return (
     <div className="gv-card" style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', boxShadow: 'var(--shadow-sm)', opacity: pending ? 0.65 : 1, transition: 'opacity .15s ease' }}>
@@ -179,14 +170,11 @@ export default function GabineteVivo({
       <Veredicto interior={interior} compact={compact} />
 
       <div style={{ position: 'relative' }}>
-        {scene
-          ? scene(pick)
-          : <Gabinete2D interior={interior} onPick={compact ? undefined : pick.onPick} picked={focused}
-              onToggleFan={onToggleFan} compact={compact} />}
+        {scene ? scene(pick) : flat}
 
         {/* ficha da peça escolhida — tocar numa peça na cena (3D ou 2D) */}
         {ft && (
-          <div className="mono" role="dialog" aria-label={`Ficha: ${ft.label}`} style={{
+          <div role="dialog" aria-label={`Ficha: ${ft.label}`} style={{
             position: 'absolute', left: 12, top: 12, zIndex: 6, maxWidth: 'min(320px, calc(100% - 24px))',
             background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 10,
             padding: '10px 12px', boxShadow: 'var(--shadow-sm)',
@@ -230,7 +218,6 @@ export default function GabineteVivo({
                 ↻ trocar esta placa
               </button>
             )}
-            <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--dim2)' }}>estimativa · Esc para fechar</div>
           </div>
         )}
       </div>
@@ -238,16 +225,14 @@ export default function GabineteVivo({
       {/* diagnóstico: o que segura o fluxo, e como simular a solução */}
       <BottleneckNote diagnosis={interior.diagnosis} onSimulate={onToggleFan} compact={compact} />
 
-      {/* legenda */}
+      {/* uma linha de leitura, no lugar da legenda */}
       {!compact && (
-        <div className="mono" style={{ display: 'flex', flexWrap: 'wrap', gap: 14, padding: '10px 16px 2px', alignItems: 'center', fontSize: 11, color: 'var(--dim2)', borderTop: '1px solid var(--line2)' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 3, borderRadius: 2, background: 'var(--fresh)' }} /> entra</span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 3, borderRadius: 2, background: 'var(--warn)' }} /> sai</span>
-          {scene
-            ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 11, height: 11, borderRadius: 99, border: '2px solid var(--accent)' }} /> vaga livre (toque para simular)</span>
-            : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 0, borderTop: '2px dashed var(--dim2)' }} /> vaga livre (toque no +)</span>}
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 24, height: 6, borderRadius: 3, background: 'linear-gradient(90deg, var(--fresh), var(--warn), var(--danger))' }} /> ar esquenta</span>
-          <span>toque numa peça para ver a ficha</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '8px 16px 2px', alignItems: 'center', fontSize: 12, color: 'var(--dim2)', borderTop: '1px solid var(--line2)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 12, height: 3, borderRadius: 2, background: 'var(--fresh)' }} /> entra ar</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 12, height: 3, borderRadius: 2, background: 'var(--warn)' }} /> sai ar</span>
+          <span>toque numa peça para ver preço</span>
+          <span style={{ flex: 1 }} />
+          <span>estimativa</span>
         </div>
       )}
 
@@ -258,22 +243,22 @@ export default function GabineteVivo({
           const issues = interior.airflow.zones.filter((z) => z.status !== 'ok')
           if (!issues.length) {
             return (
-              <span className="mono" style={{ fontSize: 12, padding: '3px 9px', borderRadius: 99, border: `1px solid ${STATUS_PT.ok.border}`, color: STATUS_PT.ok.color }}>
-                ar a circular bem em todas as zonas
+              <span style={{ fontSize: 12.5, padding: '3px 9px', borderRadius: 99, border: `1px solid ${STATUS_PT.ok.border}`, color: STATUS_PT.ok.color }}>
+                ar circulando bem
               </span>
             )
           }
           return issues.map((z) => {
             const st = STATUS_PT[z.status] ?? STATUS_PT.ok
             return (
-              <span key={z.zone} className="mono" style={{ fontSize: 12, padding: '3px 9px', borderRadius: 99, border: `1px solid ${st.border}`, color: st.color }}>
+              <span key={z.zone} style={{ fontSize: 12.5, padding: '3px 9px', borderRadius: 99, border: `1px solid ${st.border}`, color: st.color }}>
                 {ZONE_LABEL[z.zone] ?? z.zone}: {st.label}
               </span>
             )
           })
         })()}
-        {!compact && g.mounts.filter((m) => m.occupied_by === null).map((m) => (
-          <button key={m.id} type="button" className="mono"
+        {!compact && !scene && g.mounts.filter((m) => m.occupied_by === null).map((m) => (
+          <button key={m.id} type="button"
             onClick={onToggleFan ? () => onToggleFan(m.id) : undefined}
             data-umami-event="viewer-ventoinha-mais"
             disabled={!onToggleFan}
@@ -286,22 +271,22 @@ export default function GabineteVivo({
           </button>
         ))}
         {whatIfFans.length > 0 && onClearWhatIf && (
-          <button type="button" className="mono" onClick={onClearWhatIf}
+          <button type="button" onClick={onClearWhatIf}
             style={{ fontSize: 12, padding: '3px 9px', borderRadius: 99, border: '1px solid var(--line)', color: 'var(--dim)', background: 'transparent', cursor: 'pointer' }}>
-            limpar simulação
+            desfazer simulação
           </button>
         )}
       </div>
       {!compact && (
         <details style={{ padding: '0 16px 14px' }}>
-          <summary data-umami-event="viewer-detalhes" className="mono" style={{ fontSize: 12, color: 'var(--dim2)', cursor: 'pointer', padding: '4px 0' }}>
-            detalhes do fluxo de ar
+          <summary data-umami-event="viewer-detalhes" style={{ fontSize: 12.5, color: 'var(--dim2)', cursor: 'pointer', padding: '4px 0' }}>
+            detalhes
           </summary>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 6, alignItems: 'center' }}>
             {interior.airflow.zones.map((z) => {
               const st = STATUS_PT[z.status] ?? STATUS_PT.ok
               return (
-                <span key={z.zone} className="mono" style={{ fontSize: 12, padding: '3px 9px', borderRadius: 99, border: `1px solid ${st.border}`, color: st.color }}>
+                <span key={z.zone} style={{ fontSize: 12.5, padding: '3px 9px', borderRadius: 99, border: `1px solid ${st.border}`, color: st.color }}>
                   {ZONE_LABEL[z.zone] ?? z.zone}: {st.label}
                 </span>
               )
