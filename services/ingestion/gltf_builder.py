@@ -320,6 +320,10 @@ def build_gltf(est: dict) -> dict:
                 t = (i + 0.5) / n
                 cx = px + pw * t if wide else px + pw / 2
                 cy = py + ph / 2 if wide else py + ph * t
+                if face == "bottom" and shroud > 0:
+                    # na cobertura da fonte a ventoinha fica rente à chapa: o
+                    # topo do disco aflora 1,5 mm para não sumir debaixo dela
+                    cy = shroud - 25.0 / 2 + 1.5
                 disc(f"fan-{p.get('mount', '')}-{i}", cx, cy, zc, r, 25.0,
                      "y" if wide else "x", mat,
                      "spec" if not p.get("simulated") else "simulado")

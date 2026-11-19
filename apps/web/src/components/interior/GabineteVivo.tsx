@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { GeoMount, GeoPlacement, LiveInterior, LiveProduct } from '@/lib/live-server'
 import { MaterialDefs, bevel, pickVariant, renderPart, renderFromDescriptor } from './PartMockups'
 import TopDownInset from './TopDownInset'
@@ -62,6 +62,7 @@ function eddyArc(cx: number, cy: number, r: number): string {
 
 export default function GabineteVivo({
   interior, products, offers, whatIfFans = [], onToggleFan, onFanDelta, onClearWhatIf, onSwapGpu, pending = false, compact = false,
+  scene,
 }: {
   interior: LiveInterior
   products: Products
@@ -79,6 +80,10 @@ export default function GabineteVivo({
   pending?: boolean
   /** modo comparação lado a lado: esconde inset/legenda p/ caber */
   compact?: boolean
+  /** vista 3D no lugar do corte 2D (fase 2 do 3D). O veredicto, o diagnóstico,
+   *  os chips e a legenda continuam — só a cena muda. O corte superior some: no
+   *  3D a largura (cooler × vidro, espessura da GPU) já está à vista. */
+  scene?: ReactNode
 }) {
   const [hovered, setHovered] = useState<string | null>(null)
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null)
@@ -544,6 +549,7 @@ export default function GabineteVivo({
       {header}
       <Veredicto interior={interior} compact={compact} />
 
+      {scene ?? (
       <div style={{ position: 'relative' }}>
         <svg viewBox="0 0 720 430" role="img" className={compact ? 'gv-compact' : undefined}
           aria-label={`Interior do ${interior.case.name ?? 'gabinete'}: fluxo estimado ${score} de 100, pressão ${pressao}`}
@@ -1150,6 +1156,7 @@ export default function GabineteVivo({
           }}>{tip.text}</div>
         )}
       </div>
+      )}
 
       {/* diagnóstico: o que segura o fluxo, e como simular a solução */}
       <BottleneckNote diagnosis={interior.diagnosis} onSimulate={onToggleFan} compact={compact} />
@@ -1166,9 +1173,11 @@ export default function GabineteVivo({
           gabinete de frente). Foi removida — fora do escopo do projeto. A
           vista principal deste componente é a do VIDRO (painel lateral), que
           é o que o produto precisa pra lançar. */}
-      <div className={compact ? 'gv-compact' : undefined} style={{ borderTop: '1px solid var(--line2)' }}>
-        <TopDownInset interior={interior} g={g} hovered={focused ?? hovered} onHover={setHovered} />
-      </div>
+      {!scene && (
+        <div className={compact ? 'gv-compact' : undefined} style={{ borderTop: '1px solid var(--line2)' }}>
+          <TopDownInset interior={interior} g={g} hovered={focused ?? hovered} onHover={setHovered} />
+        </div>
+      )}
 
       {/* legenda */}
       {!compact && (
