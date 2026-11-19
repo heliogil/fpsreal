@@ -3,7 +3,7 @@ import Link from 'next/link'
 export default function NotFound() {
   return (
     <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 20, padding: '40px 16px', textAlign: 'center' }}>
-      <div className="mono" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.14em', color: 'var(--dim)' }}>ERRO 404</div>
+      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.05em', color: 'var(--dim)' }}>ERRO 404</div>
       <h1 className="disp" style={{ fontSize: 'clamp(32px,5vw,48px)', fontWeight: 700, color: 'var(--strong)', margin: 0 }}>
         Esta página não existe
       </h1>

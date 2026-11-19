@@ -122,25 +122,25 @@ export default function TrocaPeca({
       <header style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--line2)' }}>
         <div style={{ flex: 1 }}>
           <strong style={{ fontSize: 15, color: 'var(--text)' }}>Trocar a placa de vídeo</strong>
-          <div className="mono" style={{ fontSize: 11.5, color: 'var(--dim2)', marginTop: 2, lineHeight: 1.45 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--dim2)', marginTop: 2, lineHeight: 1.45 }}>
             mesma build, só a placa muda · FPS médio em{' '}
             {(data?.games ?? []).map((g) => gameLabel(g)).join(', ') || 'jogos de referência'}
             {' '}({data?.resolution ?? '1080p'}) · estimativa
           </div>
         </div>
-        <button type="button" onClick={onClose} aria-label="Fechar a troca de placa" className="mono"
+        <button type="button" onClick={onClose} aria-label="Fechar a troca de placa"
           style={{ fontSize: 12, padding: '2px 8px', borderRadius: 99, cursor: 'pointer', border: '1px solid var(--line)', background: 'transparent', color: 'var(--dim)' }}>
           fechar
         </button>
       </header>
 
-      {loading && <div className="mono" style={{ padding: 16, fontSize: 12.5, color: 'var(--dim)' }}>testando as placas do catálogo nesta build…</div>}
-      {failed && !loading && <div className="mono" style={{ padding: 16, fontSize: 12.5, color: 'var(--warn)' }}>não deu para carregar as alternativas agora.</div>}
+      {loading && <div style={{ padding: 16, fontSize: 12.5, color: 'var(--dim)' }}>testando as placas do catálogo nesta build…</div>}
+      {failed && !loading && <div style={{ padding: 16, fontSize: 12.5, color: 'var(--warn)' }}>não deu para carregar as alternativas agora.</div>}
 
       {data && !loading && (
         <>
           {cur && (
-            <div className="mono" style={{ padding: '10px 16px', fontSize: 12.5, color: 'var(--dim)', borderBottom: '1px solid var(--line2)' }}>
+            <div style={{ padding: '10px 16px', fontSize: 12.5, color: 'var(--dim)', borderBottom: '1px solid var(--line2)' }}>
               atual: <span style={{ color: 'var(--text)' }}>{cur.name}</span>
               {cur.avg_fps != null && <> · {Math.round(cur.avg_fps)} FPS</>}
               {cur.rs_per_fps != null && <> · {cpfFmt(cur.rs_per_fps)}/FPS</>}
@@ -148,7 +148,7 @@ export default function TrocaPeca({
           )}
           <div role="group" aria-label="Ordenar" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '10px 16px 4px' }}>
             {SORTS.map(([k, label]) => (
-              <button key={k} type="button" className="mono" style={chip(sort === k)} aria-pressed={sort === k}
+              <button key={k} type="button" style={chip(sort === k)} aria-pressed={sort === k}
                 onClick={() => setSort(k)}>{label}</button>
             ))}
           </div>
@@ -175,8 +175,8 @@ export default function TrocaPeca({
                     className="gv-swap-row">
                     <span style={{ flex: '1 1 180px', fontSize: 14, fontWeight: 600 }}>
                       {a.name}
-                      {applied && <span className="mono" style={{ marginLeft: 8, fontSize: 11, color: 'var(--accent)' }}>no desenho</span>}
-                      {applyingId === a.product_id && <span className="mono" style={{ marginLeft: 8, fontSize: 11, color: 'var(--dim)' }}>montando…</span>}
+                      {applied && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--accent)' }}>no desenho</span>}
+                      {applyingId === a.product_id && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--dim)' }}>montando…</span>}
                     </span>
                     <span className="mono" style={{ fontSize: 12.5, color: a.delta_fps > 0 ? 'var(--fresh)' : a.delta_fps < 0 ? 'var(--warn)' : 'var(--dim)' }}>
                       {Math.round(a.avg_fps)} FPS ({a.delta_pct > 0 ? '+' : ''}{a.delta_pct}%)
@@ -187,7 +187,7 @@ export default function TrocaPeca({
                         {cpfFmt(a.rs_per_fps)}/FPS
                       </span>
                     )}
-                    <span className="mono" style={{ flexBasis: '100%', fontSize: 11, color: 'var(--dim2)' }}>
+                    <span style={{ flexBasis: '100%', fontSize: 11, color: 'var(--dim2)' }}>
                       {!a.fits && a.blocker && <span style={{ color: 'var(--danger)' }}>✕ {shortBlock(a.blocker)} · </span>}
                       {a.fits && a.warning && <span style={{ color: 'var(--warn)' }} title={a.warning}>⚠ {shortWarn(a.warning)} · </span>}
                       {capped && <span title="Com esta CPU, placas mais fortes não passam deste FPS (a CPU é o gargalo).">travado na CPU · </span>}
@@ -202,12 +202,12 @@ export default function TrocaPeca({
           </ul>
           {sorted.length > 6 && (
             <div style={{ padding: '0 16px 12px' }}>
-              <button type="button" className="mono" onClick={() => setAll((v) => !v)} style={chip(false)}>
+              <button type="button" onClick={() => setAll((v) => !v)} style={chip(false)}>
                 {all ? 'mostrar menos' : `ver todas (${sorted.length})`}
               </button>
             </div>
           )}
-          {!alts.length && <div className="mono" style={{ padding: 16, fontSize: 12.5, color: 'var(--dim)' }}>sem alternativas com preço e FPS para esta build.</div>}
+          {!alts.length && <div style={{ padding: 16, fontSize: 12.5, color: 'var(--dim)' }}>sem alternativas com preço e FPS para esta build.</div>}
         </>
       )}
     </section>

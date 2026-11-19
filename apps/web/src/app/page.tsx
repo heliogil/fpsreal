@@ -108,7 +108,7 @@ export default async function HomePage() {
                 <rect x="3.4" y="19.6" width="17.2" height="2.1" rx="1" fill="var(--accent)" />
               </svg>
             </div>
-            <div className="mono" style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '.14em', color: 'var(--accent-2)', lineHeight: 1.35 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '.05em', color: 'var(--accent-2)', lineHeight: 1.35 }}>
               MEDIDO CONTRA O REI
               <br />
               <span style={{ color: 'var(--dim2)', letterSpacing: '.1em' }}>FPS com fonte, data e banda, sempre</span>
@@ -130,7 +130,7 @@ export default async function HomePage() {
               Como medimos o FPS
             </Link>
           </div>
-          <div className="mono rv" style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginTop: 32, fontSize: 12, color: 'var(--dim2)', animationDelay: '.32s' }}>
+          <div className="rv" style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginTop: 32, fontSize: 12, color: 'var(--dim2)', animationDelay: '.32s' }}>
             <span><span style={{ color: 'var(--accent-2)' }}>✓</span> sem FPS inventado</span>
             <span><span style={{ color: 'var(--accent-2)' }}>✓</span> preço de amostra sempre sinalizado</span>
             <span><span style={{ color: 'var(--accent-2)' }}>✓</span> medido contra o Rei</span>
@@ -141,17 +141,17 @@ export default async function HomePage() {
         {hero && (
           <div className="rv hero-panel" style={{ position: 'relative', background: 'var(--card)', border: '1px solid var(--accent-dim)', borderRadius: 12, padding: '24px 26px', boxShadow: 'var(--shadow)', animationDelay: '.2s', alignSelf: 'start' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <span className="mono" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.12em', color: 'var(--dim)' }}>
+              <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.05em', color: 'var(--dim)' }}>
                 MELHOR CUSTO/FPS · {TIER_LABEL[hero.b.tier] ?? hero.b.tier}
               </span>
-              <span className="mono" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 500, color: 'var(--dim)', border: '1px solid var(--line)', padding: '3px 8px', borderRadius: 99 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 500, color: 'var(--dim)', border: '1px solid var(--line)', padding: '3px 8px', borderRadius: 99 }}>
                 preço · amostra
               </span>
             </div>
             <div className="mono metric" style={{ fontSize: 'clamp(44px,6vw,60px)', fontWeight: 600, lineHeight: 1, letterSpacing: '-2px', color: 'var(--accent)' }}>
               {fmtCpf(hero.cpf)}<span style={{ fontSize: 20, color: 'var(--dim)' }}> /FPS</span>
             </div>
-            <div className="mono" style={{ fontSize: 12, color: 'var(--dim2)', margin: '8px 0 20px' }}>
+            <div style={{ fontSize: 12, color: 'var(--dim2)', margin: '8px 0 20px' }}>
               total {fmtR(hero.b.total_price_brl)} · média em {hero.games.length} jogos · 1080p
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
@@ -168,7 +168,7 @@ export default async function HomePage() {
                 </div>
               ))}
             </div>
-            <div className="mono" style={{ marginTop: 18, paddingTop: 14, borderTop: '1px dashed var(--line)', fontSize: 11, lineHeight: 1.5, color: 'var(--dim2)' }}>
+            <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px dashed var(--line)', fontSize: 11, lineHeight: 1.5, color: 'var(--dim2)' }}>
               estimativas · base Tom&apos;s Hardware (GPU Hierarchy 2026) · calibrado ago/2026 · 1080p
             </div>
           </div>
@@ -177,7 +177,7 @@ export default async function HomePage() {
 
       {/* ============ HONESTY STRIP ============ */}
       <section style={{ borderTop: '1px solid var(--line2)', borderBottom: '1px solid var(--line2)', background: 'var(--accent-soft)', padding: 'clamp(32px,4vw,40px) clamp(16px,4vw,40px)' }}>
-        <div className="mono" style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '.14em', color: 'var(--dim)', marginBottom: 22 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '.05em', color: 'var(--dim)', marginBottom: 22 }}>
           A GENTE NÃO INVENTA FPS — E ISSO É O PRODUTO
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 24 }}>
@@ -196,7 +196,7 @@ export default async function HomePage() {
             <div style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--dim)' }}>Quando o preço vier da loja, toda oferta leva selo de frescura; passou de 72h sem confirmação, some. Até os feeds oficiais entrarem, o preço aparece marcado como amostra.</div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <span className="mono" style={{ alignSelf: 'flex-start', fontSize: 11, fontWeight: 600, color: 'var(--dim)', border: '1px dashed var(--dim2)', padding: '4px 10px', borderRadius: 99 }}>desempenho em análise</span>
+            <span style={{ alignSelf: 'flex-start', fontSize: 11, fontWeight: 600, color: 'var(--dim)', border: '1px dashed var(--dim2)', padding: '4px 10px', borderRadius: 99 }}>desempenho em análise</span>
             <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--strong)' }}>Sem dado? Sem número</div>
             <div style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--dim)' }}>Peça recém-lançada sem benchmark confiável fica &quot;em análise&quot;. A gente não chuta índice pra fechar review.</div>
           </div>
@@ -207,7 +207,7 @@ export default async function HomePage() {
       <section id="challengers" style={{ padding: 'clamp(40px,5vw,52px) clamp(16px,4vw,40px)', scrollMarginTop: 80 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 26, flexWrap: 'wrap', gap: 8 }}>
           <h2 className="disp" style={{ fontWeight: 700, fontSize: 'clamp(24px,3vw,30px)', margin: 0, color: 'var(--strong)' }}>As challengers de hoje</h2>
-          <span className="mono" style={{ fontSize: 12, color: 'var(--dim2)' }}>ranqueadas por custo/FPS · preço de amostra</span>
+          <span style={{ fontSize: 12, color: 'var(--dim2)' }}>ranqueadas por custo/FPS · preço de amostra</span>
         </div>
         <div className="stag" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 20 }}>
           {enriched.map(({ b, cpf }) => {
@@ -220,13 +220,13 @@ export default async function HomePage() {
                 style={{ display: 'block', background: 'var(--card)', border: `1px solid ${best ? 'var(--accent-dim)' : 'var(--line)'}`, borderRadius: 12, padding: 22, position: 'relative', boxShadow: best ? '0 0 0 1px var(--accent-dim)' : 'none' }}
               >
                 {best && (
-                  <div className="mono" style={{ position: 'absolute', top: -9, left: 20, background: 'var(--accent)', color: 'var(--accent-ink)', fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 99 }}>
+                  <div style={{ position: 'absolute', top: -9, left: 20, background: 'var(--accent)', color: 'var(--accent-ink)', fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 99 }}>
                     ♛ O Rei
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
-                  <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--dim)' }}>{TIER_LABEL[b.tier] ?? b.tier}</span>
-                  <span className="mono" style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--fresh)' }}>✓ compatível</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dim)' }}>{TIER_LABEL[b.tier] ?? b.tier}</span>
+                  <span style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--fresh)' }}>✓ compatível</span>
                 </div>
                 <div style={{ fontWeight: 600, fontSize: 17, color: 'var(--strong)', marginBottom: 4 }}>{b.title}</div>
                 <div style={{ fontSize: 12.5, color: 'var(--dim)', marginBottom: 18, minHeight: 34 }}>{b.subtitle}</div>
@@ -235,7 +235,7 @@ export default async function HomePage() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line2)' }}>
                   <span className="mono" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>{fmtR(b.total_price_brl)}</span>
-                  <span className="mono" style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--dim2)', border: '1px solid var(--line)', padding: '2px 8px', borderRadius: 99 }}>amostra (demo)</span>
+                  <span style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--dim2)', border: '1px solid var(--line)', padding: '2px 8px', borderRadius: 99 }}>amostra (demo)</span>
                 </div>
               </Link>
             )
