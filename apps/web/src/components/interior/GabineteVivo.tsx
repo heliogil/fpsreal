@@ -42,7 +42,7 @@ const ZONE_LABEL: Record<string, string> = {
 // os 5 ids que existem hoje no catálogo de gabinetes.
 const MOUNT_LABEL: Record<string, string> = {
   front_bottom: 'frontal inferior', front_top: 'frontal superior', front_mid: 'frontal meio',
-  rear: 'traseira', top_bay: 'baía superior',
+  rear: 'traseira', top_bay: 'baía superior', shroud: 'cobertura da fonte',
 }
 const mountLabel = (id: string) => MOUNT_LABEL[id] ?? id.replace(/_/g, ' ')
 const STATUS_PT: Record<string, { label: string; color: string; border: string }> = {
@@ -326,7 +326,10 @@ export default function GabineteVivo({
   const mountLine = (m: GeoMount) => {
     const occupied = m.occupied_by !== null
     const isSim = m.occupied_by === 'what_if_fan'
-    const isTop = m.y > H * 0.8 && m.w > m.h
+    // face vem do motor (mounts 3D); payload antigo sem ela ⇒ dedução por x/y
+    const isTop = m.face ? m.face === 'top' : m.y > H * 0.8 && m.w > m.h
+    const isBottom = m.face === 'bottom'
+    const isSide = m.face === 'side'
     const color = isSim ? 'var(--accent)' : m.orient === 'intake' ? 'var(--fresh)' : 'var(--warn)'
     const label = `${mountLabel(m.id)} · ${m.orient === 'intake' ? 'entrada' : 'saída'} · ${
       occupied ? `${Math.round(m.cfm)} CFM${isSim ? ' (simulado)' : ''}` : 'espaço livre — clique pra simular uma ventoinha aqui'
@@ -341,21 +344,31 @@ export default function GabineteVivo({
     }
     const mid = isTop
       ? { x: X(m.x + m.w / 2), y: oy }
-      : { x: m.x < D / 2 ? X(0) : X(D), y: Yc(m.y + m.h / 2) }
+      : isBottom
+        ? { x: X(m.x + m.w / 2), y: Yc(m.y + m.h) }
+        : isSide
+          ? { x: X(m.x + m.w / 2), y: Yc(m.y + m.h / 2) }
+          : { x: m.x < D / 2 ? X(0) : X(D), y: Yc(m.y + m.h / 2) }
 
     return (
       <g key={m.id} {...hoverProps(`mount:${m.id}`, label)} opacity={dimOf(`mount:${m.id}`)}
         onClick={clickable ? (e) => { e.stopPropagation(); onToggleFan?.(m.id) } : undefined}
         style={{ cursor: clickable ? 'pointer' : 'help' }}>
-        {isTop ? (
-          <line data-vent={`${m.orient}-${m.id}`} x1={X(m.x)} y1={oy} x2={X(m.x + m.w)} y2={oy} {...common} />
+        {isTop || isBottom ? (
+          <line data-vent={`${m.orient}-${m.id}`} x1={X(m.x)} y1={mid.y} x2={X(m.x + m.w)} y2={mid.y} {...common} />
+        ) : isSide ? (
+          // ventoinha na tampa lateral: vista de frente neste corte — um círculo
+          <circle data-vent={`${m.orient}-${m.id}`} cx={mid.x} cy={mid.y} r={(Math.min(m.w, m.h) * s) / 2}
+            fill="none" {...common} />
         ) : (
           <line data-vent={`${m.orient}-${m.id}`} x1={mid.x} y1={Yc(m.y + m.h)} x2={mid.x} y2={Yc(m.y)} {...common} />
         )}
         {/* alvo maior p/ o clique/hover não exigir precisão */}
-        {isTop
-          ? <rect x={X(m.x)} y={oy - 9} width={m.w * s} height={18} fill="transparent" />
-          : <rect x={mid.x - 9} y={Yc(m.y + m.h)} width={18} height={m.h * s} fill="transparent" />}
+        {isTop || isBottom
+          ? <rect x={X(m.x)} y={mid.y - 9} width={m.w * s} height={18} fill="transparent" />
+          : isSide
+            ? <rect x={X(m.x)} y={Yc(m.y + m.h)} width={m.w * s} height={m.h * s} fill="transparent" />
+            : <rect x={mid.x - 9} y={Yc(m.y + m.h)} width={18} height={m.h * s} fill="transparent" />}
         {/* afordância "+" nos mounts livres */}
         {clickable && (
           <g pointerEvents="none">
@@ -426,8 +439,10 @@ export default function GabineteVivo({
       })
     })
   } else g.flows.forEach((f, fi) => {
-    const sx = ox - 26
-    const sy = Yc(f.from.y)
+    // entrada por baixo (cobertura da fonte) nasce no topo da cobertura
+    const fromBottom = f.from.side === 'bottom'
+    const sx = fromBottom ? X(f.from.x + (f.from.w ?? 0) / 2) : ox - 26
+    const sy = fromBottom ? Yc(f.from.y) + 14 : Yc(f.from.y)
     const heatT = Math.min(0.86, 0.18 + (f.heat_at[0] ?? 0.55) * 0.6)
     const choke = flowChoke(f)
     if (f.to.side === 'rear') {

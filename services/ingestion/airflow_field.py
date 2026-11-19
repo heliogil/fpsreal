@@ -40,7 +40,12 @@ def _rects_contain(rects: List[dict], x: float, y: float, inflate: float = 0.0) 
 
 
 def _side_of(op: dict, D: float, H: float) -> str:
-    """Lado da abertura (parede em que assenta), pela posição do centro."""
+    """Lado da abertura (parede em que assenta). A face declarada pelo mount
+    (case_mounts) manda; sem ela, deduz pela posição do centro. Uma abertura
+    na lateral não existe neste corte — entra pela frente/traseira mais perto."""
+    face = op.get("face")
+    if face in ("front", "rear", "top", "bottom"):
+        return face
     cx = op["x"] + op.get("w", 0) / 2
     cy = op["y"] + op.get("h", 0) / 2
     if cy > H * 0.8 and op.get("w", 0) >= op.get("h", 0):

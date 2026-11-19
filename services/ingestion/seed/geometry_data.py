@@ -72,21 +72,37 @@ CASE_GEOMETRY: dict[str, dict] = {
              "x": 15, "y": 367, "w": 400, "h": 28, "orient": "exhaust", "stock": False},
         ],
     },
-    # Antec Flux Pro: externo 530 (D) × 545 (H) mm; interior estimado pela mesma
-    # proporção dos outros gabinetes. 3×140 na frente, 1×140 atrás, topo livre
-    # (aceita 3×120/3×140 ou radiador até 420). As 2×120 da cobertura da fonte
-    # ficam de fora (ver catalog_data).
+    # Antec Flux Pro: externo 530 (D) × 245 (W) × 545 (H) mm; interior estimado
+    # pela mesma proporção dos outros gabinetes. Ficha oficial
+    # (antec.com/product/case/flux-pro.php): 3×140 Tranquil PWM na frente,
+    # 1×140 Tranquil atrás e 2×120 "P12R PWM reverse" na cobertura da fonte
+    # (soprando para cima, para a placa de vídeo); topo livre (3×120/3×140 ou
+    # radiador até 420).
+    # CFM por ventoinha (fan_cfm): Tranquil 140 = 85.96 (antec.com/product/
+    # cooling/tranquil-140.php, máximo). A Antec NÃO publica o CFM do P12R PWM
+    # (a página do modelo dá 404; o P12R ARGB, outro SKU, diz 55.31–61.46) —
+    # usado 55, o valor de classe fan120 do motor, que fica no piso dessa faixa.
     "case-flux-pro": {
         "interior_mm": {"depth": 470, "height": 440},
         "mounts": [
             {"id": "front_bottom", "kind": "fan140", "accepts": ["fan120", "fan140"],
-             "x": 0, "y": 15, "w": 28, "h": 140, "orient": "intake", "stock": True},
+             "x": 0, "y": 15, "w": 28, "h": 140, "orient": "intake", "stock": True,
+             "face": "front", "fan_cfm": 85.96, "cfm_source": "ficha Antec Tranquil 140"},
             {"id": "front_mid", "kind": "fan140", "accepts": ["fan120", "fan140"],
-             "x": 0, "y": 155, "w": 28, "h": 140, "orient": "intake", "stock": True},
+             "x": 0, "y": 155, "w": 28, "h": 140, "orient": "intake", "stock": True,
+             "face": "front", "fan_cfm": 85.96, "cfm_source": "ficha Antec Tranquil 140"},
             {"id": "front_top", "kind": "fan140", "accepts": ["fan120", "fan140"],
-             "x": 0, "y": 295, "w": 28, "h": 140, "orient": "intake", "stock": True},
+             "x": 0, "y": 295, "w": 28, "h": 140, "orient": "intake", "stock": True,
+             "face": "front", "fan_cfm": 85.96, "cfm_source": "ficha Antec Tranquil 140"},
             {"id": "rear", "kind": "fan140", "accepts": ["fan120", "fan140"],
-             "x": 442, "y": 270, "w": 28, "h": 140, "orient": "exhaust", "stock": True},
+             "x": 442, "y": 270, "w": 28, "h": 140, "orient": "exhaust", "stock": True,
+             "face": "rear", "fan_cfm": 85.96, "cfm_source": "ficha Antec Tranquil 140"},
+            # cobertura da fonte: 2 ventoinhas deitadas, na metade da frente
+            # (a fonte fica atrás), topo das ventoinhas = topo da cobertura
+            {"id": "shroud", "kind": "fan120", "accepts": ["fan120"], "face": "bottom",
+             "x": 30, "y": 55, "w": 250, "h": 25, "orient": "intake", "stock": True,
+             "stock_fans": 2, "slots": 2, "fan_cfm": 55.0,
+             "cfm_source": "classe fan120 (Antec não publica o CFM do P12R PWM)"},
             {"id": "top_bay", "kind": "rad_bay", "accepts": ["fan120", "fan140", "rad240", "rad360"],
              "x": 30, "y": 412, "w": 420, "h": 28, "orient": "exhaust", "stock": False},
         ],

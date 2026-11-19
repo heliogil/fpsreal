@@ -297,15 +297,31 @@ def build_gltf(est: dict) -> dict:
             continue
 
         if part == "case_fan":
+            # face e posição na largura vêm do mount (case_mounts); sem elas, o
+            # palpite antigo (deitada = topo, em pé = parede, centro da largura)
+            face = p.get("face")
             wide = p.get("wide") is True
             n = max(1, int(p.get("fan_count") or 1))
+            zc = float(p["z"]) if p.get("z") is not None else W / 2
+            if face == "side":
+                # na tampa: disco de frente para quem olha pelo vidro
+                r = min(pw, ph) / 2 * 0.9
+                disc(f"fan-{p.get('mount', '')}-0", px + pw / 2, py + ph / 2, zc, r, 25.0,
+                     "z", "fresh" if p.get("orient") == "intake" else "warn",
+                     "spec" if not p.get("simulated") else "simulado")
+                continue
             r = (pw if wide else ph) / n * 0.45
+            r = min(r, (float(p.get("d") or W)) / 2 * 0.95)
+            if p.get("orient") in ("intake", "exhaust"):
+                mat = "fresh" if p["orient"] == "intake" else "warn"
+            else:
+                mat = "fresh" if px < D * 0.3 else "warn"
             for i in range(n):
                 t = (i + 0.5) / n
                 cx = px + pw * t if wide else px + pw / 2
                 cy = py + ph / 2 if wide else py + ph * t
-                disc(f"fan-{p.get('mount', '')}-{i}", cx, cy, W / 2, r, 25.0,
-                     "y" if wide else "x", "fresh" if px < D * 0.3 else "warn",
+                disc(f"fan-{p.get('mount', '')}-{i}", cx, cy, zc, r, 25.0,
+                     "y" if wide else "x", mat,
                      "spec" if not p.get("simulated") else "simulado")
             continue
 
