@@ -49,6 +49,12 @@ const MOUNT_LABEL: Record<string, string> = {
   rear: 'traseira', top_bay: 'baía superior', shroud: 'cobertura da fonte',
 }
 const mountLabel = (id: string) => MOUNT_LABEL[id] ?? id.replace(/_/g, ' ')
+/** nó do glTF → chave da ficha no GabineteVivo (as peças que têm ficha) */
+const FICHA_OF: Array<[RegExp, string]> = [
+  [/^gpu/, 'gpu'], [/^cooler/, 'cooler'], [/^aio_pump/, 'pump'], [/^aio_(radiator|fans)/, 'rad'],
+  [/^psu/, 'psu'], [/^motherboard/, 'mobo'], [/^ram/, 'ram'],
+]
+const fichaOf = (name: string) => FICHA_OF.find(([re]) => re.test(name))?.[1] ?? null
 function partLabel(name: string): string {
   return PART_LABEL.find(([re]) => re.test(name))?.[1] ?? name
 }
@@ -114,7 +120,7 @@ function mountSlots(m: GeoMount, W: number): { pts: THREE.Vector3[]; r: number; 
 }
 
 export default function Viewer3D({
-  components, whatIfFans = [], downloadHref, interior, onToggleFan, embedded = false,
+  components, whatIfFans = [], downloadHref, interior, onToggleFan, embedded = false, onPick, picked: pickedKey,
 }: {
   components: Record<string, number>
   whatIfFans?: string[]
@@ -125,6 +131,10 @@ export default function Viewer3D({
   onToggleFan?: (mountId: string) => void
   /** dentro do cartão do visualizador (sem moldura própria, proporção do 2D) */
   embedded?: boolean
+  /** tocar numa peça com ficha (GPU, cooler, fonte…) abre a ficha no cartão */
+  onPick?: (key: string | null) => void
+  /** ficha aberta agora (null = nenhuma): fechar a ficha apaga o realce */
+  picked?: string | null
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const labelsRef = useRef<HTMLDivElement>(null)
@@ -132,16 +142,25 @@ export default function Viewer3D({
   toggleRef.current = onToggleFan
   const whatIfRef = useRef(whatIfFans)
   whatIfRef.current = whatIfFans
+  const pickRef = useRef(onPick)
+  pickRef.current = onPick
   const api = useRef<{
     setModel: (root: THREE.Object3D) => void
     setOverlay: (g: THREE.Group, labels: Label[]) => void
     setFlowVisible: (v: boolean) => void
+    setActive: (v: boolean) => void
+    clearLit: () => void
     view: (v: View) => void
     dispose: () => void
   } | null>(null)
   const [state, setState] = useState<'loading' | 'ok' | 'fail' | 'nogl'>('loading')
   const [picked, setPicked] = useState<string | null>(null)
   const [showFlow, setShowFlow] = useState(true)
+  // Toque (celular/tablet): o 3D começa PARADO — o dedo rola a página, um toque
+  // escolhe peça ou vaga. Girar pede um toque em "girar". Sem isto, o arrastar
+  // do 3D prende a rolagem da página (o problema da fase 3).
+  const [touch, setTouch] = useState(false)
+  const [active, setActive] = useState(false)
 
   // ── cena (uma vez) ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -178,6 +197,23 @@ export default function Viewer3D({
     const controls = new OrbitControls(camera, canvas)
     controls.enablePan = false
     controls.rotateSpeed = 0.8
+    // a roda só aproxima depois de um clique na cena: passar o rato por cima
+    // a rolar a página não pode virar zoom (prendia a rolagem no desktop)
+    controls.enableZoom = false
+    const isTouch = window.matchMedia?.('(pointer: coarse)').matches ?? false
+    setTouch(isTouch)
+    const setActiveScene = (v: boolean) => {
+      if (!isTouch) return
+      controls.enabled = v
+      controls.enableZoom = v
+      canvas.style.touchAction = v ? 'none' : 'pan-y'
+    }
+    setActiveScene(false)
+    // saiu da tela → volta a parar (o próximo arrastar é rolagem outra vez)
+    const io = new IntersectionObserver(([en]) => {
+      if (en && en.intersectionRatio < 0.35) setActive(false)
+    }, { threshold: [0, 0.35] })
+    io.observe(wrap)
 
     let model: THREE.Object3D | null = null
     let overlay: THREE.Group | null = null
@@ -330,7 +366,11 @@ export default function Viewer3D({
         }
       })
     }
-    const onDown = (e: PointerEvent) => { down = { x: e.clientX, y: e.clientY } }
+    const onDown = (e: PointerEvent) => {
+      down = { x: e.clientX, y: e.clientY }
+      if (!isTouch) controls.enableZoom = true
+    }
+    const onLeave = () => { if (!isTouch) controls.enableZoom = false }
     const onUp = (e: PointerEvent) => {
       if (!down) return
       const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y)
@@ -344,9 +384,17 @@ export default function Viewer3D({
       } else if (h?.obj) {
         lit = h.obj
         ;(lit.material as THREE.MeshStandardMaterial).emissive.setHex(0x5a4310)
-        const src = 'src' in h ? h.src : undefined
-        setPicked(`${partLabel(h.name)}${src && SOURCE_LABEL[src] ? ` · ${SOURCE_LABEL[src]}` : ''}`)
+        const key = fichaOf(h.name)
+        if (key && pickRef.current) {
+          setPicked(null)          // a ficha do cartão diz mais do que o nome
+          pickRef.current(key)
+        } else {
+          pickRef.current?.(null)
+          const src = 'src' in h ? h.src : undefined
+          setPicked(`${partLabel(h.name)}${src && SOURCE_LABEL[src] ? ` · ${SOURCE_LABEL[src]}` : ''}`)
+        }
       } else {
+        pickRef.current?.(null)
         setPicked(null)
       }
       render()
@@ -354,11 +402,17 @@ export default function Viewer3D({
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointerup', onUp)
     canvas.addEventListener('pointermove', onMove)
+    canvas.addEventListener('pointerleave', onLeave)
 
+    const clearLit = () => {
+      if (lit) { (lit.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000); lit = null; render() }
+    }
     api.current = {
-      setModel, setOverlay, setFlowVisible, view,
+      setModel, setOverlay, setFlowVisible, view, clearLit, setActive: setActiveScene,
       dispose: () => {
         ro.disconnect()
+        io.disconnect()
+        canvas.removeEventListener('pointerleave', onLeave)
         canvas.removeEventListener('pointerdown', onDown)
         canvas.removeEventListener('pointerup', onUp)
         canvas.removeEventListener('pointermove', onMove)
@@ -507,6 +561,8 @@ export default function Viewer3D({
   }, [interior, onToggleFan])
 
   useEffect(() => { api.current?.setFlowVisible(showFlow) }, [showFlow])
+  useEffect(() => { api.current?.setActive(active) }, [active])
+  useEffect(() => { if (!pickedKey) api.current?.clearLit() }, [pickedKey])
 
   const btn: React.CSSProperties = {
     fontSize: 12, padding: '4px 10px', borderRadius: 99, cursor: 'pointer',
@@ -538,6 +594,26 @@ export default function Viewer3D({
             maxWidth: 'calc(100% - 20px)',
           }}>{picked}</div>
         )}
+        {touch && state === 'ok' && !active && (
+          <button type="button" onClick={() => setActive(true)} data-umami-event="viewer-3d-girar" className="mono"
+            style={{
+              position: 'absolute', left: '50%', bottom: 12, transform: 'translateX(-50%)', zIndex: 3,
+              fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 99, cursor: 'pointer',
+              border: '1px solid var(--accent-dim)', background: 'var(--card)', color: 'var(--accent)',
+              boxShadow: 'var(--shadow-sm)', whiteSpace: 'nowrap',
+            }}>
+            ⟳ toque para girar em 3D
+          </button>
+        )}
+        {touch && active && (
+          <button type="button" onClick={() => setActive(false)} className="mono"
+            style={{
+              position: 'absolute', right: 10, top: 10, zIndex: 3, fontSize: 12, padding: '5px 12px', borderRadius: 99,
+              cursor: 'pointer', border: '1px solid var(--line)', background: 'var(--card)', color: 'var(--text)',
+            }}>
+            ✓ pronto
+          </button>
+        )}
       </div>
       <div className="mono" style={{
         display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '8px 12px',
@@ -553,14 +629,16 @@ export default function Viewer3D({
           </button>
         )}
         <span style={{ flex: '1 1 160px' }}>
-          arraste para girar · roda para aproximar{hasFree ? ' · anel dourado = vaga livre, clique para simular uma ventoinha' : ''}
+          {touch
+            ? `toque numa peça para ver a ficha${hasFree ? ' · anel dourado = vaga livre, toque para simular' : ''}`
+            : `arraste para girar · clique e use a roda para aproximar · clique numa peça para ver a ficha${hasFree ? ' · anel dourado = vaga livre' : ''}`}
         </span>
         {downloadHref && (
           <a href={downloadHref} download data-umami-event="baixar-3d" style={{ color: 'var(--dim)' }}>⬇ .gltf</a>
         )}
       </div>
       <div className="mono" style={{ padding: '0 12px 8px', fontSize: 10.5, color: 'var(--dim2)' }}>
-        3D gerado da mesma geometria em mm da vista 2D · linhas de fluxo: corte no meio da largura · estimativa, não medição
+        3D gerado pelo motor, da geometria em mm · linhas de fluxo: corte no meio da largura · estimativa, não medição
       </div>
     </div>
   )

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import type { LiveCaseOption, LiveInterior, LiveProduct } from '@/lib/live-server'
 import GabineteVivo from './GabineteVivo'
-// o three.js só é baixado quando o 3D vai aparecer (desktop ou pedido)
+// o three.js só é baixado quando o 3D vai aparecer (cartão perto da tela)
 const Viewer3D = dynamic(() => import('./Viewer3D'), {
   ssr: false,
   loading: () => (
@@ -16,15 +16,15 @@ const Viewer3D = dynamic(() => import('./Viewer3D'), {
 })
 
 const VIEW_PREF_KEY = 'reidofps:viewer'
-/** 3D por padrão só onde ele é melhor: tela larga, mouse e WebGL. No celular o
- *  arrastar do 3D brigaria com a rolagem da página (fase 3 trata disso). */
+/** 3D por padrão onde houver WebGL — no celular ele abre PARADO (o dedo rola
+ *  a página; girar pede um toque), por isso já não precisa de ficar no 2D.
+ *  O visitante que escolheu o 2D fica com o 2D. */
 function prefers3d(): boolean {
   try {
     const saved = window.localStorage.getItem(VIEW_PREF_KEY)
     if (saved === '2d') return false
     if (saved === '3d') return true
   } catch { /* storage bloqueado: segue a regra padrão */ }
-  if (!window.matchMedia?.('(min-width: 900px) and (pointer: fine)').matches) return false
   try {
     const c = document.createElement('canvas')
     return !!(c.getContext('webgl2') || c.getContext('webgl'))
@@ -125,6 +125,18 @@ export default function GabineteVivoLive({
   // o HTML do servidor é sempre o 2D (Google, og, sem JS); o 3D entra depois
   const [show3d, setShow3d] = useState(false)
   useEffect(() => { if (prefers3d()) setShow3d(true) }, [])
+  // só monta o 3D (e baixa o three.js) quando o cartão chega perto da tela
+  const [near, setNear] = useState(false)
+  const nearRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = nearRef.current
+    if (!el || near) return
+    if (typeof IntersectionObserver === 'undefined') { setNear(true); return }
+    const io = new IntersectionObserver(([en]) => { if (en?.isIntersecting) { setNear(true); io.disconnect() } },
+      { rootMargin: '300px 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [near])
   const toggle3d = () => setShow3d((v) => {
     try { window.localStorage.setItem(VIEW_PREF_KEY, v ? '2d' : '3d') } catch { /* sem storage: só nesta visita */ }
     return !v
@@ -333,7 +345,7 @@ export default function GabineteVivoLive({
         )}
       </div>
 
-      <div style={{
+      <div ref={nearRef} style={{
         display: 'grid', gap: 12,
         gridTemplateColumns: compare ? 'repeat(auto-fit, minmax(340px, 1fr))' : '1fr',
       }}>
@@ -348,9 +360,10 @@ export default function GabineteVivoLive({
           onClearWhatIf={clearWhatIf}
           pending={pending}
           compact={!!compare}
-          scene={show3d && !compare ? (
+          scene={show3d && near && !compare ? ({ picked, onPick }) => (
             <Viewer3D embedded components={components} whatIfFans={whatIf} interior={interior}
-              onToggleFan={toggleFan} downloadHref={swapped ? undefined : modelHref} />
+              onToggleFan={toggleFan} downloadHref={swapped ? undefined : modelHref}
+              onPick={onPick} picked={picked} />
           ) : undefined}
         />
         {compare && (
