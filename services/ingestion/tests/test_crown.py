@@ -81,3 +81,19 @@ def test_notify_failure_never_raises_nor_leaks_token(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "SEGREDO" not in out and "api.telegram.org" not in out
     assert "0/1" in out
+
+
+# --- falha da API de fluxo de ar ≠ fluxo baixo -------------------------------
+def test_air_retries_then_succeeds(monkeypatch):
+    import seed.crown_reis as C
+    answers = iter([None, None, 77.0])
+    monkeypatch.setattr(C, "_airflow", lambda parts: next(answers))
+    assert C._air({}, sleep=lambda s: None) == 77.0
+
+
+def test_air_raises_when_api_stays_down(monkeypatch):
+    import pytest
+    import seed.crown_reis as C
+    monkeypatch.setattr(C, "_airflow", lambda parts: None)
+    with pytest.raises(C.AirflowUnavailable):
+        C._air({}, sleep=lambda s: None)

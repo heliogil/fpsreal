@@ -26,6 +26,7 @@ import json
 import math
 import os
 import sys
+import time
 import urllib.request
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
@@ -135,7 +136,34 @@ def _airflow(parts: dict) -> Optional[float]:
         return None
 
 
+# Falha de rede ≠ fluxo de ar baixo. `_airflow` devolve None quando a API não
+# responde (ex.: o pcb_api a reiniciar num deploy). Tratar isso como "fluxo
+# insuficiente" descartava builds boas e podia coroar um Rei pior (visto em
+# 2026-11-19, com o seed.best_by_budget). Por isso: até 3 tentativas e, se
+# ainda falhar, o run PARA na hora sem gravar nada — os Reis atuais ficam.
+class AirflowUnavailable(RuntimeError):
+    """A API de fluxo de ar não respondeu depois das tentativas."""
+
+
+def _air(parts: dict, sleep: Callable[[float], None] = time.sleep) -> float:
+    for wait in (0, 2, 5):
+        if wait:
+            sleep(wait)
+        r = _airflow(parts)
+        if r is not None:
+            return r
+    raise AirflowUnavailable(f"{API}/interior/estimate sem resposta")
+
+
 def run(apply: bool) -> int:
+    try:
+        return _run(apply)
+    except AirflowUnavailable as e:
+        print(f"ABORTADO: {e} — nada gravado, os Reis atuais ficam")
+        return 3
+
+
+def _run(apply: bool) -> int:
     con = _connect()
     cur = con.cursor()
     cur.execute("""SELECT p.id, p.sku, p.name, p.category, p.specs, MIN(o.price_brl)
@@ -196,7 +224,7 @@ def run(apply: bool) -> int:
                 if key not in air_cache:
                     if calls >= MAX_AIR_CALLS_PER_PAIR:
                         break
-                    air_cache[key] = _airflow(parts)
+                    air_cache[key] = _air(parts)
                     calls += 1
                 af = air_cache[key]
                 if af is not None and af >= MIN_AIRFLOW:
