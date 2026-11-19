@@ -19,12 +19,11 @@ import argparse
 import itertools
 import json
 import sys
-import time
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 from compat_core import Part, evaluate
-from seed.crown_reis import (MAX_AIR_CALLS_PER_PAIR, SLOTS, _airflow, _connect, _Rule, geomean,
-                             pick_rei)
+from seed.crown_reis import (MAX_AIR_CALLS_PER_PAIR, SLOTS, AirflowUnavailable, _air, _connect,
+                             _Rule, geomean, pick_rei)
 from seed.performance_data import CPU_CALIBRATION
 from tiers import MIN_AIRFLOW, RANK_GAMES, RANK_RESOLUTION, Tier
 
@@ -42,22 +41,8 @@ CREATE TABLE IF NOT EXISTS budget_picks (
 
 Pair = Tuple[float, Callable[[], Optional[Tuple[float, dict]]]]
 
-# Falha de rede ≠ fluxo de ar baixo. `_airflow` devolve None quando a API não
-# responde (ex.: o pcb_api a reiniciar num deploy) — tratar isso como "fluxo
-# insuficiente" descartaria builds boas e gravaria picks piores. Por isso:
-# até 3 tentativas, e se alguma chamada ainda falhar o --apply não grava nada.
-AIR_FAILURES: List[int] = [0]
-
-
-def _air(parts: dict) -> Optional[float]:
-    for wait in (0, 2, 5):
-        if wait:
-            time.sleep(wait)
-        r = _airflow(parts)
-        if r is not None:
-            return r
-    AIR_FAILURES[0] += 1
-    return None
+# Falha da API de fluxo de ar: `_air` (crown_reis) tenta 3 vezes e depois
+# levanta AirflowUnavailable — o run para sem gravar nada.
 
 
 # ── núcleo puro (testado em tests/test_best_by_budget.py) ────────────────────
@@ -150,7 +135,12 @@ def _load(cur) -> List[Pair]:
 def run(apply: bool) -> int:
     con = _connect()
     cur = con.cursor()
-    picks = pick_all(_load(cur), BUDGETS)
+    try:
+        picks = pick_all(_load(cur), BUDGETS)
+    except AirflowUnavailable as e:
+        print(f"ABORTADO: {e} — nada gravado")
+        con.close()
+        return 3
     prev = None
     for b in BUDGETS:
         if b not in picks:
@@ -162,11 +152,6 @@ def run(apply: bool) -> int:
         print(f"até R$ {b:>6,}: {parts['cpu']['name']} + {parts['gpu']['name']} · R$ {total:,.0f} · "
               f"{fps:.0f} FPS{'  (igual à anterior)' if same else ''}")
         prev = picks[b]
-    if AIR_FAILURES[0]:
-        print(f"ABORTADO: {AIR_FAILURES[0]} chamada(s) ao fluxo de ar falharam (API fora?) — nada gravado")
-        con.rollback()
-        con.close()
-        return 3
     if apply:
         cur.execute(DDL)
         cur.execute("DELETE FROM budget_picks WHERE NOT (budget_brl = ANY(%s))", (list(picks),))
