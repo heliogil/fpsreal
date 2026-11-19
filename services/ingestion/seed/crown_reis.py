@@ -12,6 +12,11 @@ válida, a faixa MANTÉM o Rei atual (nunca fica vazia).
 Preço = oferta disponível mais barata de cada peça (hoje: amostra; com feed real
 de afiliado, rodar depois de cada atualização de preço — há cron na VPS).
 Só mexe nas builds `is_rei` de cada faixa; o Rei Absoluto fica como está.
+
+Aviso "o Rei mudou" no Telegram: com --apply, depois de gravar, cada faixa que
+trocou de Rei vira uma mensagem no canal — só se TELEGRAM_BOT_TOKEN e
+TELEGRAM_CHAT_ID estiverem no ambiente (na VPS: /opt/pc-builder-br/.telegram.env,
+lido pelo pcb-crown.sh). Falha no Telegram nunca desfaz a coroação.
 """
 from __future__ import annotations
 
@@ -29,11 +34,48 @@ from seed.performance_data import CPU_CALIBRATION
 from tiers import MIN_AIRFLOW, RANK_GAMES, RANK_RESOLUTION, TIERS, Tier
 
 SLOTS = ["cpu", "gpu", "ram", "motherboard", "storage", "psu", "case", "cooler"]
+SITE = "https://reidofps.com.br"
 API = os.environ.get("PCB_API_URL", "http://pcb_api:8100")
 MAX_AIR_CALLS_PER_PAIR = 60
 
 
 # ── núcleo puro (testado em tests/test_crown.py) ─────────────────────────────
+def _brl(v: float) -> str:
+    return "R$ " + f"{v:,.0f}".replace(",", ".")
+
+
+def telegram_message(tier_label: str, cpu: str, gpu: str, total: float, fps: float, slug: str) -> str:
+    """Texto do aviso "o Rei mudou" (pt-BR, sem formatação especial)."""
+    per_fps = f"{total / fps:.2f}".replace(".", ",") if fps else "—"
+    return (
+        f"👑 Novo Rei {tier_label}\n"
+        f"{cpu} + {gpu}\n"
+        f"{_brl(total)} · {fps:.0f} FPS médios em 1080p · R$ {per_fps}/FPS\n"
+        f"{SITE}/build/{slug}?utm_source=telegram&utm_medium=rei-mudou\n"
+        "(estimativa — preços do momento)"
+    )
+
+
+def notify_telegram(messages: List[str]) -> None:
+    """Envia cada mensagem ao canal. Sem token/canal no ambiente, não faz nada.
+    Nunca imprime o token nem a URL (que o contém)."""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    chat = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    if not messages or not token or not chat:
+        return
+    sent = 0
+    for text in messages:
+        body = json.dumps({"chat_id": chat, "text": text, "disable_web_page_preview": False}).encode()
+        req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=body,
+                                     headers={"content-type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                sent += 1 if r.status == 200 else 0
+        except Exception as e:  # noqa: BLE001 — aviso é acessório
+            print(f"telegram: falhou ({type(e).__name__})")
+    print(f"telegram: {sent}/{len(messages)} aviso(s) enviado(s)")
+
+
 def pick_rei(
     pairs: Iterable[Tuple[float, Callable[[], Optional[Tuple[float, dict]]]]],
     tier: Tier,
@@ -173,6 +215,7 @@ def run(apply: bool) -> int:
     current = {r[2]: r for r in cur.fetchall()}
 
     changed = 0
+    announce: List[str] = []
     for tier in TIERS:
         row = current.get(tier.key)
         if row is None:
@@ -207,6 +250,8 @@ def run(apply: bool) -> int:
                             (tier.rei_name, round(total, 2), round(fps / total, 4), bid))
             else:
                 changed += 1
+                announce.append(telegram_message(tier.label, parts["cpu"]["name"], parts["gpu"]["name"],
+                                                 total, fps, slug))
                 cur.execute(
                     """UPDATE curated_builds SET name=%s, cpu_id=%s, gpu_id=%s, ram_id=%s, motherboard_id=%s,
                          storage_id=%s, psu_id=%s, case_id=%s, cooler_id=%s, total_price_brl=%s,
@@ -217,6 +262,7 @@ def run(apply: bool) -> int:
     if apply:
         con.commit()
         print(f"gravado: {changed} faixa(s) com Rei novo")
+        notify_telegram(announce)
     else:
         print(f"simulação: {changed} faixa(s) mudariam — rodar com --apply para gravar")
     con.close()

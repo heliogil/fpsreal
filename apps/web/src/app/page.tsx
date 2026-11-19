@@ -33,6 +33,9 @@ const RANK: { slug: GameSlug; name: string }[] = [
 ]
 
 import { TIER_LABEL as TIER_LABEL_BY_KEY } from '@/lib/tiers'
+import AdSlot from '@/components/ads/AdSlot'
+import Patrocinado from '@/components/ads/Patrocinado'
+import { adsConfig } from '@/lib/ads'
 const TIER_LABEL: Record<string, string> = TIER_LABEL_BY_KEY
 
 const fmtR = (n: number) => 'R$ ' + Math.round(n).toLocaleString('pt-BR')
@@ -68,6 +71,7 @@ async function enrich(b: CuratedBuild): Promise<Enriched> {
 }
 
 export default async function HomePage() {
+  const ads = adsConfig()
   const builds = (await getLiveBuilds()) ?? (await getMockRepository().builds.getAll())
   const tronos = builds.filter((b) => !b.is_rei_absoluto)
   const enriched = await Promise.all(tronos.map(enrich))
@@ -242,6 +246,12 @@ export default async function HomePage() {
           })}
         </div>
       </section>
+
+      {/* espaço patrocinado e anúncio: depois das builds, nunca no meio do ranking */}
+      <div style={{ padding: '0 clamp(16px,4vw,40px)' }}>
+        <Patrocinado placement="home" />
+        <AdSlot client={ads?.client} slot={ads?.slots.home_meio} />
+      </div>
     </main>
   )
 }

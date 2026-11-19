@@ -1,5 +1,5 @@
 """Unit tests da escolha do Rei por faixa (seed.crown_reis.pick_rei)."""
-from seed.crown_reis import pick_rei
+from seed.crown_reis import notify_telegram, pick_rei, telegram_message
 from tiers import TIER_BY_KEY, TIERS
 
 
@@ -50,3 +50,34 @@ def test_tier_caps_are_increasing():
     caps = [t.cap_brl for t in TIERS if t.cap_brl]
     assert caps == sorted(caps)
     assert TIERS[-1].floor_brl == TIERS[-2].cap_brl
+
+
+def test_telegram_message_has_build_link_and_numbers():
+    m = telegram_message("R$ 11k+", "Ryzen 7 9800X3D", "GeForce RTX 4090", 21853.0, 419.0, "rei-r12k")
+    assert "Novo Rei R$ 11k+" in m
+    assert "Ryzen 7 9800X3D + GeForce RTX 4090" in m
+    assert "R$ 21.853" in m and "419 FPS" in m and "R$ 52,16/FPS" in m
+    assert "https://reidofps.com.br/build/rei-r12k?utm_source=telegram&utm_medium=rei-mudou" in m
+
+
+def test_notify_without_env_does_nothing(monkeypatch):
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+
+    def boom(*a, **k):
+        raise AssertionError("não devia chamar a rede")
+    monkeypatch.setattr("urllib.request.urlopen", boom)
+    notify_telegram(["oi"])  # sem token/canal: nem tenta
+
+
+def test_notify_failure_never_raises_nor_leaks_token(monkeypatch, capsys):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:SEGREDO")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "@canal")
+
+    def fail(*a, **k):
+        raise OSError("rede fora")
+    monkeypatch.setattr("urllib.request.urlopen", fail)
+    notify_telegram(["oi"])
+    out = capsys.readouterr().out
+    assert "SEGREDO" not in out and "api.telegram.org" not in out
+    assert "0/1" in out
