@@ -117,6 +117,12 @@ export default function ComoMedimosPage() {
           <span style={{ color: 'var(--accent-red)' }}>crítico</span> são sinais, não
           sentença: o gabinete pode ficar bem com ventoinhas extras.
         </p>
+        <p className="mt-3">
+          Quando a ficha de cada ventoinha existe, o fluxo é a soma delas, uma a uma. Entrar
+          muito mais ar do que sai rende menos: acima de <span className="num-mono">3×</span> a
+          saída, o ar a mais conta só metade, porque boa parte escapa pelas frestas sem passar
+          pelas peças. É uma regra nossa, não uma medição.
+        </p>
       </section>
 
       <section>
